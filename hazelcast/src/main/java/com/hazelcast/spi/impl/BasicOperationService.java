@@ -220,6 +220,10 @@ final class BasicOperationService implements InternalOperationService {
         return op instanceof PartitionAwareOperation ? op.getPartitionId() : -1;
     }
 
+    @Override
+    public void start() {
+    }
+
     /**
      * Runs operation in calling thread.
      * @param op
