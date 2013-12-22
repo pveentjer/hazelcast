@@ -94,15 +94,13 @@ public class OperationServiceTest extends HazelcastTestSupport {
         HazelcastInstance local = instances[0];
         HazelcastInstance remote = instances[1];
 
-        waitForPartitionStabilization();
+        HazelcastTestSupport.warmUpPartitions(instances);
 
         DummyOperation op = new DummyOperation();
         OperationService operationService = getNode(local).nodeEngine.getOperationService();
         int partitionId = findAnyAssignedPartition(remote);
         Future f = operationService.invokeOnPartition(null, op, partitionId);
         assertEquals(new Integer(10), f.get());
-
-        System.out.println("Successfully retrieved data from remote partition");
     }
 
     private int findAnyAssignedPartition(HazelcastInstance hz) {
@@ -130,12 +128,6 @@ public class OperationServiceTest extends HazelcastTestSupport {
         return new Address(hz.getCluster().getLocalMember().getSocketAddress());
     }
 
-    //todo: needs to be changed by warmUpPartitions
-    private void waitForPartitionStabilization() throws InterruptedException {
-        System.out.println("Starting wait for partition stabilization");
-        Thread.sleep(5000);
-        System.out.println("Finished wait for partition stabilization");
-    }
 
     public static class DummyOperation extends AbstractOperation {
         @Override

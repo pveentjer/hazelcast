@@ -125,7 +125,7 @@ public class AdvancedOperationService extends AbstractOperationService {
             OperationAccessor.setCallerAddress(op, thisAddress);
             OperationAccessor.setCallTimeout(op, callTimeout);
             //todo: we need to do something with return value.
-            send(op, partitionId,replicaIndex);
+            send(op, partitionId, replicaIndex);
         }
 
         return op;
@@ -284,17 +284,16 @@ public class AdvancedOperationService extends AbstractOperationService {
             op.run();
             op.afterRun();
 
-            ResponseHandler responseHandler = op.getResponseHandler();
             Object response = null;
-
             if (op.returnsResponse()) {
                 response = op.getResponse();
-                op.set(response, false);
-            }
 
-            if (responseHandler != null) {
-                responseHandler.sendResponse(response);
+                ResponseHandler responseHandler = op.getResponseHandler();
+                if (responseHandler != null) {
+                    responseHandler.sendResponse(response);
+                }
             }
+            op.set(response, false);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -615,7 +614,7 @@ public class AdvancedOperationService extends AbstractOperationService {
                 //we claimed a slot.
                 int slotIndex = toIndex(newProducerSeq);
                 Slot slot = ringbuffer[slotIndex];
-                slot.packet = packet;
+                slot.task = packet;
                 slot.commit(newProducerSeq);
 
                 if (schedule) {
@@ -698,7 +697,7 @@ public class AdvancedOperationService extends AbstractOperationService {
                 //we claimed a slot.
                 int slotIndex = toIndex(newProducerSeq);
                 Slot slot = ringbuffer[slotIndex];
-                slot.op = op;
+                slot.task = op;
                 slot.commit(newProducerSeq);
 
                 if (schedule) {
@@ -735,22 +734,13 @@ public class AdvancedOperationService extends AbstractOperationService {
                         final int slotIndex = toIndex(newConsumerSeq);
                         final Slot slot = ringbuffer[slotIndex];
                         slot.awaitCommitted(newConsumerSeq);
-                        final Operation op = slot.op;
-                        final Packet packet = slot.packet;
-
-                        if (op != null) {
-                            slot.op = null;
-                        }
-
-                        if (packet != null) {
-                            slot.packet = null;
-                        }
+                        final Object task = slot.task;
 
                         consumerSeq.set(newConsumerSeq);
-                        if (op != null) {
-                            runOperation(op, false);
+                        if (task instanceof Operation) {
+                            runOperation((Operation)task, false);
                         } else {
-                            runPacket(packet);
+                            runPacket((Packet)task);
                         }
                         oldConsumerSeq = newConsumerSeq;
                     }
@@ -784,26 +774,23 @@ public class AdvancedOperationService extends AbstractOperationService {
         }
 
         private void runOperation(final Operation op, final boolean callerRuns) {
-
-            //System.out.println(op);
             try {
-                 op.setNodeEngine(nodeEngine);
+                op.setNodeEngine(nodeEngine);
                 op.setPartitionId(partitionId);
                 op.beforeRun();
                 op.run();
                 op.afterRun();
 
-                ResponseHandler responseHandler = op.getResponseHandler();
-
                 Object response = null;
                 if (op.returnsResponse()) {
                     response = op.getResponse();
-                    op.set(response, callerRuns);
-                }
 
-                if (responseHandler != null) {
-                    responseHandler.sendResponse(response);
+                    ResponseHandler responseHandler = op.getResponseHandler();
+                    if (responseHandler != null) {
+                        responseHandler.sendResponse(response);
+                    }
                 }
+                op.set(response, callerRuns);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -812,8 +799,7 @@ public class AdvancedOperationService extends AbstractOperationService {
         //todo: padding needed to prevent false sharing.
         private class Slot {
             private volatile long sequence = 0;
-            private Operation op;
-            private Packet packet;
+            private Object task;
 
             public void commit(final long sequence) {
                 this.sequence = sequence;
