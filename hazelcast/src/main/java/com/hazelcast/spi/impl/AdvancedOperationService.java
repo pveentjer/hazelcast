@@ -17,7 +17,9 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 
+import static com.hazelcast.spi.OperationAccessor.*;
 import static com.hazelcast.spi.impl.ResponseHandlerFactory.setLocalResponseHandler;
+import static com.hazelcast.spi.impl.ResponseHandlerFactory.setRemoteResponseHandler;
 import static com.hazelcast.util.ValidationUtil.isNotNull;
 
 
@@ -123,9 +125,9 @@ public class AdvancedOperationService extends AbstractOperationService {
             long callId = callIdGen.incrementAndGet();
             remoteOperations.put(callId, op);
 
-            OperationAccessor.setCallId(op, callId);
-            OperationAccessor.setCallerAddress(op, thisAddress);
-            OperationAccessor.setCallTimeout(op, callTimeout);
+            setCallId(op, callId);
+            setCallerAddress(op, thisAddress);
+            setCallTimeout(op, callTimeout);
             //todo: we need to do something with return value.
             send(op, partitionId, replicaIndex);
         }
@@ -175,7 +177,7 @@ public class AdvancedOperationService extends AbstractOperationService {
         } else {
             long callId = callIdGen.incrementAndGet();
             remoteOperations.put(callId, op);
-            OperationAccessor.setCallId(op, callId);
+            setCallId(op, callId);
             //todo: we need to do something with return value.
             send(op, target);
         }
@@ -383,13 +385,13 @@ public class AdvancedOperationService extends AbstractOperationService {
                 final Data data = packet.getData();
                 final Operation op = (Operation) nodeEngine.toObject(data);
                 op.setNodeEngine(nodeEngine);
-                OperationAccessor.setCallerAddress(op, caller);
-                OperationAccessor.setConnection(op, conn);
+                setCallerAddress(op, caller);
+                setConnection(op, conn);
                 if (op instanceof ResponseOperation) {
                     processResponse((ResponseOperation) op);
                 } else {
-                    ResponseHandlerFactory.setRemoteResponseHandler(nodeEngine, op);
-                    if (!OperationAccessor.isJoinOperation(op) && clusterService.getMember(op.getCallerAddress()) == null) {
+                    setRemoteResponseHandler(nodeEngine, op);
+                    if (!isJoinOperation(op) && clusterService.getMember(op.getCallerAddress()) == null) {
                         final Exception error = new CallerNotMemberException(op.getCallerAddress(), op.getPartitionId(),
                                 op.getClass().getName(), op.getServiceName());
                         handleOperationError(op, error);
@@ -428,7 +430,8 @@ public class AdvancedOperationService extends AbstractOperationService {
             if (target != null) {
                 return invokeOnTarget(serviceName, op, target, replicaIndex, tryCount, tryPauseMillis, callback);
             } else {
-                return invokeOnPartition(serviceName, op, partitionId, replicaIndex, replicaIndex, tryCount, tryPauseMillis, callback);
+                return invokeOnPartition(serviceName, op, partitionId, replicaIndex, replicaIndex, tryCount,
+                        tryPauseMillis, callback);
             }
         }
     }
@@ -566,27 +569,6 @@ public class AdvancedOperationService extends AbstractOperationService {
             }
         }
 
-        public int toIndex(long sequence) {
-            if (sequence % 2 == 1) {
-                sequence--;
-            }
-
-            //todo: can be done more efficient by not using mod but using bitshift
-            return (int) ((sequence / 2) % ringbuffer.length);
-        }
-
-        private int size(long producerSeq, final long consumerSeq) {
-            if (producerSeq % 2 == 1) {
-                producerSeq--;
-            }
-
-            if (producerSeq == consumerSeq) {
-                return 0;
-            }
-
-            return (int) ((producerSeq - consumerSeq) / 2);
-        }
-
         public void schedule(final Packet packet) {
             assert packet != null;
 
@@ -611,7 +593,7 @@ public class AdvancedOperationService extends AbstractOperationService {
             }
         }
 
-        private void doScheduleUrgent(Object task) {
+        private void doScheduleUrgent(final Object task) {
             priorityQueue.offer(task);
 
             //todo: add warning if too many urgent messages
@@ -621,7 +603,7 @@ public class AdvancedOperationService extends AbstractOperationService {
             }
         }
 
-        private void doSchedule(Object task) {
+        private void doSchedule(final Object task) {
             //todo: we need to deal with overload.
 
             long oldProducerSeq = producerSeq.get();
@@ -630,6 +612,10 @@ public class AdvancedOperationService extends AbstractOperationService {
             boolean schedule;
             long newProducerSeq;
             for (; ; ) {
+                if (isFull(oldProducerSeq, consumerSeq.get())) {
+                    throw new OverloadException();
+                }
+
                 newProducerSeq = oldProducerSeq + 2;
                 if (isUnscheduled(oldProducerSeq)) {
                     //if the scheduled flag is not set, we are going to be responsible for scheduling.
@@ -649,9 +635,10 @@ public class AdvancedOperationService extends AbstractOperationService {
             }
 
             //we claimed a slot.
-            int slotIndex = toIndex(newProducerSeq);
-            Slot slot = ringbuffer[slotIndex];
+            final int slotIndex = toIndex(newProducerSeq);
+            final Slot slot = ringbuffer[slotIndex];
             if (task != null) {
+                //we clear the slot to free the memory
                 slot.task = task;
             }
             slot.commit(newProducerSeq);
@@ -661,14 +648,40 @@ public class AdvancedOperationService extends AbstractOperationService {
             }
         }
 
+        public int toIndex(long sequence) {
+            if (sequence % 2 == 1) {
+                sequence--;
+            }
+
+            //todo: can be done more efficient by not using mod but using bitshift
+            return (int) ((sequence / 2) % ringbuffer.length);
+        }
+
+        private boolean isFull(long producerSeq, final long consumerSeq) {
+            return size(producerSeq, consumerSeq) == ringbuffer.length;
+        }
+
+        private int size(long producerSeq, final long consumerSeq) {
+            if (producerSeq % 2 == 1) {
+                producerSeq--;
+            }
+
+            if (producerSeq == consumerSeq) {
+                return 0;
+            }
+
+            return (int) ((producerSeq - consumerSeq) / 2);
+        }
+
         private boolean isUnscheduled(final long oldProducerSeq) {
             return oldProducerSeq % 2 == 0;
         }
 
         private boolean tryCallerRun(final Operation op) {
-            long oldProducerSeq = producerSeq.get();
+            final long oldProducerSeq = producerSeq.get();
             final long consumerSeq = this.consumerSeq.get();
 
+            //if there is work, or the scheduler bit is set, caller runs can't be done/
             if (oldProducerSeq != consumerSeq) {
                 return false;
             }
@@ -682,12 +695,14 @@ public class AdvancedOperationService extends AbstractOperationService {
                 return false;
             }
 
-            //we managed to signal other consumers that scheduling should not be done, because we do a caller runs optimization
+            //we managed to signal other consumers that scheduling should not be done, so we can now execute the
+            //operation on the caller thread.
             runOperation(op, true);
 
             if (producerSeq.get() > newProducerSeq) {
                 //work has been produced by another producer, and since we still own the scheduled bit, we can safely
                 //schedule this
+                //todo: shitty name
                 executeOnOperationThread(this);
             } else {
                 //work has not yet been produced, so we are going to unset the scheduled bit.
@@ -728,9 +743,9 @@ public class AdvancedOperationService extends AbstractOperationService {
             try {
                 long oldConsumerSeq = consumerSeq.get();
                 for (; ; ) {
-                    final long oldProducerSeq = producerSeq.get();
+                    runPriorityOperations();
 
-                    priorityQueue.poll();
+                    final long oldProducerSeq = producerSeq.get();
 
                     if (oldConsumerSeq == oldProducerSeq - 1) {
                         //there is no more work, so we are going to try to unschedule
@@ -754,8 +769,6 @@ public class AdvancedOperationService extends AbstractOperationService {
                         }
                         consumerSeq.set(newConsumerSeq);
 
-                        runPriorityOperations();
-
                         if (task == null) {
                             //no-op: this is needed to schedule priority operations/packets
                         } else if (task instanceof Operation) {
@@ -767,24 +780,27 @@ public class AdvancedOperationService extends AbstractOperationService {
                     }
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                logger.severe(e);
             }
         }
 
-        private void runPacket(Packet packet) {
+        private void runPacket(final Packet packet) {
             final Connection conn = packet.getConn();
             try {
                 final Address caller = conn.getEndPoint();
                 final Data data = packet.getData();
                 final Operation op = (Operation) nodeEngine.toObject(data);
                 op.setNodeEngine(nodeEngine);
-                OperationAccessor.setCallerAddress(op, caller);
-                OperationAccessor.setConnection(op, conn);
-                ResponseHandlerFactory.setRemoteResponseHandler(nodeEngine, op);
+                setCallerAddress(op, caller);
+                setConnection(op, conn);
+                setRemoteResponseHandler(nodeEngine, op);
 
-                if (!OperationAccessor.isJoinOperation(op) && clusterService.getMember(op.getCallerAddress()) == null) {
-                    final Exception error = new CallerNotMemberException(op.getCallerAddress(), op.getPartitionId(),
-                            op.getClass().getName(), op.getServiceName());
+                if (!isJoinOperation(op) && clusterService.getMember(op.getCallerAddress()) == null) {
+                    final Exception error = new CallerNotMemberException(
+                            op.getCallerAddress(),
+                            op.getPartitionId(),
+                            op.getClass().getName(),
+                            op.getServiceName());
                     handleOperationError(op, error);
                 } else {
                     runOperation(op, false);
@@ -806,7 +822,7 @@ public class AdvancedOperationService extends AbstractOperationService {
                 if (op.returnsResponse()) {
                     response = op.getResponse();
 
-                    ResponseHandler responseHandler = op.getResponseHandler();
+                    final ResponseHandler responseHandler = op.getResponseHandler();
                     if (responseHandler != null) {
                         responseHandler.sendResponse(response);
                     }
@@ -826,9 +842,9 @@ public class AdvancedOperationService extends AbstractOperationService {
                 this.sequence = sequence;
             }
 
-            public void awaitCommitted(final long consumerSequence) {
+            public void awaitCommitted(final long consumerSeq) {
                 for (; ; ) {
-                    if (sequence >= consumerSequence) {
+                    if (sequence >= consumerSeq) {
                         return;
                     }
                 }
