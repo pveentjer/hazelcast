@@ -52,8 +52,6 @@ public class RemoteOperationBenchmark extends HazelcastTestSupport {
             }
         }
 
-        System.out.println("Successfully retrieved data from remote partition");
-
         long durationMs = System.currentTimeMillis() - startMs;
         double performance = (iterations * 1000d) / durationMs;
         System.out.println("Performance: " + String.format("%1$,.2f", performance));
