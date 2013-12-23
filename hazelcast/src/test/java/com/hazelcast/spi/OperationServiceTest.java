@@ -41,6 +41,8 @@ public class OperationServiceTest extends HazelcastTestSupport {
         HazelcastInstance local = instances[0];
         HazelcastInstance remote = instances[1];
 
+        warmUpPartitions(instances);
+
         DummyOperation op = new DummyOperation();
         OperationService operationService = getNode(local).nodeEngine.getOperationService();
         Address target = getAddress(remote);
@@ -94,28 +96,18 @@ public class OperationServiceTest extends HazelcastTestSupport {
         HazelcastInstance local = instances[0];
         HazelcastInstance remote = instances[1];
 
-        HazelcastTestSupport.warmUpPartitions(instances);
+        warmUpPartitions(instances);
 
         DummyOperation op = new DummyOperation();
         OperationService operationService = getNode(local).nodeEngine.getOperationService();
-        int partitionId = findAnyAssignedPartition(remote);
+        int partitionId = findAnyPartitionId(remote);
         Future f = operationService.invokeOnPartition(null, op, partitionId);
         assertEquals(new Integer(10), f.get());
     }
 
-    private int findAnyAssignedPartition(HazelcastInstance hz) {
+    private int findAnyPartitionId(HazelcastInstance hz) {
         for (Partition p : hz.getPartitionService().getPartitions()) {
-            System.out.println("Before");
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            System.out.println("After");
             Member owner = p.getOwner();
-            if (owner == null) {
-                continue;
-            }
             if (owner.localMember()) {
                 return p.getPartitionId();
             }
@@ -127,7 +119,6 @@ public class OperationServiceTest extends HazelcastTestSupport {
     private Address getAddress(HazelcastInstance hz) {
         return new Address(hz.getCluster().getLocalMember().getSocketAddress());
     }
-
 
     public static class DummyOperation extends AbstractOperation {
         @Override

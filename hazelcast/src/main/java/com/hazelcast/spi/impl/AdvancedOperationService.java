@@ -17,6 +17,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 
+import static com.hazelcast.spi.impl.ResponseHandlerFactory.setLocalResponseHandler;
 import static com.hazelcast.util.ValidationUtil.isNotNull;
 
 
@@ -61,7 +62,7 @@ import static com.hazelcast.util.ValidationUtil.isNotNull;
 public class AdvancedOperationService extends AbstractOperationService {
 
     private final PartitionOperationScheduler[] schedulers;
-    private final boolean localCallOptimizationEnabled;
+    private final boolean callerRunsOptimizationEnabled;
     private final OperationThread[] operationThreads;
 
     //todo: we need to optimize this executor.
@@ -86,7 +87,7 @@ public class AdvancedOperationService extends AbstractOperationService {
         for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
             schedulers[partitionId] = new PartitionOperationScheduler(partitionId, ringbufferSize);
         }
-        this.localCallOptimizationEnabled = false;
+        this.callerRunsOptimizationEnabled = false;
 
         this.operationThreads = new OperationThread[16];
         for (int k = 0; k < operationThreads.length; k++) {
@@ -108,9 +109,10 @@ public class AdvancedOperationService extends AbstractOperationService {
         if (serviceName != null) {
             op.setServiceName(serviceName);
         }
+
         op.setPartitionId(partitionId);
         if (callback != null) {
-            ResponseHandlerFactory.setLocalResponseHandler(op, callback);
+            setLocalResponseHandler(op, callback);
         }
 
         Address target = getAddress(partitionId, replicaIndex);
@@ -163,7 +165,7 @@ public class AdvancedOperationService extends AbstractOperationService {
             op.setServiceName(serviceName);
         }
         if (callback != null) {
-            ResponseHandlerFactory.setLocalResponseHandler(op, callback);
+            setLocalResponseHandler(op, callback);
         }
 
         if (isLocal(target)) {
@@ -171,13 +173,10 @@ public class AdvancedOperationService extends AbstractOperationService {
             //todo: we should offload this call
             doRunOperation(op);
         } else {
-            //System.out.println("InvokeOnTarget: " + op);
-
             long callId = callIdGen.incrementAndGet();
             remoteOperations.put(callId, op);
             OperationAccessor.setCallId(op, callId);
             //todo: we need to do something with return value.
-            //todo: is this a blocking call?
             send(op, target);
         }
         return op;
@@ -529,6 +528,10 @@ public class AdvancedOperationService extends AbstractOperationService {
      * - improved thread assignment
      * - add batching for the consumer
      * - add system messages. System messages can be stored on a different regular queue (e.g. concurrentlinkedqueue)
+     * - back pressure
+     * - overwrite
+     * - lazy creation of the ringbuffer; ringbuffers are big..
+     * <p/>
      * <p/>
      * bad things:
      * - contention on the producersequenceref with concurrent producers
@@ -572,7 +575,7 @@ public class AdvancedOperationService extends AbstractOperationService {
             return (int) ((sequence / 2) % ringbuffer.length);
         }
 
-        private int size(long producerSeq, long consumerSeq) {
+        private int size(long producerSeq, final long consumerSeq) {
             if (producerSeq % 2 == 1) {
                 producerSeq--;
             }
@@ -584,128 +587,139 @@ public class AdvancedOperationService extends AbstractOperationService {
             return (int) ((producerSeq - consumerSeq) / 2);
         }
 
-        public void schedule(Packet packet) {
+        public void schedule(final Packet packet) {
             assert packet != null;
-            try {
-                long oldProducerSeq = producerSeq.get();
 
-                //this flag indicates if we need to schedule, or if scheduling already is taken care of.
-                boolean schedule;
-                long newProducerSeq;
-                for (; ; ) {
-                    newProducerSeq = oldProducerSeq + 2;
-                    if (oldProducerSeq % 2 == 0) {
-                        //if the scheduled flag is not set, we are going to be responsible for scheduling.
-                        schedule = true;
-                        newProducerSeq++;
-                    } else {
-                        //apparently this scheduler already is scheduled, so we don't need to schedule it.
-                        schedule = false;
-                    }
-
-                    if (producerSeq.compareAndSet(oldProducerSeq, newProducerSeq)) {
-                        break;
-                    }
-
-                    //we did not manage to claim the slot and potentially set the scheduled but, so we need to try again.
-                    oldProducerSeq = producerSeq.get();
-                }
-
-                //we claimed a slot.
-                int slotIndex = toIndex(newProducerSeq);
-                Slot slot = ringbuffer[slotIndex];
-                slot.task = packet;
-                slot.commit(newProducerSeq);
-
-                if (schedule) {
-                    executeOnOperationThread(this);
-                }
-            } catch (RuntimeException e) {
-                e.printStackTrace();
-                throw e;
+            if (packet.isUrgent()) {
+                doScheduleUrgent(packet);
+            } else {
+                doSchedule(packet);
             }
         }
 
-        public void schedule(Operation op) {
+        public void schedule(final Operation op) {
             assert op != null;
 
-            try {
-                long oldProducerSeq = producerSeq.get();
-                long consumerSeq = this.consumerSeq.get();
+            if (op instanceof UrgentSystemOperation) {
+                doScheduleUrgent(op);
+            } else if (callerRunsOptimizationEnabled) {
+                if (!tryCallerRun(op)) {
+                    doSchedule(op);
+                }
+            } else {
+                doSchedule(op);
+            }
+        }
 
-                if (localCallOptimizationEnabled && oldProducerSeq == consumerSeq) {
-                    //there currently is no pending work and the scheduler is not scheduled, so we can try to do a local runs optimization
+        private void doScheduleUrgent(Object task) {
+            priorityQueue.offer(task);
 
-                    long newProduceSequence = oldProducerSeq + 1;
+            //todo: add warning if too many urgent messages
 
-                    //if we can set the 'uneven' flag, it means that scheduler is not yet running
-                    if (producerSeq.compareAndSet(oldProducerSeq, newProduceSequence)) {
-                        //we managed to signal other consumers that scheduling should not be done, because we do a local runs optimization
+            if (isUnscheduled(producerSeq.get())) {
+                doSchedule(null);
+            }
+        }
 
-                        runOperation(op, true);
+        private void doSchedule(Object task) {
+            //todo: we need to deal with overload.
 
-                        if (producerSeq.get() > newProduceSequence) {
-                            //work has been produced by another producer, and since we still own the scheduled bit, we can safely
-                            //schedule this
-                            executeOnOperationThread(this);
-                        } else {
-                            //work has not yet been produced, so we are going to unset the scheduled bit.
-                            if (producerSeq.compareAndSet(newProduceSequence, oldProducerSeq)) {
-                                //we successfully managed to set the scheduled bit to false and no new work has been
-                                //scheduled by other producers, so we are done.
-                                return;
-                            }
+            long oldProducerSeq = producerSeq.get();
 
-                            //new work has been scheduled by other producers, but since we still own the scheduled bit,
-                            //we can schedule the work.
-                            //work has been produced, so we need to offload it.
-                            executeOnOperationThread(this);
-                        }
-
-                        return;
-                    }
-
-                    oldProducerSeq = producerSeq.get();
-                } else if (size(oldProducerSeq, consumerSeq) == ringbuffer.length) {
-                    //todo: overload
-                    System.out.println("Overload");
-                    throw new RuntimeException();
+            //this flag indicates if we need to schedule, or if scheduling already is taken care of.
+            boolean schedule;
+            long newProducerSeq;
+            for (; ; ) {
+                newProducerSeq = oldProducerSeq + 2;
+                if (isUnscheduled(oldProducerSeq)) {
+                    //if the scheduled flag is not set, we are going to be responsible for scheduling.
+                    schedule = true;
+                    newProducerSeq++;
+                } else {
+                    //apparently this scheduler already is scheduled, so we don't need to schedule it.
+                    schedule = false;
                 }
 
-                //this flag indicates if we need to schedule, or if scheduling already is taken care of.
-                boolean schedule;
-                long newProducerSeq;
-                for (; ; ) {
-                    newProducerSeq = oldProducerSeq + 2;
-                    if (oldProducerSeq % 2 == 0) {
-                        //if the scheduled flag is not set, we are going to be responsible for scheduling.
-                        schedule = true;
-                        newProducerSeq++;
-                    } else {
-                        //apparently this scheduler already is scheduled, so we don't need to schedule it.
-                        schedule = false;
-                    }
-
-                    if (producerSeq.compareAndSet(oldProducerSeq, newProducerSeq)) {
-                        break;
-                    }
-
-                    //we did not manage to claim the slot and potentially set the scheduled but, so we need to try again.
-                    oldProducerSeq = producerSeq.get();
+                if (producerSeq.compareAndSet(oldProducerSeq, newProducerSeq)) {
+                    break;
                 }
 
-                //we claimed a slot.
-                int slotIndex = toIndex(newProducerSeq);
-                Slot slot = ringbuffer[slotIndex];
-                slot.task = op;
-                slot.commit(newProducerSeq);
+                //we did not manage to claim the slot and potentially set the scheduled but, so we need to try again.
+                oldProducerSeq = producerSeq.get();
+            }
 
-                if (schedule) {
-                    executeOnOperationThread(this);
+            //we claimed a slot.
+            int slotIndex = toIndex(newProducerSeq);
+            Slot slot = ringbuffer[slotIndex];
+            if (task != null) {
+                slot.task = task;
+            }
+            slot.commit(newProducerSeq);
+
+            if (schedule) {
+                executeOnOperationThread(this);
+            }
+        }
+
+        private boolean isUnscheduled(final long oldProducerSeq) {
+            return oldProducerSeq % 2 == 0;
+        }
+
+        private boolean tryCallerRun(final Operation op) {
+            long oldProducerSeq = producerSeq.get();
+            final long consumerSeq = this.consumerSeq.get();
+
+            if (oldProducerSeq != consumerSeq) {
+                return false;
+            }
+
+            //there currently is no pending work and the scheduler is not scheduled, so we can try to do a local runs optimization
+            //we are going to try to set the 'scheduled' bit, by setting the newProducerSeq to uneven.
+            final long newProducerSeq = oldProducerSeq + 1;
+
+            //if we can set the 'uneven' flag, it means that scheduler is not yet running
+            if (!producerSeq.compareAndSet(oldProducerSeq, newProducerSeq)) {
+                return false;
+            }
+
+            //we managed to signal other consumers that scheduling should not be done, because we do a caller runs optimization
+            runOperation(op, true);
+
+            if (producerSeq.get() > newProducerSeq) {
+                //work has been produced by another producer, and since we still own the scheduled bit, we can safely
+                //schedule this
+                executeOnOperationThread(this);
+            } else {
+                //work has not yet been produced, so we are going to unset the scheduled bit.
+                if (producerSeq.compareAndSet(newProducerSeq, oldProducerSeq)) {
+                    //we successfully managed to set the scheduled bit to false and no new work has been
+                    //scheduled by other producers, so we are done.
+                    return true;
                 }
-            } catch (RuntimeException e) {
-                e.printStackTrace();
-                throw e;
+
+                //new work has been scheduled by other producers, but since we still own the scheduled bit,
+                //we can schedule the work.
+                //work has been produced, so we need to offload it.
+                executeOnOperationThread(this);
+            }
+
+            return true;
+        }
+
+        private void runPriorityOperations() {
+            for (; ; ) {
+                final Object task = priorityQueue.poll();
+                if (task == null) {
+                    return;
+                }
+
+                if (task instanceof Packet) {
+                    runPacket((Packet) task);
+                } else if (task instanceof Operation) {
+                    runOperation((Operation) task, false);
+                } else {
+                    throw new IllegalArgumentException("Unhandled task:" + task);
+                }
             }
         }
 
@@ -735,12 +749,19 @@ public class AdvancedOperationService extends AbstractOperationService {
                         final Slot slot = ringbuffer[slotIndex];
                         slot.awaitCommitted(newConsumerSeq);
                         final Object task = slot.task;
-
+                        if (task != null) {
+                            slot.task = null;
+                        }
                         consumerSeq.set(newConsumerSeq);
-                        if (task instanceof Operation) {
-                            runOperation((Operation)task, false);
+
+                        runPriorityOperations();
+
+                        if (task == null) {
+                            //no-op: this is needed to schedule priority operations/packets
+                        } else if (task instanceof Operation) {
+                            runOperation((Operation) task, false);
                         } else {
-                            runPacket((Packet)task);
+                            runPacket((Packet) task);
                         }
                         oldConsumerSeq = newConsumerSeq;
                     }
@@ -791,8 +812,8 @@ public class AdvancedOperationService extends AbstractOperationService {
                     }
                 }
                 op.set(response, callerRuns);
-            } catch (Exception e) {
-                e.printStackTrace();
+            } catch (Throwable e) {
+                logger.severe(e);
             }
         }
 
