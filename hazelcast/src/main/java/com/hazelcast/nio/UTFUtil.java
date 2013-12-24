@@ -16,10 +16,9 @@
 
 package com.hazelcast.nio;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
-import java.io.UTFDataFormatException;
+import java.io.*;
+
+import static com.hazelcast.util.ValidationUtil.isNotNull;
 
 /**
  * @author mdogan 1/23/13
@@ -27,6 +26,37 @@ import java.io.UTFDataFormatException;
 public final class UTFUtil {
 
     private static final int STRING_CHUNK_SIZE = 16 * 1024;
+
+    /**
+     * Converts a String to bytes. The String is allowed to be empty or null.
+     *
+     * @param str the String to convert.
+     * @return the bytes.
+     * @throws IOException if something fails during conversion.
+     */
+    public static byte[] toBytes(String str)throws IOException{
+        ByteArrayOutputStream byteArrayOut = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(byteArrayOut);
+        writeUTF(out,str);
+        out.close();
+        return byteArrayOut.toByteArray();
+    }
+
+    /**
+     * Converts a byte array to a String. The returned String can be empty or null.
+     *
+     * @param bytes the bytes to convert to String.
+     * @return the loaded String; could be null.
+     * @throws IOException if something fails during conversion.
+     * @throws java.lang.IllegalArgumentException if bytes is null.
+     */
+    public static String toString(byte[] bytes)throws IOException{
+        isNotNull(bytes,"bytes");
+        ByteArrayInputStream byteArrayIn = new ByteArrayInputStream(bytes);
+        DataInputStream in = new DataInputStream(byteArrayIn);
+        in.close();
+        return readUTF(in);
+    }
 
     public static void writeUTF(final DataOutput out, final String str) throws IOException {
         boolean isNull = str == null;
