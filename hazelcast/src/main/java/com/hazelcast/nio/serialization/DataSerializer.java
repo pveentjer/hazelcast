@@ -24,9 +24,12 @@ import com.hazelcast.util.ExceptionUtil;
 import com.hazelcast.util.ServiceLoader;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import static com.hazelcast.nio.serialization.SerializationConstants.CONSTANT_TYPE_DATA;
 
@@ -38,6 +41,12 @@ final class DataSerializer implements StreamSerializer<DataSerializable> {
     private static final String FACTORY_ID = "com.hazelcast.DataSerializerHook";
 
     private final Map<Integer, DataSerializableFactory> factories = new HashMap<Integer, DataSerializableFactory>();
+
+    private final ConcurrentMap<ClassLoader, ConcurrentMap<String,Constructor<DataSerializable>>> constructorCacheMap =
+            new ConcurrentHashMap<ClassLoader, ConcurrentMap<String, Constructor<DataSerializable>>>();
+
+    private final  ConcurrentMap<String,Constructor<DataSerializable>> defaultConstructorCache =
+            new ConcurrentHashMap<String, Constructor<DataSerializable>>();
 
     DataSerializer(Map<Integer, ? extends DataSerializableFactory> dataSerializableFactories, ClassLoader classLoader) {
         try {
@@ -100,7 +109,9 @@ final class DataSerializer implements StreamSerializer<DataSerializable> {
                 // TODO: @mm - we can check if DS class is final.
             } else {
                 className = in.readUTF();
-                ds = ClassLoaderUtil.newInstance(in.getClassLoader(), className);
+                ClassLoader classLoader = in.getClassLoader();
+                Constructor<DataSerializable> constructor = ClassLoaderUtil.loadNoArgConstructor(className, classLoader);
+                ds = constructor.newInstance();
             }
             ds.readData(in);
             return ds;
@@ -114,6 +125,38 @@ final class DataSerializer implements StreamSerializer<DataSerializable> {
             throw new HazelcastSerializationException("Problem while reading DataSerializable, namespace: " + factoryId +
                     ", id: " + id + ", class: " + className + ", exception: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Loads the noArg constructor.
+     *
+     * Constructor caching is applied because retrieving the constructor based on reflection is a very expensive
+     * process.
+     *
+     * @param className
+     * @param classLoader
+     * @return
+     * @throws Exception
+     */
+    private Constructor<DataSerializable> loadNoArgConstructor(String className, ClassLoader classLoader) throws Exception {
+        ConcurrentMap<String, Constructor<DataSerializable>> constructorCache;
+        if (classLoader == null) {
+            constructorCache = defaultConstructorCache;
+        } else {
+            constructorCache = constructorCacheMap.get(classLoader);
+            if (constructorCache == null) {
+                constructorCache = new ConcurrentHashMap<String, Constructor<DataSerializable>>();
+                ConcurrentMap<String, Constructor<DataSerializable>> oldValue = constructorCacheMap.putIfAbsent(classLoader, constructorCache);
+                constructorCache = oldValue != null ? oldValue : constructorCache;
+            }
+        }
+
+        Constructor<DataSerializable> constructor = constructorCache.get(className);
+        if (constructor == null) {
+            constructor = ClassLoaderUtil.loadNoArgConstructor(className, classLoader);
+            constructorCache.putIfAbsent(className, constructor);
+        }
+        return constructor;
     }
 
     public final void write(ObjectDataOutput out, DataSerializable obj) throws IOException {

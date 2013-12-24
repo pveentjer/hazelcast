@@ -68,13 +68,18 @@ public final class SerializationServiceImpl implements SerializationService {
 
     private volatile boolean active = true;
 
-    SerializationServiceImpl(InputOutputFactory inputOutputFactory, int version, ClassLoader classLoader,
+    SerializationServiceImpl(InputOutputFactory inputOutputFactory,
+                             int version,
+                             ClassLoader classLoader,
                              Map<Integer, ? extends DataSerializableFactory> dataSerializableFactories,
                              Map<Integer, ? extends PortableFactory> portableFactories,
-                             Collection<ClassDefinition> classDefinitions, boolean checkClassDefErrors,
-                             ManagedContext managedContext, PartitioningStrategy partitionStrategy,
+                             Collection<ClassDefinition> classDefinitions,
+                             boolean checkClassDefErrors,
+                             ManagedContext managedContext,
+                             PartitioningStrategy partitionStrategy,
                              int initialOutputBufferSize,
-                             boolean enableCompression, boolean enableSharedObject) {
+                             boolean enableCompression,
+                             boolean enableSharedObject) {
 
         this.inputOutputFactory = inputOutputFactory;
         this.classLoader = classLoader;
