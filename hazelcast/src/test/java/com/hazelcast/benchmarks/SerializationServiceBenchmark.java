@@ -71,7 +71,10 @@ public class SerializationServiceBenchmark extends HazelcastTestSupport{
             if(k%1000000==0){
                 System.out.println("At: "+k);
             }
-            Object x = serializationService.toObject(data);
+            Object result = serializationService.toObject(data);
+            if(result==null){
+                throw new NullPointerException();
+            }
         }
         long durationMs = System.currentTimeMillis()-startMs;
         double performance = (iterations*1000d)/durationMs;
