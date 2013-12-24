@@ -110,7 +110,7 @@ final class DataSerializer implements StreamSerializer<DataSerializable> {
             } else {
                 className = in.readUTF();
                 ClassLoader classLoader = in.getClassLoader();
-                Constructor<DataSerializable> constructor = ClassLoaderUtil.loadNoArgConstructor(className, classLoader);
+                Constructor<DataSerializable> constructor = loadNoArgConstructor(className, classLoader);
                 ds = constructor.newInstance();
             }
             ds.readData(in);

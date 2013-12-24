@@ -91,5 +91,4 @@ public class SerializationServiceBenchmark extends HazelcastTestSupport{
             field = in.readInt();
         }
     }
-
 }
