@@ -20,6 +20,8 @@ public class OperationServiceTest extends HazelcastTestSupport {
     public void invokeOnLocalTargetWithCallback() throws Exception {
         HazelcastInstance local = createHazelcastInstanceFactory(1).newHazelcastInstance();
 
+        warmUpPartitions(local);
+
         DummyOperation op = new DummyOperation();
         OperationService operationService = getNode(local).nodeEngine.getOperationService();
         Address target = getAddress(local);
@@ -64,6 +66,8 @@ public class OperationServiceTest extends HazelcastTestSupport {
         HazelcastInstance local = instances[0];
         HazelcastInstance remote = instances[1];
 
+         warmUpPartitions(local,remote);
+
         DummyOperation op = new DummyOperation();
         OperationService operationService = getNode(local).nodeEngine.getOperationService();
         Future f = operationService.invokeOnTarget(null, op, getAddress(remote));
@@ -74,6 +78,8 @@ public class OperationServiceTest extends HazelcastTestSupport {
     public void invokeOnLocalTarget() throws Exception {
         HazelcastInstance local = createHazelcastInstanceFactory(1).newHazelcastInstance();
 
+        warmUpPartitions(local);
+
         DummyOperation op = new DummyOperation();
         OperationService operationService = getNode(local).nodeEngine.getOperationService();
         Future f = operationService.invokeOnTarget(null, op, getAddress(local));
@@ -83,6 +89,8 @@ public class OperationServiceTest extends HazelcastTestSupport {
     @Test
     public void invokeOnLocalPartition() throws Exception {
         HazelcastInstance local = createHazelcastInstanceFactory(1).newHazelcastInstance();
+
+        warmUpPartitions(local);
 
         DummyOperation op = new DummyOperation();
         OperationService operationService = getNode(local).nodeEngine.getOperationService();

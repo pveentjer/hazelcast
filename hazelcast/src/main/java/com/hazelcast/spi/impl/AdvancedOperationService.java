@@ -9,7 +9,9 @@ import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.partition.PartitionService;
 import com.hazelcast.partition.PartitionView;
 import com.hazelcast.spi.*;
+import com.hazelcast.spi.exception.CallTimeoutException;
 import com.hazelcast.spi.exception.CallerNotMemberException;
+import com.hazelcast.spi.exception.WrongTargetException;
 
 import java.util.Collection;
 import java.util.Map;
@@ -72,9 +74,11 @@ public class AdvancedOperationService extends AbstractOperationService {
     private final Executor defaultExecutor = Executors.newFixedThreadPool(10);
     private final Address thisAddress;
     private final AtomicLong callIdGen = new AtomicLong(0);
-    private final ConcurrentMap<Long, Operation> remoteOperations = new ConcurrentHashMap<>();
-    private PartitionService partitionService;
+    private final ConcurrentMap<Long, Operation> remoteOperations = new ConcurrentHashMap<Long,Operation>();
+    private final int partitionCount;
+    private  PartitionService partitionService;
     private ClusterServiceImpl clusterService;
+    int ringbufferSize = 8192;
 
     public AdvancedOperationService(NodeEngineImpl nodeEngine) {
         super(nodeEngine);
@@ -83,13 +87,9 @@ public class AdvancedOperationService extends AbstractOperationService {
         if (thisAddress == null) {
             throw new RuntimeException("thisAddress can't be null");
         }
-        int partitionCount = node.getGroupProperties().PARTITION_COUNT.getInteger();
+        partitionCount = node.getGroupProperties().PARTITION_COUNT.getInteger();
         this.schedulers = new PartitionOperationScheduler[partitionCount];
-        int ringbufferSize = 8192;
-        for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
-            schedulers[partitionId] = new PartitionOperationScheduler(partitionId, ringbufferSize);
-        }
-        this.callerRunsOptimizationEnabled = false;
+         this.callerRunsOptimizationEnabled = true;
 
         this.operationThreads = new OperationThread[16];
         for (int k = 0; k < operationThreads.length; k++) {
@@ -113,34 +113,21 @@ public class AdvancedOperationService extends AbstractOperationService {
         }
 
         op.setPartitionId(partitionId);
+        op.setReplicaIndex(replicaIndex);
         if (callback != null) {
             setLocalResponseHandler(op, callback);
         }
 
-        Address target = getAddress(partitionId, replicaIndex);
-        if (isLocal(target)) {
-            PartitionOperationScheduler scheduler = schedulers[partitionId];
-            scheduler.schedule(op);
-        } else {
-            long callId = callIdGen.incrementAndGet();
-            remoteOperations.put(callId, op);
-
-            setCallId(op, callId);
-            setCallerAddress(op, thisAddress);
-            setCallTimeout(op, callTimeout);
-            //todo: we need to do something with return value.
-            send(op, partitionId, replicaIndex);
-        }
-
+        setCallTimeout(op, callTimeout); 
+        PartitionOperationScheduler scheduler = schedulers[partitionId];
+        scheduler.schedule(op);
         return op;
     }
 
-    private Address getAddress(int partitionId, int replicaIndex) {
-        PartitionView partitionview = partitionService.getPartition(partitionId);
-        return partitionview.getReplicaAddress(replicaIndex);
-    }
-
     private boolean isLocal(Address thatAddress) {
+        if(thatAddress == null){
+            System.out.println("foo");
+        }
         return thatAddress.equals(thisAddress);
     }
 
@@ -150,10 +137,10 @@ public class AdvancedOperationService extends AbstractOperationService {
                 serviceName,
                 op,
                 partitionId,
-                AbstractInvocationBuilder.DEFAULT_CALL_TIMEOUT,
-                AbstractInvocationBuilder.DEFAULT_REPLICA_INDEX,
-                AbstractInvocationBuilder.DEFAULT_TRY_COUNT,
-                AbstractInvocationBuilder.DEFAULT_TRY_PAUSE_MILLIS,
+                InvocationBuilder.DEFAULT_CALL_TIMEOUT,
+                InvocationBuilder.DEFAULT_REPLICA_INDEX,
+                InvocationBuilder.DEFAULT_TRY_COUNT,
+                InvocationBuilder.DEFAULT_TRY_PAUSE_MILLIS,
                 null);
     }
 
@@ -190,9 +177,9 @@ public class AdvancedOperationService extends AbstractOperationService {
                 serviceName,
                 op,
                 target,
-                AbstractInvocationBuilder.DEFAULT_CALL_TIMEOUT,
-                AbstractInvocationBuilder.DEFAULT_TRY_COUNT,
-                AbstractInvocationBuilder.DEFAULT_TRY_PAUSE_MILLIS,
+                InvocationBuilder.DEFAULT_CALL_TIMEOUT,
+                InvocationBuilder.DEFAULT_TRY_COUNT,
+                InvocationBuilder.DEFAULT_TRY_PAUSE_MILLIS,
                 null);
     }
 
@@ -238,6 +225,10 @@ public class AdvancedOperationService extends AbstractOperationService {
         logger.finest("Starting AdvancedOperationService...");
         this.partitionService = node.getPartitionService();
         this.clusterService = node.getClusterService();
+
+        for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
+            schedulers[partitionId] = new PartitionOperationScheduler(partitionId, ringbufferSize);
+        }
     }
 
     @Override
@@ -415,7 +406,7 @@ public class AdvancedOperationService extends AbstractOperationService {
         }
     }
 
-    private class AdvancedInvocationBuilder extends AbstractInvocationBuilder {
+    private class AdvancedInvocationBuilder extends InvocationBuilder {
 
         private AdvancedInvocationBuilder(NodeEngineImpl nodeEngine, String serviceName, Operation op, int partitionId) {
             super(nodeEngine, serviceName, op, partitionId);
@@ -548,7 +539,7 @@ public class AdvancedOperationService extends AbstractOperationService {
      * instead of waiting for more work, it could try to 'steal' another partitionoperationscheduler
      * that has pending work.
      */
-    public class PartitionOperationScheduler implements Runnable {
+    private final class PartitionOperationScheduler implements Runnable {
         private final int partitionId;
 
         private final Slot[] ringbuffer;
@@ -560,7 +551,10 @@ public class AdvancedOperationService extends AbstractOperationService {
 
         private final ConcurrentLinkedQueue priorityQueue = new ConcurrentLinkedQueue();
 
+        private final PartitionView partitionView;
+
         public PartitionOperationScheduler(final int partitionId, int ringBufferSize) {
+            this.partitionView = partitionService.getPartition(partitionId);
             this.partitionId = partitionId;
             this.ringbuffer = new Slot[ringBufferSize];
 
@@ -582,14 +576,29 @@ public class AdvancedOperationService extends AbstractOperationService {
         public void schedule(final Operation op) {
             assert op != null;
 
-            if (op instanceof UrgentSystemOperation) {
-                doScheduleUrgent(op);
-            } else if (callerRunsOptimizationEnabled) {
-                if (!tryCallerRun(op)) {
+            int replicaIndex = op.getReplicaIndex();
+
+            final Address target = partitionView.getReplicaAddress(replicaIndex);
+            if (isLocal(target)) {
+                if (op instanceof UrgentSystemOperation) {
+                    doScheduleUrgent(op);
+                } else if (callerRunsOptimizationEnabled) {
+                    if (!tryCallerRun(op)) {
+                        doSchedule(op);
+                    }
+                } else {
                     doSchedule(op);
                 }
             } else {
-                doSchedule(op);
+                long callId = callIdGen.incrementAndGet();
+                remoteOperations.put(callId, op);
+
+                setCallId(op, callId);
+                setCallerAddress(op, thisAddress);
+                //todo: we need to do something with return value.
+                send(op, partitionId, replicaIndex);
+                  //todo: we need to do something with return value.
+                send(op, partitionId, replicaIndex);
             }
         }
 
@@ -812,11 +821,42 @@ public class AdvancedOperationService extends AbstractOperationService {
 
         private void runOperation(final Operation op, final boolean callerRuns) {
             try {
+                //if (isCallTimedOut(op)) {
+                //    Object response = new CallTimeoutException(op.getClass().getName(), op.getInvocationTime(), op.getCallTimeout());
+                //    op.getResponseHandler().sendResponse(response);
+                //    return;
+                //}
+
+                if(op.validatesTarget()){
+                    Address targetAddress = partitionView.getReplicaAddress(op.getReplicaIndex());
+                    if(!isLocal(targetAddress)){
+                        throw new WrongTargetException(node.getThisAddress(), targetAddress, partitionId, op.getReplicaIndex(),
+                                op.getClass().getName(), op.getServiceName());
+                    }
+                }
+
                 op.setNodeEngine(nodeEngine);
                 op.setPartitionId(partitionId);
                 op.beforeRun();
+                op.beforeRun();
+
+                if (op instanceof WaitSupport) {
+                    WaitSupport waitSupport = (WaitSupport) op;
+                    if (waitSupport.shouldWait()) {
+                        nodeEngine.waitNotifyService.await(waitSupport);
+                        return;
+                    }
+                }
+
                 op.run();
                 op.afterRun();
+
+                if (op instanceof Notifier) {
+                    final Notifier notifier = (Notifier) op;
+                    if (notifier.shouldNotify()) {
+                        nodeEngine.waitNotifyService.notify(notifier);
+                    }
+                }
 
                 Object response = null;
                 if (op.returnsResponse()) {

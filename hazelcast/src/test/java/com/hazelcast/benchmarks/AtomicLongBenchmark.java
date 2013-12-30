@@ -45,8 +45,9 @@ public class AtomicLongBenchmark extends HazelcastTestSupport {
     private AtomicLongProxy atomicLong;
 
     @BeforeClass
-    public static void beforeClass() {
+    public static void beforeClass()throws Exception {
         hazelcastInstance = Hazelcast.newHazelcastInstance();
+        warmUpPartitions(hazelcastInstance);
     }
 
     @Before
