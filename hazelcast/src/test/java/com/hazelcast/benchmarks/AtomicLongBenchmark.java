@@ -66,58 +66,6 @@ public class AtomicLongBenchmark extends HazelcastTestSupport {
     }
 
 
-    public class NoResponseOperation extends AtomicLongBaseOperation {
-
-        public NoResponseOperation() {
-        }
-
-        public NoResponseOperation(String name) {
-            super(name);
-        }
-
-        @Override
-        public void run() throws Exception {
-            getNumber().get();
-        }
-
-        @Override
-        public boolean returnsResponse() {
-            return false;
-        }
-    }
-
-    //this test
-    @Test
-    public void noResponse() throws Exception {
-        long startMs = System.currentTimeMillis();
-        int iterations = 50 * 1000 * 1000;
-
-        OperationService opService = getNode(hazelcastInstance).nodeEngine.getOperationService();
-        Future[] futures = new Future[1000];
-        int futureIndex = 0;
-        for (int k = 0; k < iterations; k++) {
-
-            NoResponseOperation no = new NoResponseOperation(atomicLong.getName());
-            no.setPartitionId(atomicLong.getPartitionId());
-            no.setService(atomicLong.getService());
-            Future f = opService.invokeOnPartition(AtomicLongService.SERVICE_NAME, no, atomicLong.getPartitionId());
-            futures[futureIndex] = f;
-            futureIndex++;
-            if (futureIndex >= futures.length) {
-                for (Future fu : futures) {
-                    fu.get();
-                }
-                futureIndex = 0;
-            }
-
-            if (k % 2000000 == 0) {
-                System.out.println("at " + k);
-            }
-        }
-        long durationMs = System.currentTimeMillis() - startMs;
-        double performance = (iterations * 1000d) / durationMs;
-        System.out.println("Performance: " + String.format("%1$,.2f", performance));
-    }
 
     @Test
     public void getAsync() throws Exception {
@@ -161,7 +109,7 @@ public class AtomicLongBenchmark extends HazelcastTestSupport {
         int iterations = 50 * 1000 * 1000;
         for (int k = 0; k < iterations; k++) {
             atomicLong.get();
-            if (k % 200000 == 0) {
+            if (k % (1000*1000) == 0) {
                 System.out.println("at " + k);
             }
         }
