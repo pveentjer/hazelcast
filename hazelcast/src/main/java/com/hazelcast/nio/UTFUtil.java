@@ -32,37 +32,6 @@ public final class UTFUtil {
 
     private static final int STRING_CHUNK_SIZE = 16 * 1024;
 
-    /**
-     * Converts a String to bytes. The String is allowed to be empty or null.
-     *
-     * @param str the String to convert.
-     * @return the bytes.
-     * @throws IOException if something fails during conversion.
-     */
-    public static byte[] toBytes(String str)throws IOException{
-        ByteArrayOutputStream byteArrayOut = new ByteArrayOutputStream();
-        DataOutputStream out = new DataOutputStream(byteArrayOut);
-        writeUTF(out,str);
-        out.close();
-        return byteArrayOut.toByteArray();
-    }
-
-    /**
-     * Converts a byte array to a String. The returned String can be empty or null.
-     *
-     * @param bytes the bytes to convert to String.
-     * @return the loaded String; could be null.
-     * @throws IOException if something fails during conversion.
-     * @throws java.lang.IllegalArgumentException if bytes is null.
-     */
-    public static String toString(byte[] bytes)throws IOException{
-        isNotNull(bytes,"bytes");
-        ByteArrayInputStream byteArrayIn = new ByteArrayInputStream(bytes);
-        DataInputStream in = new DataInputStream(byteArrayIn);
-        in.close();
-        return readUTF(in);
-    }
-
     private static final StringCreator STRING_CREATOR;
 
     static {
@@ -83,6 +52,30 @@ public final class UTFUtil {
         STRING_CREATOR = stringCreator;
     }
 
+    /**
+     * Converts a String to bytes. The String is allowed to be empty or null.
+     *
+     * @param str the String to convert.
+     * @return the bytes.
+     * @throws IOException if something fails during conversion.
+     */
+    public static byte[] toBytes(String str)throws IOException{
+        ByteArrayOutputStream byteArrayOut = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(byteArrayOut);
+        byte[] utfBuffer = new byte[512];
+        writeUTF(out,str, utfBuffer);
+        out.close();
+        return byteArrayOut.toByteArray();
+    }
+
+    /**
+     * Encodes a given UTF8 string into a set of bytes and writes it to the given {@link java.io.DataOutput}.
+     *
+     * @param out DataOutput instance to eventually write to
+     * @param str UTF8 string to write
+     * @param buffer byte array buffer to be used while encoding the string
+     * @throws IOException if any IO problem occurs
+     */
     public static void writeUTF(final DataOutput out, final String str, byte[] buffer) throws IOException {
         boolean isNull = str == null;
         out.writeBoolean(isNull);
@@ -143,6 +136,14 @@ public final class UTFUtil {
         out.write(buffer, 0, length == 0 ? buffer.length : length);
     }
 
+    /**
+     * Decodes a UTF8 string from a set of bytes inside the given {@link java.io.DataInput}.
+     *
+     * @param in DataInput instance to read bytes from
+     * @param buffer byte array buffer to be used while encoding the string
+     * @return UTF8 decoded string
+     * @throws IOException if any IO problem occurs
+     */
     public static String readUTF(final DataInput in, byte[] buffer) throws IOException {
         boolean isNull = in.readBoolean();
         if (isNull) return null;

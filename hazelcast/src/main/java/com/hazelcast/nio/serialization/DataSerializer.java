@@ -111,10 +111,7 @@ final class DataSerializer implements StreamSerializer<DataSerializable> {
                 }
                 // TODO: @mm - we can check if DS class is final.
             } else {
-                int size = in.readInt();
-                byte[] bytes = new byte[size];
-                in.readFully(bytes);
-                className = UTFUtil.toString(bytes);
+                className = in.readUTF();
                 ClassLoader classLoader = in.getClassLoader();
                 Constructor<DataSerializable> constructor = loadNoArgConstructor(className, classLoader);
                 ds = constructor.newInstance();
@@ -179,7 +176,8 @@ final class DataSerializer implements StreamSerializer<DataSerializable> {
                 bytes = UTFUtil.toBytes(className);
                 serializedClassNameMap.putIfAbsent(className, bytes);
             }
-            out.writeInt(bytes.length);
+            // The byte array contains a full UTF8 encoded string so we
+            // just write it as is
             out.write(bytes);
         }
         obj.writeData(out);
