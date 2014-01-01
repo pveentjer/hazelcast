@@ -263,7 +263,9 @@ public class Node {
     }
 
     public void failedConnection(Address address) {
-        logger.finest(getThisAddress() + " failed connecting to " + address);
+        if(logger.isFinestEnabled()){
+            logger.finest(getThisAddress() + " failed connecting to " + address);
+        }
         failedConnections.add(address);
     }
 
@@ -313,13 +315,17 @@ public class Node {
 
     public void setMasterAddress(final Address master) {
         if (master != null) {
-            logger.finest("** setting master address to " + master);
+            if(logger.isFinestEnabled()){
+                logger.finest("** setting master address to " + master);
+            }
         }
         masterAddress = master;
     }
 
     public void start() {
-        logger.finest("We are asked to start and completelyShutdown is " + String.valueOf(completelyShutdown));
+        if(logger.isFinestEnabled()){
+            logger.finest("We are asked to start and completelyShutdown is " + String.valueOf(completelyShutdown));
+        }
         if (completelyShutdown) return;
         nodeEngine.start();
         connectionManager.start();
@@ -354,7 +360,9 @@ public class Node {
 
     public void shutdown(final boolean terminate) {
         long start = Clock.currentTimeMillis();
-        logger.finest("** we are being asked to shutdown when active = " + String.valueOf(active));
+        if(logger.isFinestEnabled()){
+            logger.finest("** we are being asked to shutdown when active = " + String.valueOf(active));
+        }
         if (!terminate && isActive()) {
             final int maxWaitSeconds = groupProperties.GRACEFUL_SHUTDOWN_MAX_WAIT.getInteger();
             if (!partitionService.prepareToSafeShutdown(maxWaitSeconds, TimeUnit.SECONDS)) {
@@ -399,7 +407,9 @@ public class Node {
             for (int i = 0; i < numThreads; i++) {
                 Thread thread = threads[i];
                 if (thread.isAlive()) {
-                    logger.finest("Shutting down thread " + thread.getName());
+                    if(logger.isFinestEnabled()){
+                        logger.finest("Shutting down thread " + thread.getName());
+                    }
                     thread.interrupt();
                 }
             }
@@ -413,7 +423,9 @@ public class Node {
         joined.set(false);
         joiner.reset();
         final String uuid = UuidUtil.createMemberUuid(address);
-        logger.finest("Generated new UUID for local member: " + uuid);
+        if(logger.isFinestEnabled()){
+            logger.finest("Generated new UUID for local member: " + uuid);
+        }
         localMember.setUuid(uuid);
     }
 
@@ -507,31 +519,44 @@ public class Node {
     }
 
     public void rejoin() {
+        prepareForRejoin();
+        join();
+    }
+
+    private void prepareForRejoin() {
         systemLogService.logJoin("Rejoining!");
         masterAddress = null;
         joined.set(false);
         clusterService.reset();
         failedConnections.clear();
-        join();
     }
 
     public void join() {
-        final long joinStartTime = joiner != null ? joiner.getStartTime() : Clock.currentTimeMillis();
+        if (joiner == null) {
+            logger.warning("No join method is enabled! Starting standalone.");
+            setAsMaster();
+            return;
+        }
+
         final long maxJoinMillis = getGroupProperties().MAX_JOIN_SECONDS.getInteger() * 1000;
-        try {
-            if (joiner == null) {
-                logger.warning("No join method is enabled! Starting standalone.");
-                setAsMaster();
-            } else {
+        //This method used to be recursive. The problem is that eventually you can get a stackoverflow if
+        //there are enough retries. With an iterative approach you don't suffer from this problem.
+        int rejoinCount = 0;
+        for (; ; ) {
+            final long joinStartTime = joiner.getStartTime();
+            try {
                 joiner.join(joined);
-            }
-        } catch (Exception e) {
-            if (Clock.currentTimeMillis() - joinStartTime < maxJoinMillis) {
-                logger.warning("Trying to rejoin: " + e.getMessage());
-                rejoin();
-            } else {
-                logger.severe("Could not join cluster, shutting down!", e);
-                shutdown(true);
+                return;
+            } catch (Exception e) {
+                rejoinCount++;
+                if (Clock.currentTimeMillis() - joinStartTime < maxJoinMillis) {
+                    logger.warning("Trying to rejoin for the "+rejoinCount+" time: " + e.getMessage());
+                    prepareForRejoin();
+                } else {
+                    logger.severe("Could not join cluster after "+rejoinCount+" attempts, shutting down!", e);
+                    shutdown(true);
+                    return;
+                }
             }
         }
     }

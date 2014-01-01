@@ -21,7 +21,6 @@ import com.hazelcast.config.EntryListenerConfig;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.config.MapIndexConfig;
 import com.hazelcast.core.*;
-import com.hazelcast.executor.ExecutionCallbackAdapter;
 import com.hazelcast.instance.MemberImpl;
 import com.hazelcast.map.*;
 import com.hazelcast.map.operation.*;
@@ -29,15 +28,16 @@ import com.hazelcast.monitor.LocalMapStats;
 import com.hazelcast.monitor.impl.LocalMapStatsImpl;
 import com.hazelcast.nio.ClassLoaderUtil;
 import com.hazelcast.nio.serialization.Data;
+import com.hazelcast.nio.serialization.SerializationService;
 import com.hazelcast.partition.PartitionService;
 import com.hazelcast.partition.PartitionView;
+import com.hazelcast.query.PagingPredicate;
+import com.hazelcast.query.PagingPredicateAccessor;
 import com.hazelcast.query.Predicate;
+import com.hazelcast.query.impl.QueryResultEntry;
 import com.hazelcast.spi.*;
 import com.hazelcast.spi.impl.BinaryOperationFactory;
-import com.hazelcast.util.ExceptionUtil;
-import com.hazelcast.util.IterationType;
-import com.hazelcast.util.QueryResultSet;
-import com.hazelcast.util.ThreadUtil;
+import com.hazelcast.util.*;
 
 import java.util.*;
 import java.util.Map.Entry;
@@ -143,7 +143,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         if (nearCacheEnabled) {
             int partitionId = nodeEngine.getPartitionService().getPartitionId(key);
             if (!nodeEngine.getPartitionService().getPartitionOwner(partitionId)
-                    .equals(nodeEngine.getClusterService().getThisAddress())) {
+                    .equals(nodeEngine.getClusterService().getThisAddress()) || mapConfig.getNearCacheConfig().isCacheLocalEntries()) {
                 mapService.putNearCache(name, key, result);
             }
         }
@@ -190,7 +190,10 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
             Object o;
             if (mapConfig.isStatisticsEnabled()) {
                 long time = System.currentTimeMillis();
-                f = nodeEngine.getOperationService().invokeOnPartition(SERVICE_NAME, operation, partitionId);
+                f = nodeEngine.getOperationService()
+                        .createInvocationBuilder(SERVICE_NAME, operation, partitionId)
+                        .setResultDeserialized(false)
+                        .invoke();
                 o = f.get();
                 if (operation instanceof BasePutOperation)
                     localMapStats.incrementPuts(System.currentTimeMillis() - time);
@@ -341,11 +344,11 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     protected Map<Object, Object> getAllObjectInternal(final Set<Data> keys) {
         final NodeEngine nodeEngine = getNodeEngine();
         Map<Object, Object> result = new HashMap<Object, Object>();
-
+        Collection<Integer> partitions = getPartitionsForKeys(keys);
         Map<Integer, Object> responses = null;
         try {
             responses = nodeEngine.getOperationService()
-                    .invokeOnAllPartitions(SERVICE_NAME, new MapGetAllOperationFactory(name, keys));
+                    .invokeOnPartitions(SERVICE_NAME, new MapGetAllOperationFactory(name, keys), partitions);
             for (Object response : responses.values()) {
                 Set<Map.Entry<Data, Data>> entries = ((MapEntrySet) getService().toObject(response)).getEntrySet();
                 for (Entry<Data, Data> entry : entries) {
@@ -357,6 +360,20 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         }
 
         return result;
+    }
+
+    private Collection<Integer> getPartitionsForKeys(Set<Data> keys) {
+        PartitionService partitionService = getNodeEngine().getPartitionService();
+        int partitions = partitionService.getPartitionCount();
+        int capacity = Math.min(partitions, keys.size()); //todo: is there better way to estimate size?
+        Set<Integer> partitionIds = new HashSet<Integer>(capacity);
+
+        Iterator<Data> iterator = keys.iterator();
+        while (iterator.hasNext() && partitionIds.size() < partitions){
+            Data key = iterator.next();
+            partitionIds.add(partitionService.getPartitionId(key));
+        }
+        return partitionIds;
     }
 
     protected void putAllInternal(final Map<? extends Object, ? extends Object> entries) {
@@ -542,6 +559,12 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         return mapService.addLocalEventListener(listener, name);
     }
 
+    public String addLocalEntryListenerInternal(EntryListener listener, Predicate predicate, final Data key, boolean includeValue) {
+        final MapService mapService = getService();
+        EventFilter eventFilter = new QueryEventFilter(includeValue, key, predicate);
+        return mapService.addLocalEventListener(listener, eventFilter, name);
+    }
+
     protected String addEntryListenerInternal(
             final EntryListener listener, final Data key, final boolean includeValue) {
         EventFilter eventFilter = new EntryEventFilter(includeValue, key);
@@ -599,11 +622,37 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         EntryOperation operation = new EntryOperation(name, key, entryProcessor);
         operation.setThreadId(ThreadUtil.getThreadId());
         try {
-            Future future = nodeEngine.getOperationService().invokeOnPartition(SERVICE_NAME, operation, partitionId);
+            Future future = nodeEngine.getOperationService()
+                    .createInvocationBuilder(SERVICE_NAME, operation, partitionId)
+                    .setResultDeserialized(false)
+                    .invoke();
             return (Data) future.get();
         } catch (Throwable t) {
             throw ExceptionUtil.rethrow(t);
         }
+    }
+    public Map executeOnKeysInternal(Set<Data> keys, EntryProcessor entryProcessor) {
+        Map result = new HashMap();
+        final NodeEngine nodeEngine = getNodeEngine();
+        final Collection<Integer> partitionsForKeys = getPartitionsForKeys(keys);
+        try {
+            MultipleEntryOperationFactory operationFactory = new MultipleEntryOperationFactory(name, keys, entryProcessor);
+            Map<Integer, Object> results = nodeEngine.getOperationService()
+                    .invokeOnPartitions(SERVICE_NAME, operationFactory, partitionsForKeys);
+            for (Object o : results.values()) {
+                if (o != null) {
+                    final MapService service = getService();
+                    final MapEntrySet mapEntrySet = (MapEntrySet) o;
+                    for (Entry<Data, Data> entry : mapEntrySet.getEntrySet()) {
+                        result.put(service.toObject(entry.getKey()), service.toObject(entry.getValue()));
+                    }
+                }
+            }
+
+        } catch (Throwable t) {
+            throw ExceptionUtil.rethrow(t);
+        }
+        return result;
     }
     public Future executeOnKeyInternal(Data key, EntryProcessor entryProcessor, ExecutionCallback callback) {
         final NodeEngine nodeEngine = getNodeEngine();
@@ -619,7 +668,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
             {
                 return nodeEngine.getOperationService()
                         .createInvocationBuilder(SERVICE_NAME, operation, partitionId)
-                        .setCallback(new ExecutionCallbackAdapter(callback))
+                        .setCallback(new MapExecutionCallbackAdapter(callback))
                         .invoke();
             }
         } catch (Throwable t) {
@@ -627,6 +676,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         }
     }
 
+    //todo: dead code??
     public Map executeOnEntries(EntryProcessor entryProcessor) {
         Map result = new HashMap();
         try {
@@ -648,6 +698,7 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
         return result;
     }
 
+    //todo: dead code??
     public Map executeOnEntries(EntryProcessor entryProcessor, Predicate predicate) {
         Map result = new HashMap();
         try {
@@ -675,8 +726,25 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     protected Set queryLocal(final Predicate predicate, final IterationType iterationType, final boolean dataResult) {
         final NodeEngine nodeEngine = getNodeEngine();
         OperationService operationService = nodeEngine.getOperationService();
+        final SerializationService ss = nodeEngine.getSerializationService();
         List<Integer> partitionIds = nodeEngine.getPartitionService().getMemberPartitions(nodeEngine.getThisAddress());
-        QueryResultSet result = new QueryResultSet(nodeEngine.getSerializationService(), iterationType, dataResult);
+        PagingPredicate pagingPredicate = null;
+        if (predicate instanceof PagingPredicate) {
+            pagingPredicate = (PagingPredicate) predicate;
+            pagingPredicate.setIterationType(iterationType);
+            if (pagingPredicate.getPage() > 0 && pagingPredicate.getAnchor() == null) {
+                pagingPredicate.previousPage();
+                query(pagingPredicate, iterationType, dataResult);
+                pagingPredicate.nextPage();
+            }
+        }
+        Set result;
+        if (pagingPredicate == null) {
+            result = new QueryResultSet(ss, iterationType, dataResult);
+        } else {
+            result = new SortedQueryResultSet(pagingPredicate.getComparator(), iterationType, pagingPredicate.getPageSize());
+        }
+
         List<Integer> returnedPartitionIds = new ArrayList<Integer>();
         try {
             Future future = operationService
@@ -686,10 +754,21 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
             QueryResult queryResult = (QueryResult) future.get();
             if (queryResult != null) {
                 returnedPartitionIds = queryResult.getPartitionIds();
-                result.addAll(queryResult.getResult());
+                if (pagingPredicate == null) {
+                    result.addAll(queryResult.getResult());
+                } else {
+                    for (QueryResultEntry queryResultEntry : queryResult.getResult()) {
+                        Object key = ss.toObject(queryResultEntry.getKeyData());
+                        Object value = ss.toObject(queryResultEntry.getValueData());
+                        result.add(new AbstractMap.SimpleImmutableEntry(key, value));
+                    }
+                }
             }
 
             if (returnedPartitionIds.size() == partitionIds.size()) {
+                if (pagingPredicate != null) {
+                    PagingPredicateAccessor.setPagingPredicateAnchor(pagingPredicate, ((SortedQueryResultSet) result).last());
+                }
                 return result;
             }
             List<Integer> missingList = new ArrayList<Integer>();
@@ -711,7 +790,15 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
             }
             for (Future f : futures) {
                 QueryResult qResult = (QueryResult) f.get();
-                result.addAll(qResult.getResult());
+                if (pagingPredicate == null) {
+                    result.addAll(qResult.getResult());
+                } else {
+                    for (QueryResultEntry queryResultEntry : qResult.getResult()) {
+                        Object key = ss.toObject(queryResultEntry.getKeyData());
+                        Object value = ss.toObject(queryResultEntry.getValueData());
+                        result.add(new AbstractMap.SimpleImmutableEntry(key, value));
+                    }
+                }
             }
         } catch (Throwable t) {
             throw ExceptionUtil.rethrow(t);
@@ -721,12 +808,29 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
 
 
     protected Set query(final Predicate predicate, final IterationType iterationType, final boolean dataResult) {
+
         final NodeEngine nodeEngine = getNodeEngine();
         OperationService operationService = nodeEngine.getOperationService();
+        final SerializationService ss = nodeEngine.getSerializationService();
         Collection<MemberImpl> members = nodeEngine.getClusterService().getMemberList();
         int partitionCount = nodeEngine.getPartitionService().getPartitionCount();
         Set<Integer> plist = new HashSet<Integer>(partitionCount);
-        QueryResultSet result = new QueryResultSet(nodeEngine.getSerializationService(), iterationType, dataResult);
+        PagingPredicate pagingPredicate = null;
+        if (predicate instanceof PagingPredicate) {
+            pagingPredicate = (PagingPredicate) predicate;
+            pagingPredicate.setIterationType(iterationType);
+            if (pagingPredicate.getPage() > 0 && pagingPredicate.getAnchor() == null) {
+                pagingPredicate.previousPage();
+                query(pagingPredicate, iterationType, dataResult);
+                pagingPredicate.nextPage();
+            }
+        }
+        Set result;
+        if (pagingPredicate == null) {
+            result = new QueryResultSet(ss, iterationType, dataResult);
+        } else {
+            result = new SortedQueryResultSet(pagingPredicate.getComparator(), iterationType, pagingPredicate.getPageSize());
+        }
         List<Integer> missingList = new ArrayList<Integer>();
         try {
             List<Future> flist = new ArrayList<Future>();
@@ -741,11 +845,22 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
                     final List<Integer> partitionIds = queryResult.getPartitionIds();
                     if (partitionIds != null) {
                         plist.addAll(partitionIds);
-                        result.addAll(queryResult.getResult());
+                        if (pagingPredicate == null) {
+                            result.addAll(queryResult.getResult());
+                        } else {
+                            for (QueryResultEntry queryResultEntry : queryResult.getResult()) {
+                                Object key = ss.toObject(queryResultEntry.getKeyData());
+                                Object value = ss.toObject(queryResultEntry.getValueData());
+                                result.add(new AbstractMap.SimpleImmutableEntry(key, value));
+                            }
+                        }
                     }
                 }
             }
             if (plist.size() == partitionCount) {
+                if (pagingPredicate != null) {
+                    PagingPredicateAccessor.setPagingPredicateAnchor(pagingPredicate, ((SortedQueryResultSet) result).last());
+                }
                 return result;
             }
             for (int i = 0; i < partitionCount; i++) {
@@ -777,10 +892,21 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
             }
             for (Future future : futures) {
                 QueryResult queryResult = (QueryResult) future.get();
-                result.addAll(queryResult.getResult());
+                if (pagingPredicate == null) {
+                    result.addAll(queryResult.getResult());
+                } else {
+                    for (QueryResultEntry queryResultEntry : queryResult.getResult()) {
+                        Object key = ss.toObject(queryResultEntry.getKeyData());
+                        Object value = ss.toObject(queryResultEntry.getValueData());
+                        result.add(new AbstractMap.SimpleImmutableEntry(key, value));
+                    }
+                }
             }
         } catch (Throwable t) {
             throw ExceptionUtil.rethrow(t);
+        }
+        if (pagingPredicate != null) {
+            PagingPredicateAccessor.setPagingPredicateAnchor(pagingPredicate, ((SortedQueryResultSet) result).last());
         }
         return result;
     }
@@ -824,4 +950,24 @@ abstract class MapProxySupport extends AbstractDistributedObject<MapService> imp
     public final String getServiceName() {
         return SERVICE_NAME;
     }
+
+    private class MapExecutionCallbackAdapter implements Callback {
+
+        private final ExecutionCallback executionCallback;
+
+        public MapExecutionCallbackAdapter(ExecutionCallback executionCallback) {
+            this.executionCallback = executionCallback;
+        }
+
+        @Override
+        public void notify(Object response) {
+            if (response instanceof Throwable) {
+                executionCallback.onFailure((Throwable) response);
+            } else {
+                executionCallback.onResponse(getService().toObject(response));
+            }
+        }
+
+    }
+
 }

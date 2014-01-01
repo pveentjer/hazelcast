@@ -36,12 +36,15 @@ import com.hazelcast.map.tx.TransactionalMapProxy;
 import com.hazelcast.map.wan.MapReplicationRemove;
 import com.hazelcast.map.wan.MapReplicationUpdate;
 import com.hazelcast.monitor.impl.LocalMapStatsImpl;
+import com.hazelcast.monitor.impl.NearCacheStatsImpl;
 import com.hazelcast.nio.Address;
 import com.hazelcast.nio.ClassLoaderUtil;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.nio.serialization.SerializationService;
-import com.hazelcast.partition.*;
+import com.hazelcast.partition.MigrationEndpoint;
 import com.hazelcast.partition.PartitionService;
+import com.hazelcast.partition.PartitionView;
+import com.hazelcast.query.PagingPredicate;
 import com.hazelcast.query.Predicate;
 import com.hazelcast.query.impl.IndexService;
 import com.hazelcast.query.impl.QueryEntry;
@@ -50,10 +53,7 @@ import com.hazelcast.spi.*;
 import com.hazelcast.spi.impl.EventServiceImpl;
 import com.hazelcast.spi.impl.ResponseHandlerFactory;
 import com.hazelcast.transaction.impl.TransactionSupport;
-import com.hazelcast.util.Clock;
-import com.hazelcast.util.ConcurrencyUtil;
-import com.hazelcast.util.ConstructorFunction;
-import com.hazelcast.util.ExceptionUtil;
+import com.hazelcast.util.*;
 import com.hazelcast.util.scheduler.ScheduledEntry;
 import com.hazelcast.wan.WanReplicationEvent;
 
@@ -511,7 +511,13 @@ public class MapService implements ManagedService, MigrationAwareService,
     }
 
     public void destroyDistributedObject(String name) {
-        mapContainers.remove(name);
+        MapContainer mapContainer = mapContainers.remove(name);
+        if (mapContainer != null && mapContainer.isNearCacheEnabled()) {
+            NearCache nearCache = nearCacheMap.remove(name);
+            if (nearCache != null) {
+                nearCache.clear();
+            }
+        }
         final PartitionContainer[] containers = partitionContainers;
         for (PartitionContainer container : containers) {
             if (container != null) {
@@ -676,6 +682,11 @@ public class MapService implements ManagedService, MigrationAwareService,
         return registration.getId();
     }
 
+    public String addLocalEventListener(EntryListener entryListener, EventFilter eventFilter, String mapName) {
+        EventRegistration registration = nodeEngine.getEventService().registerLocalListener(SERVICE_NAME, mapName, eventFilter, entryListener);
+        return registration.getId();
+    }
+
     public String addEventListener(EntryListener entryListener, EventFilter eventFilter, String mapName) {
         EventRegistration registration = nodeEngine.getEventService().registerListener(SERVICE_NAME, mapName, eventFilter, entryListener);
         return registration.getId();
@@ -781,7 +792,7 @@ public class MapService implements ManagedService, MigrationAwareService,
         }
 
         MapContainer mapContainer = getMapContainer(mapName);
-        return mapContainer.getRecordFactory().equals(value1, value2);
+        return mapContainer.getRecordFactory().isEquals(value1, value2);
     }
 
     @SuppressWarnings("unchecked")
@@ -1026,10 +1037,13 @@ public class MapService implements ManagedService, MigrationAwareService,
 
     public QueryResult queryOnPartition(String mapName, Predicate predicate, int partitionId) {
         final QueryResult result = new QueryResult();
+        List<QueryEntry> list = new LinkedList<QueryEntry>();
         PartitionContainer container = getPartitionContainer(partitionId);
         RecordStore recordStore = container.getRecordStore(mapName);
         Map<Data, Record> records = recordStore.getReadonlyRecordMap();
         SerializationService serializationService = nodeEngine.getSerializationService();
+        final PagingPredicate pagingPredicate = predicate instanceof PagingPredicate ? (PagingPredicate)predicate : null;
+        Comparator<Map.Entry> wrapperComparator = SortingUtil.newComparator(pagingPredicate);
         for (Record record : records.values()) {
             Data key = record.getKey();
             Object value = record.getValue();
@@ -1038,8 +1052,24 @@ public class MapService implements ManagedService, MigrationAwareService,
             }
             QueryEntry queryEntry = new QueryEntry(serializationService, key, key, value);
             if (predicate.apply(queryEntry)) {
-                result.add(new QueryResultEntryImpl(key, key, queryEntry.getValueData()));
+                if (pagingPredicate != null) {
+                    Map.Entry anchor = pagingPredicate.getAnchor();
+                    if (anchor != null &&
+                            SortingUtil.compare(pagingPredicate.getComparator(), pagingPredicate.getIterationType(), anchor, queryEntry) >= 0 ) {
+                        continue;
+                    }
+                }
+                list.add(queryEntry);
             }
+        }
+        if (pagingPredicate != null) {
+            Collections.sort(list, wrapperComparator);
+            if (list.size() > pagingPredicate.getPageSize()) {
+                list = list.subList(0, pagingPredicate.getPageSize());
+            }
+        }
+        for (QueryEntry entry : list) {
+            result.add(new QueryResultEntryImpl(entry.getKeyData(), entry.getKeyData(), entry.getValueData()));
         }
         return result;
     }
@@ -1130,6 +1160,11 @@ public class MapService implements ManagedService, MigrationAwareService,
         // add near cache heap cost.
         heapCost += mapContainer.getNearCacheSizeEstimator().getSize();
         localMapStats.setHeapCost(heapCost);
+        if(mapContainer.getMapConfig().isNearCacheEnabled())
+        {
+            NearCacheStatsImpl nearCacheStats =  getNearCache(mapName).getNearCacheStats();
+            localMapStats.setNearCacheStats(nearCacheStats);
+        }
 
         return localMapStats;
     }

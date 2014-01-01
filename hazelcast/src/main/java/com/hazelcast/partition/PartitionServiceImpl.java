@@ -17,10 +17,7 @@
 package com.hazelcast.partition;
 
 import com.hazelcast.config.PartitionGroupConfig;
-import com.hazelcast.core.HazelcastException;
-import com.hazelcast.core.Member;
-import com.hazelcast.core.MigrationEvent;
-import com.hazelcast.core.MigrationListener;
+import com.hazelcast.core.*;
 import com.hazelcast.instance.MemberImpl;
 import com.hazelcast.instance.Node;
 import com.hazelcast.logging.ILogger;
@@ -36,21 +33,18 @@ import com.hazelcast.util.scheduler.*;
 
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 
 import static com.hazelcast.core.MigrationEvent.MigrationStatus;
+import static java.lang.System.arraycopy;
 
 public class PartitionServiceImpl implements PartitionService, ManagedService,
         EventPublishingService<MigrationEvent, MigrationListener> {
 
     public static final String SERVICE_NAME = "hz:core:partitionService";
-
-    private static final long REPARTITIONING_CHECK_INTERVAL = TimeUnit.SECONDS.toMillis(600); // 10 MINUTES
 
     private final Node node;
     private final NodeEngineImpl nodeEngine;
@@ -58,7 +52,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     private final int partitionCount;
     private final PartitionImpl[] partitions;
     private final PartitionReplicaVersions[] replicaVersions;
-    private final ConcurrentMap<Integer, ReplicaSyncInfo> replicaSyncRequests;
+    private final AtomicReferenceArray<ReplicaSyncInfo> replicaSyncRequests;
     private final EntryTaskScheduler<Integer, ReplicaSyncInfo> replicaSyncScheduler;
     private final AtomicInteger replicaSyncProcessCount = new AtomicInteger();
     private final MigrationThread migrationThread;
@@ -112,56 +106,14 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         migrationThread = new MigrationThread(node);
         proxy = new PartitionServiceProxy(this);
 
-        replicaSyncRequests = new ConcurrentHashMap<Integer, ReplicaSyncInfo>(partitionCount);
+        replicaSyncRequests = new AtomicReferenceArray<ReplicaSyncInfo>(new ReplicaSyncInfo[partitionCount]);
         replicaSyncScheduler = EntryTaskSchedulerFactory.newScheduler(nodeEngine.getExecutionService().getScheduledExecutor(),
                 new ReplicaSyncEntryProcessor(), ScheduleType.SCHEDULE_IF_NEW);
 
         nodeEngine.getExecutionService().scheduleWithFixedDelay(new SyncReplicaVersionTask(), 30, 30, TimeUnit.SECONDS);
     }
 
-    private class LocalPartitionListener implements PartitionListener {
-        final Address thisAddress;
-        private LocalPartitionListener(Address thisAddress) {
-            this.thisAddress = thisAddress;
-        }
-
-        public void replicaChanged(PartitionReplicaChangeEvent event) {
-            if (event.getReplicaIndex() > 0) {
-                // backup replica owner changed!
-                if (thisAddress.equals(event.getOldAddress())) {
-                    final PartitionImpl partition = partitions[event.getPartitionId()];
-                    if (!partition.isOwnerOrBackup(thisAddress)) {
-                        clearPartitionReplica(event.getPartitionId(), event.getReplicaIndex());
-                    }
-                } else if (thisAddress.equals(event.getNewAddress())) {
-                    syncPartitionReplica(event.getPartitionId(), event.getReplicaIndex(), true);
-                }
-            }
-            if (event.getReplicaIndex() == 0 && event.getNewAddress() == null && node.isActive() && node.joined()) {
-                final String warning = "Owner of partition is being removed! " +
-                        "Possible data loss for partition[" + event.getPartitionId() + "]. " + event;
-                logger.warning(warning);
-                systemLogService.logWarningPartition(warning);
-            }
-            if (node.isMaster()) {
-                stateVersion.incrementAndGet();
-            }
-        }
-    }
-
-    private class ReplicaSyncEntryProcessor implements ScheduledEntryProcessor<Integer, ReplicaSyncInfo> {
-
-        public void process(EntryTaskScheduler<Integer, ReplicaSyncInfo> scheduler, Collection<ScheduledEntry<Integer, ReplicaSyncInfo>> entries) {
-            for (ScheduledEntry<Integer, ReplicaSyncInfo> entry : entries) {
-                final ReplicaSyncInfo syncInfo = entry.getValue();
-                if (replicaSyncRequests.remove(entry.getKey(), syncInfo)) {
-                    logger.info("Re-sending sync replica request for partition: " + syncInfo.partitionId + ", replica: " + syncInfo.replicaIndex);
-                    syncPartitionReplica(syncInfo.partitionId, syncInfo.replicaIndex, false);
-                }
-            }
-        }
-    }
-
+    @Override
     public void init(final NodeEngine nodeEngine, Properties properties) {
         migrationThread.start();
 
@@ -171,17 +123,9 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         }
         nodeEngine.getExecutionService().scheduleAtFixedRate(new SendClusterStateTask(),
                 partitionTableSendInterval, partitionTableSendInterval, TimeUnit.SECONDS);
-
-//        nodeEngine.getExecutionService().scheduleAtFixedRate(new Runnable() {
-//            public void run() {
-//                if (node.isMaster() && node.isActive() && initialized && shouldCheckRepartitioning()) {
-//                    logger.finest( "Checking partition table for repartitioning...");
-//                    migrationQueue.add(new RepartitioningTask(false));
-//                }
-//            }
-//        }, 180, 180, TimeUnit.SECONDS);
     }
 
+    @Override
     public Address getPartitionOwner(int partitionId) {
         if (!initialized) {
             firstArrangement();
@@ -221,10 +165,14 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
                 PartitionStateGenerator psg = partitionStateGenerator;
                 logger.info("Initializing cluster partition table first arrangement...");
                 final Set<Member> members = node.getClusterService().getMembers();
-                PartitionImpl[] newState = psg.initialize(memberGroupFactory.createMemberGroups(members), partitionCount);
+                Address[][] newState = psg.initialize(memberGroupFactory.createMemberGroups(members), partitionCount);
+
+                //todo: why is there a null check?
                 if (newState != null) {
-                    for (PartitionImpl partition : newState) {
-                        partitions[partition.getPartitionId()].setPartitionInfo(partition);
+                    for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
+                        PartitionImpl partition = partitions[partitionId];
+                        Address[] replicas = newState[partitionId];
+                        partition.setPartitionInfo(replicas);
                     }
                     initialized = true;
                     sendPartitionRuntimeState(true);
@@ -240,6 +188,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         memberGroupsSize = groups.size();
     }
 
+    @Override
     public int getMemberGroupsSize() {
         final int size = memberGroupsSize;
         // size = 0 means service is not initialized yet.
@@ -324,6 +273,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
             migrationActivationDelay = Math.max(migrationActivationDelay, 1000L);
 
             nodeEngine.getExecutionService().schedule(new Runnable() {
+                @Override
                 public void run() {
                     resumeMigration();
                 }
@@ -388,8 +338,10 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         lock.lock();
         try {
             if (!node.isActive() || !node.joined()) {
-                logger.finest("Node should be active(" + node.isActive() + ") and joined(" + node.joined()
-                        + ") to be able to process partition table!");
+                if(logger.isFinestEnabled()){
+                    logger.finest("Node should be active(" + node.isActive() + ") and joined(" + node.joined()
+                            + ") to be able to process partition table!");
+                }
                 return;
             }
             final Address sender = partitionState.getEndpoint();
@@ -413,22 +365,23 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
             }
 
             final Set<Address> unknownAddresses = new HashSet<Address>();
-            PartitionView[] newPartitions = partitionState.getPartitions();
-            for (PartitionView newPartition : newPartitions) {
-                PartitionImpl currentPartition = partitions[newPartition.getPartitionId()];
-                for (int index = 0; index < PartitionImpl.MAX_REPLICA_COUNT; index++) {
-                    Address address = newPartition.getReplicaAddress(index);
+            Address[][] state = partitionState.getPartitionState();
+            for(int partitionId=0;partitionId<state.length;partitionId++){
+                Address[] replicas = state[partitionId];
+                PartitionImpl currentPartition = partitions[partitionId];
+                for (int index = 0; index < PartitionView.MAX_REPLICA_COUNT; index++) {
+                    Address address = replicas[index];
                     if (address != null && getMember(address) == null) {
                         if (logger.isFinestEnabled()) {
                             logger.finest(
                                     "Unknown " + address + " found in partition table sent from master "
-                                            + sender + ". It has probably already left the cluster. Partition: " + newPartition);
+                                            + sender + ". It has probably already left the cluster. Partition: " + partitionId);
                         }
                         unknownAddresses.add(address);
                     }
                 }
                 // backup replicas will be assigned after active migrations are finalized.
-                currentPartition.setOwner(newPartition.getOwner());
+                currentPartition.setOwner(replicas[0]);
             }
             if (!unknownAddresses.isEmpty() && logger.isLoggable(Level.WARNING)) {
                 StringBuilder s = new StringBuilder("Following unknown addresses are found in partition table")
@@ -452,9 +405,10 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
                 rollbackActiveMigrationsFromPreviousMaster(masterMember.getUuid());
             }
 
-            for (PartitionView newPartition : newPartitions) {
-                PartitionImpl currentPartition = partitions[newPartition.getPartitionId()];
-                currentPartition.setPartitionInfo(newPartition);
+            for(int partitionId=0;partitionId<partitionCount;partitionId++){
+                PartitionImpl partition = partitions[partitionId];
+                Address[] replicas = state[partitionId];
+                partition.setPartitionInfo(replicas);
             }
 
             stateVersion.set(partitionState.getVersion());
@@ -492,6 +446,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
                     } else {
                         logger.info("Scheduling finalization of " + migrationInfo + ", because migration process is currently running.");
                         nodeEngine.getExecutionService().schedule(new Runnable() {
+                            @Override
                             public void run() {
                                 finalizeActiveMigration(migrationInfo);
                             }
@@ -504,14 +459,11 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         }
     }
 
-    public boolean isPartitionMigrating(int partitionId) {
-        return activeMigrations.containsKey(partitionId);
-    }
-
     void addActiveMigration(MigrationInfo migrationInfo) {
         lock.lock();
         try {
             final int partitionId = migrationInfo.getPartitionId();
+            partitions[partitionId].isMigrating=true;
             final MigrationInfo currentMigrationInfo = activeMigrations.putIfAbsent(partitionId, migrationInfo);
             if (currentMigrationInfo != null) {
                 boolean oldMaster = false;
@@ -563,6 +515,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     }
 
     MigrationInfo removeActiveMigration(int partitionId) {
+        partitions[partitionId].isMigrating=false;
         return activeMigrations.remove(partitionId);
     }
 
@@ -595,6 +548,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
 
     private void clearPartitionReplica(final int partitionId, final int replicaIndex) {
         nodeEngine.getExecutionService().execute(ExecutionService.SYSTEM_EXECUTOR, new Runnable() {
+            @Override
             public void run() {
                 final Collection<MigrationAwareService> services = nodeEngine.getServices(MigrationAwareService.class);
                 for (MigrationAwareService service : services) {
@@ -606,7 +560,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
 
     @PrivateApi
     void syncPartitionReplica(int partitionId, int replicaIndex, boolean force) {
-        if (replicaIndex < 0 || replicaIndex > PartitionImpl.MAX_REPLICA_COUNT) {
+        if (replicaIndex < 0 || replicaIndex > PartitionView.MAX_REPLICA_COUNT) {
             throw new IllegalArgumentException("Invalid replica index: " + replicaIndex);
         }
         final PartitionImpl partitionImpl = getPartition(partitionId);
@@ -618,12 +572,12 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
             final ReplicaSyncInfo syncInfo = new ReplicaSyncInfo(partitionId, replicaIndex, target);
             boolean sendRequest = false;
             if (currentSyncInfo == null) {
-                sendRequest = replicaSyncRequests.putIfAbsent(partitionId, syncInfo) == null;
+                sendRequest = replicaSyncRequests.compareAndSet(partitionId, null,syncInfo);
             } else if (currentSyncInfo.requestTime < (Clock.currentTimeMillis() - 10000)
                     || nodeEngine.getClusterService().getMember(currentSyncInfo.target) == null) {
-                sendRequest = replicaSyncRequests.replace(partitionId, currentSyncInfo, syncInfo);
+                sendRequest = replicaSyncRequests.compareAndSet(partitionId, currentSyncInfo, syncInfo);
             } else if (force) {
-                replicaSyncRequests.put(partitionId, syncInfo);
+                replicaSyncRequests.set(partitionId, syncInfo);
                 sendRequest = true;
             }
             if (target.equals(nodeEngine.getThisAddress())) {
@@ -655,14 +609,11 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         return node.clusterService.getMember(address);
     }
 
-    public int getStateVersion() {
-        return stateVersion.get();
-    }
-
     private PartitionImpl getPartitionImpl(int partitionId) {
         return partitions[partitionId];
     }
 
+    @Override
     public PartitionImpl getPartition(int partitionId) {
         PartitionImpl p = getPartitionImpl(partitionId);
         if (p.getOwner() == null) {
@@ -727,6 +678,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         return false;
     }
 
+    @Override
     public boolean hasOnGoingMigration() {
         return hasOnGoingMigrationLocal() || (!node.isMaster() && hasOnGoingMigrationMaster(Level.FINEST));
     }
@@ -755,6 +707,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         for (final PartitionImpl partition : partitions) {
             if (thisAddress.equals(partition.getOwner()) && partition.getReplicaAddress(1) != null) {
                 Callback<Object> callback = new Callback<Object>() {
+                    @Override
                     public void notify(Object object) {
                         if (Boolean.FALSE.equals(object)) {
                             ok.compareAndSet(true, false);
@@ -831,15 +784,18 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         return false;
     }
 
+    @Override
     public final int getPartitionId(Data key) {
         int hash = key.getPartitionHash();
         return (hash != Integer.MIN_VALUE) ? Math.abs(hash) % partitionCount : 0;
     }
 
+    @Override
     public final int getPartitionId(Object key) {
         return getPartitionId(nodeEngine.toData(key));
     }
 
+    @Override
     public final int getPartitionCount() {
         return partitionCount;
     }
@@ -874,7 +830,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     // called in operation threads
     void finalizeReplicaSync(int partitionId, long[] versions) {
         setPartitionReplicaVersions(partitionId, versions);
-        replicaSyncRequests.remove(partitionId);
+        replicaSyncRequests.set(partitionId, null);
         replicaSyncScheduler.cancel(partitionId);
     }
 
@@ -886,51 +842,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         replicaSyncProcessCount.decrementAndGet();
     }
 
-    private class PartitionReplicaVersions {
-        final int partitionId;
-        final long versions[] = new long[PartitionImpl.MAX_BACKUP_COUNT]; // read and updated only by operation/partition threads
-
-        private PartitionReplicaVersions(int partitionId) {
-            this.partitionId = partitionId;
-        }
-
-        long[] incrementAndGet(int backupCount) {
-            for (int i = 0; i < backupCount; i++) {
-                versions[i]++;
-            }
-            return versions;
-        }
-
-        long[] get() {
-            return versions;
-        }
-
-        boolean update(final long[] newVersions, int currentReplica) {
-            final int index = currentReplica - 1;
-            final long current = versions[index];
-            final long next = newVersions[index];
-            final boolean updated = (current == next - 1);
-            if (updated) {
-                System.arraycopy(newVersions, 0, versions, 0, newVersions.length);
-            }
-            return updated;
-        }
-
-        void reset(long[] newVersions) {
-            System.arraycopy(newVersions, 0, versions, 0, newVersions.length);
-        }
-
-        @Override
-        public String toString() {
-            final StringBuilder sb = new StringBuilder();
-            sb.append("PartitionReplicaVersions");
-            sb.append("{partitionId=").append(partitionId);
-            sb.append(", versions=").append(Arrays.toString(versions));
-            sb.append('}');
-            return sb.toString();
-        }
-    }
-
+    @Override
     public Map<Address, List<Integer>> getMemberPartitionsMap() {
         final int members = node.getClusterService().getSize();
         Map<Address, List<Integer>> memberPartitions = new HashMap<Address, List<Integer>>(members);
@@ -953,7 +865,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         return memberPartitions;
     }
 
-
+    @Override
     public List<Integer> getMemberPartitions(Address target) {
         List<Integer> ownedPartitions = new LinkedList<Integer>();
         for (int i = 0; i < partitionCount; i++) {
@@ -965,12 +877,120 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         return ownedPartitions;
     }
 
-    private boolean shouldCheckRepartitioning() {
-        return migrationQueue.isEmpty()
-                && lastRepartitionTime.get() < (Clock.currentTimeMillis() - REPARTITIONING_CHECK_INTERVAL);
+    @Override
+    public void reset() {
+        migrationQueue.clear();
+        for (int k = 0; k < replicaSyncRequests.length(); k++) {
+            replicaSyncRequests.set(k, null);
+        }
+        replicaSyncScheduler.cancelAll();
+        lock.lock();
+        try {
+            initialized = false;
+            for (PartitionImpl partition : partitions) {
+                for (int i = 0; i < PartitionView.MAX_REPLICA_COUNT; i++) {
+                    partition.setReplicaAddress(i, null);
+                    partition.isMigrating=false;
+                }
+            }
+            activeMigrations.clear();
+            completedMigrations.clear();
+            stateVersion.set(0);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void pauseMigration() {
+        migrationActive.set(false);
+    }
+
+    public void resumeMigration() {
+        migrationActive.set(true);
+    }
+
+    @Override
+    public void shutdown(boolean terminate) {
+        logger.finest( "Shutting down the partition service");
+        migrationThread.stopNow();
+        reset();
+    }
+
+    public long getMigrationQueueSize() {
+        return migrationQueue.size();
+    }
+
+    public PartitionServiceProxy getPartitionServiceProxy() {
+        return proxy;
+    }
+
+    private void sendMigrationEvent(final MigrationInfo migrationInfo, final MigrationStatus status) {
+        final MemberImpl current = getMember(migrationInfo.getSource());
+        final MemberImpl newOwner = getMember(migrationInfo.getDestination());
+        final MigrationEvent event = new MigrationEvent(migrationInfo.getPartitionId(), current, newOwner, status);
+        final EventService eventService = nodeEngine.getEventService();
+        final Collection<EventRegistration> registrations = eventService.getRegistrations(SERVICE_NAME, SERVICE_NAME);
+        eventService.publishEvent(SERVICE_NAME, registrations, event, event.getPartitionId());
+    }
+
+    @Override
+    public String addMigrationListener(MigrationListener migrationListener) {
+        final EventRegistration registration = nodeEngine.getEventService().registerListener(SERVICE_NAME, SERVICE_NAME, migrationListener);
+        return registration.getId();
+    }
+
+    @Override
+    public boolean removeMigrationListener(final String registrationId) {
+        return nodeEngine.getEventService().deregisterListener(SERVICE_NAME, SERVICE_NAME, registrationId);
+    }
+
+    @Override
+    public void dispatchEvent(MigrationEvent migrationEvent, MigrationListener migrationListener) {
+        switch (migrationEvent.getStatus()) {
+            case STARTED:
+                migrationListener.migrationStarted(migrationEvent);
+                break;
+            case COMPLETED:
+                migrationListener.migrationCompleted(migrationEvent);
+                break;
+            case FAILED:
+                migrationListener.migrationFailed(migrationEvent);
+                break;
+        }
+    }
+
+    private static MemberGroupFactory newMemberGroupFactory(PartitionGroupConfig partitionGroupConfig) {
+        PartitionGroupConfig.MemberGroupType memberGroupType;
+
+        if (partitionGroupConfig == null || !partitionGroupConfig.isEnabled()) {
+            memberGroupType = PartitionGroupConfig.MemberGroupType.PER_MEMBER;
+        }else{
+            memberGroupType = partitionGroupConfig.getGroupType();
+        }
+
+        switch (memberGroupType) {
+            case HOST_AWARE:
+                return new HostAwareMemberGroupFactory();
+            case CUSTOM:
+                return new ConfigMemberGroupFactory(partitionGroupConfig.getMemberGroupConfigs());
+            case PER_MEMBER:
+                return new SingleMemberGroupFactory();
+            default:
+                throw new RuntimeException("Unknown MemberGroupType:"+memberGroupType);
+        }
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("PartitionManager[" + stateVersion + "] {\n");
+        sb.append("\n");
+        sb.append("migrationQ: ").append(migrationQueue.size());
+        sb.append("\n}");
+        return sb.toString();
     }
 
     public static class AssignPartitions extends AbstractOperation {
+        @Override
         public void run() {
             final PartitionServiceImpl service = getService();
             service.firstArrangement();
@@ -988,6 +1008,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     }
 
     private class SendClusterStateTask implements Runnable {
+        @Override
         public void run() {
             if (node.isMaster() && node.isActive()) {
                 if (!migrationQueue.isEmpty() && migrationActive.get()) {
@@ -999,7 +1020,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     }
 
     private class SyncReplicaVersionTask implements Runnable {
-
+        @Override
         public void run() {
             if (node.isActive() && migrationActive.get()) {
                 final Address thisAddress = node.getThisAddress();
@@ -1019,7 +1040,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     }
 
     private class RepartitioningTask implements Runnable {
-
+        @Override
         public void run() {
             if (node.isMaster() && node.isActive()) {
                 lock.lock();
@@ -1030,19 +1051,19 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
                     migrationQueue.clear();
                     final PartitionStateGenerator psg = partitionStateGenerator;
                     final Set<Member> members = node.getClusterService().getMembers();
-                    final PartitionImpl[] newState = psg.reArrange(memberGroupFactory.createMemberGroups(members), partitions);
+                    final Address[][] newState = psg.reArrange(memberGroupFactory.createMemberGroups(members), partitions);
                     int migrationCount = 0;
                     int lostCount = 0;
                     lastRepartitionTime.set(Clock.currentTimeMillis());
-                    for (PartitionImpl newPartition : newState) {
-                        int partitionId = newPartition.getPartitionId();
+                    for (int partitionId=0;partitionId<partitionCount;partitionId++) {
+                        Address[] replicas = newState[partitionId];
                         PartitionImpl currentPartition = partitions[partitionId];
                         Address currentOwner = currentPartition.getOwner();
-                        Address newOwner = newPartition.getOwner();
+                        Address newOwner = replicas[0];
 
                         if (currentOwner == null) {  // assign new owner for lost partition
                             lostCount++;
-                            currentPartition.setPartitionInfo(newPartition);
+                            currentPartition.setPartitionInfo(replicas);
                             MigrationInfo migrationInfo = new MigrationInfo(partitionId, null, newOwner);
                             sendMigrationEvent(migrationInfo, MigrationStatus.STARTED);
                             sendMigrationEvent(migrationInfo, MigrationStatus.COMPLETED);
@@ -1050,10 +1071,10 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
                         } else if (newOwner != null && !currentOwner.equals(newOwner)) {
                             migrationCount++;
                             MigrationInfo info = new MigrationInfo(partitionId, currentOwner, newOwner);
-                            final Migrator migrator = new Migrator(info, new BackupMigrationTask(newPartition));
+                            final Migrator migrator = new Migrator(info, new BackupMigrationTask(partitionId, replicas));
                             migrationQueue.offer(migrator);
                         } else {
-                            currentPartition.setPartitionInfo(newPartition);
+                            currentPartition.setPartitionInfo(replicas);
                         }
                     }
                     sendPartitionRuntimeState(false);
@@ -1075,18 +1096,21 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     }
 
     private class BackupMigrationTask implements Runnable {
-        final PartitionImpl newPartition;
+        final Address[] replicas;
+        final int partitionid;
 
-        BackupMigrationTask(PartitionImpl newPartition) {
-            this.newPartition = newPartition;
+        BackupMigrationTask(int partitionId, Address[] replicas) {
+            this.partitionid = partitionId;
+            this.replicas = replicas;
         }
 
+        @Override
         public void run() {
             lock.lock();
             try {
-                final PartitionImpl currentPartition = partitions[newPartition.getPartitionId()];
+                final PartitionImpl currentPartition = partitions[partitionid];
                 for (int index = 1; index < PartitionView.MAX_REPLICA_COUNT; index++) {
-                    currentPartition.setReplicaAddress(index, newPartition.getReplicaAddress(index));
+                    currentPartition.setReplicaAddress(index, replicas[index]);
                 }
             } finally {
                 lock.unlock();
@@ -1096,7 +1120,8 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         @Override
         public String toString() {
             final StringBuilder sb = new StringBuilder("BackupMigrationTask{");
-            sb.append("newPartition=").append(newPartition);
+            sb.append("partitonId=").append(partitionid);
+            sb.append("replicas=").append(Arrays.toString(replicas));
             sb.append('}');
             return sb.toString();
         }
@@ -1116,6 +1141,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
             }
         }
 
+        @Override
         public void run() {
             if (!node.isActive() || !node.isMaster()) {
                 return;
@@ -1218,6 +1244,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
             thread = new Thread(node.threadGroup, this, node.getThreadNamePrefix("migration"));
         }
 
+        @Override
         public void run() {
             try {
                 while (!thread.isInterrupted()) {
@@ -1241,7 +1268,9 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
                     }
                 }
             } catch (InterruptedException e) {
-                logger.finest( "MigrationThread is interrupted: " + e.getMessage());
+                if(logger.isFinestEnabled()){
+                    logger.finest( "MigrationThread is interrupted: " + e.getMessage());
+                }
             } finally {
                 migrationQueue.clear();
             }
@@ -1312,107 +1341,209 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         }
     }
 
-    public void reset() {
-        migrationQueue.clear();
-        replicaSyncRequests.clear();
-        replicaSyncScheduler.cancelAll();
-        lock.lock();
-        try {
-            initialized = false;
-            for (PartitionImpl partition : partitions) {
-                for (int i = 0; i < PartitionImpl.MAX_REPLICA_COUNT; i++) {
-                    partition.setReplicaAddress(i, null);
+    private static final AtomicReferenceFieldUpdater<PartitionImpl, Address[]> addressesUpdater
+            = AtomicReferenceFieldUpdater.newUpdater(PartitionImpl.class, Address[].class, "addresses");
+
+    private final class PartitionImpl implements PartitionView {
+
+        private final int partitionId;
+
+        //The content of this array will never be updated, so it can be safely read using a volatile read.
+        //Writing to 'addresses' is done using the 'addressUpdater' AtomicReferenceFieldUpdater which involves a
+        //cas to prevent lost updates.
+        //The old approach relied on a AtomicReferenceArray, but this performed a lot slower that the current approach.
+        //Number of reads will outweigh the number of writes to the field.
+        volatile Address[] addresses = new Address[MAX_REPLICA_COUNT];
+        private final PartitionListener partitionListener;
+        private volatile boolean isMigrating = false;
+
+        PartitionImpl(int partitionId, PartitionListener partitionListener) {
+            this.partitionId = partitionId;
+            this.partitionListener = partitionListener;
+        }
+
+        @Override
+        public int getPartitionId() {
+            return partitionId;
+        }
+
+        @Override
+        public boolean isMigrating() {
+            return isMigrating;
+        }
+
+        @Override
+        public Address getOwner() {
+            return addresses[0];
+        }
+
+        void setOwner(Address ownerAddress) {
+            setReplicaAddress(0, ownerAddress);
+        }
+
+        @Override
+        public Address getReplicaAddress(int replicaIndex) {
+            return addresses[replicaIndex];
+        }
+
+        void setReplicaAddress(int replicaIndex, Address newAddress) {
+            boolean changed = false;
+            Address oldAddress;
+            for (; ; ) {
+                Address[] oldAddresses = addresses;
+                oldAddress = oldAddresses[replicaIndex];
+                if (partitionListener != null) {
+                    if (oldAddress == null) {
+                        changed = (newAddress != null);
+                    } else {
+                        changed = !oldAddress.equals(newAddress);
+                    }
+                }
+
+                Address[] newAddresses = new Address[MAX_REPLICA_COUNT];
+                arraycopy(oldAddresses, 0, newAddresses, 0, MAX_REPLICA_COUNT);
+                newAddresses[replicaIndex] = newAddress;
+                if (addressesUpdater.compareAndSet(this, oldAddresses, newAddresses)) {
+                    break;
                 }
             }
-            activeMigrations.clear();
-            completedMigrations.clear();
-            stateVersion.set(0);
-        } finally {
-            lock.unlock();
+
+            if (changed) {
+                partitionListener.replicaChanged(new PartitionReplicaChangeEvent(partitionId, replicaIndex, oldAddress, newAddress));
+            }
+        }
+
+        boolean onDeadAddress(Address deadAddress) {
+            for (int i = 0; i < MAX_REPLICA_COUNT; i++) {
+                if (deadAddress.equals(addresses[i])) {
+                    for (int a = i; a + 1 < MAX_REPLICA_COUNT; a++) {
+                        setReplicaAddress(a, addresses[a + 1]);
+                    }
+                    setReplicaAddress(MAX_REPLICA_COUNT - 1, null);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        void setPartitionInfo(Address[] replicas) {
+            for (int i = 0; i < MAX_REPLICA_COUNT; i++) {
+                setReplicaAddress(i, replicas[i]);
+            }
+        }
+
+        @Override
+        public boolean isOwnerOrBackup(Address address) {
+            for (int i = 0; i < MAX_REPLICA_COUNT; i++) {
+                if (address.equals(getReplicaAddress(i))) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder("Partition [").append(partitionId).append("]{\n");
+            for (int i = 0; i < MAX_REPLICA_COUNT; i++) {
+                Address address = addresses[i];
+                if (address != null) {
+                    sb.append('\t');
+                    sb.append(i).append(":").append(address);
+                    sb.append("\n");
+                }
+            }
+            sb.append("}");
+            return sb.toString();
         }
     }
 
-    public void pauseMigration() {
-        migrationActive.set(false);
-    }
+    private class LocalPartitionListener implements PartitionListener {
+        final Address thisAddress;
+        private LocalPartitionListener(Address thisAddress) {
+            this.thisAddress = thisAddress;
+        }
 
-    public void resumeMigration() {
-        migrationActive.set(true);
-    }
-
-    public void shutdown(boolean terminate) {
-        logger.finest( "Shutting down the partition service");
-        migrationThread.stopNow();
-        reset();
-    }
-
-    public long getMigrationQueueSize() {
-        return migrationQueue.size();
-    }
-
-    public PartitionServiceProxy getPartitionServiceProxy() {
-        return proxy;
-    }
-
-    private void sendMigrationEvent(final MigrationInfo migrationInfo, final MigrationStatus status) {
-        final MemberImpl current = getMember(migrationInfo.getSource());
-        final MemberImpl newOwner = getMember(migrationInfo.getDestination());
-        final MigrationEvent event = new MigrationEvent(migrationInfo.getPartitionId(), current, newOwner, status);
-        final EventService eventService = nodeEngine.getEventService();
-        final Collection<EventRegistration> registrations = eventService.getRegistrations(SERVICE_NAME, SERVICE_NAME);
-        eventService.publishEvent(SERVICE_NAME, registrations, event, event.getPartitionId());
-    }
-
-    public String addMigrationListener(MigrationListener migrationListener) {
-        final EventRegistration registration = nodeEngine.getEventService().registerListener(SERVICE_NAME, SERVICE_NAME, migrationListener);
-        return registration.getId();
-    }
-
-    public boolean removeMigrationListener(final String registrationId) {
-        return nodeEngine.getEventService().deregisterListener(SERVICE_NAME, SERVICE_NAME, registrationId);
-    }
-
-    public void dispatchEvent(MigrationEvent migrationEvent, MigrationListener migrationListener) {
-        switch (migrationEvent.getStatus()) {
-            case STARTED:
-                migrationListener.migrationStarted(migrationEvent);
-                break;
-            case COMPLETED:
-                migrationListener.migrationCompleted(migrationEvent);
-                break;
-            case FAILED:
-                migrationListener.migrationFailed(migrationEvent);
-                break;
+        @Override
+        public void replicaChanged(PartitionReplicaChangeEvent event) {
+            if (event.getReplicaIndex() > 0) {
+                // backup replica owner changed!
+                if (thisAddress.equals(event.getOldAddress())) {
+                    final PartitionImpl partition = partitions[event.getPartitionId()];
+                    if (!partition.isOwnerOrBackup(thisAddress)) {
+                        clearPartitionReplica(event.getPartitionId(), event.getReplicaIndex());
+                    }
+                } else if (thisAddress.equals(event.getNewAddress())) {
+                    syncPartitionReplica(event.getPartitionId(), event.getReplicaIndex(), true);
+                }
+            }
+            if (event.getReplicaIndex() == 0 && event.getNewAddress() == null && node.isActive() && node.joined()) {
+                final String warning = "Owner of partition is being removed! " +
+                        "Possible data loss for partition[" + event.getPartitionId() + "]. " + event;
+                logger.warning(warning);
+                systemLogService.logWarningPartition(warning);
+            }
+            if (node.isMaster()) {
+                stateVersion.incrementAndGet();
+            }
         }
     }
 
-    private static MemberGroupFactory newMemberGroupFactory(PartitionGroupConfig partitionGroupConfig) {
-        PartitionGroupConfig.MemberGroupType memberGroupType;
-
-        if (partitionGroupConfig == null || !partitionGroupConfig.isEnabled()) {
-            memberGroupType = PartitionGroupConfig.MemberGroupType.PER_MEMBER;
-        }else{
-            memberGroupType = partitionGroupConfig.getGroupType();
-        }
-
-        switch (memberGroupType) {
-            case HOST_AWARE:
-                return new HostAwareMemberGroupFactory();
-            case CUSTOM:
-                return new ConfigMemberGroupFactory(partitionGroupConfig.getMemberGroupConfigs());
-            case PER_MEMBER:
-                return new SingleMemberGroupFactory();
-            default:
-                throw new RuntimeException("Unknown MemberGroupType:"+memberGroupType);
+    private class ReplicaSyncEntryProcessor implements ScheduledEntryProcessor<Integer, ReplicaSyncInfo> {
+        @Override
+        public void process(EntryTaskScheduler<Integer, ReplicaSyncInfo> scheduler, Collection<ScheduledEntry<Integer, ReplicaSyncInfo>> entries) {
+            for (ScheduledEntry<Integer, ReplicaSyncInfo> entry : entries) {
+                final ReplicaSyncInfo syncInfo = entry.getValue();
+                if (replicaSyncRequests.compareAndSet(entry.getKey(), syncInfo, null)) {
+                    logger.info("Re-sending sync replica request for partition: " + syncInfo.partitionId + ", replica: " + syncInfo.replicaIndex);
+                    syncPartitionReplica(syncInfo.partitionId, syncInfo.replicaIndex, false);
+                }
+            }
         }
     }
 
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder("PartitionManager[" + stateVersion + "] {\n");
-        sb.append("\n");
-        sb.append("migrationQ: ").append(migrationQueue.size());
-        sb.append("\n}");
-        return sb.toString();
+    private class PartitionReplicaVersions {
+        final int partitionId;
+        final long versions[] = new long[PartitionImpl.MAX_BACKUP_COUNT]; // read and updated only by operation/partition threads
+
+        private PartitionReplicaVersions(int partitionId) {
+            this.partitionId = partitionId;
+        }
+
+        long[] incrementAndGet(int backupCount) {
+            for (int i = 0; i < backupCount; i++) {
+                versions[i]++;
+            }
+            return versions;
+        }
+
+        long[] get() {
+            return versions;
+        }
+
+        boolean update(final long[] newVersions, int currentReplica) {
+            final int index = currentReplica - 1;
+            final long current = versions[index];
+            final long next = newVersions[index];
+            final boolean updated = (current == next - 1);
+            if (updated) {
+                arraycopy(newVersions, 0, versions, 0, newVersions.length);
+            }
+            return updated;
+        }
+
+        void reset(long[] newVersions) {
+            arraycopy(newVersions, 0, versions, 0, newVersions.length);
+        }
+
+        @Override
+        public String toString() {
+            final StringBuilder sb = new StringBuilder();
+            sb.append("PartitionReplicaVersions");
+            sb.append("{partitionId=").append(partitionId);
+            sb.append(", versions=").append(Arrays.toString(versions));
+            sb.append('}');
+            return sb.toString();
+        }
     }
 }

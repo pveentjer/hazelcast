@@ -57,6 +57,7 @@ public abstract class AbstractJoiner implements Joiner {
 
     public abstract void doJoin(AtomicBoolean joined);
 
+    @Override
     public void join(AtomicBoolean joined) {
         doJoin(joined);
         postJoin();
@@ -96,7 +97,8 @@ public abstract class AbstractJoiner implements Joiner {
             }
             if (!node.joined() || !allConnected) {
                 if (Clock.currentTimeMillis() - getStartTime() < maxJoinMillis) {
-                    logger.warning("Failed to connect, node joined= " + node.joined() + ", allConnected= " + allConnected + " to all other members after " + checkCount + " seconds.");
+                    logger.warning("Failed to connect, node joined= " + node.joined() + ", allConnected= " +
+                            allConnected + " to all other members after " + checkCount + " seconds.");
                     logger.warning("Rebooting after 10 seconds.");
                     try {
                         Thread.sleep(10000);
@@ -112,8 +114,7 @@ public abstract class AbstractJoiner implements Joiner {
             }
         }
         if (node.getClusterService().getSize() == 1) {
-            final StringBuilder sb = new StringBuilder();
-            sb.append("\n");
+            final StringBuilder sb = new StringBuilder("\n");
             sb.append(node.clusterService.membersString());
             logger.info(sb.toString());
         }
@@ -210,6 +211,7 @@ public abstract class AbstractJoiner implements Joiner {
         }
     }
 
+    @Override
     public void reset() {
         joinStartTime.set(Clock.currentTimeMillis());
         tryCount.set(0);
@@ -254,10 +256,12 @@ public abstract class AbstractJoiner implements Joiner {
         operationService.runOperation(mergeClustersOperation);
     }
 
+    @Override
     public final long getStartTime() {
         return joinStartTime.get();
     }
 
+    @Override
     public void setTargetAddress(Address targetAddress) {
         this.targetAddress = targetAddress;
     }

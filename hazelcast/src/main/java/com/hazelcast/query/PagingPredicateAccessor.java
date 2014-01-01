@@ -14,19 +14,16 @@
  * limitations under the License.
  */
 
-package com.hazelcast.cluster;
+package com.hazelcast.query;
 
-import com.hazelcast.instance.Node;
-import com.hazelcast.spi.NodeAware;
+import java.util.Map;
 
-public class AbstractNodeAware implements NodeAware {
-    protected volatile Node node;
+/**
+ * @ali 08/12/13
+ */
+public class PagingPredicateAccessor {
 
-    public Node getNode() {
-        return node;
-    }
-
-    public void setNode(Node node) {
-        this.node = node;
+    public static void setPagingPredicateAnchor(PagingPredicate predicate, Map.Entry anchor){
+        predicate.setAnchor(anchor);
     }
 }
