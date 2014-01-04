@@ -32,21 +32,13 @@ public class OperationServiceTest extends HazelcastTestSupport {
         DummyOperation op = new DummyOperation(exception);
         OperationService operationService = getOperationService(local);
         int partitionId = findAnyPartitionId(local);
-        final CountDownLatch latch = new CountDownLatch(1);
-        Callback callback = new Callback() {
-            @Override
-            public void notify(Object object) {
-                latch.countDown();
-            }
-        };
-        Future f = operationService.createInvocationBuilder(null, op, partitionId).setCallback(callback).invoke();
+        Future f = operationService.invokeOnPartition(null, op, partitionId);
         try{
             f.get(1, TimeUnit.MINUTES);
             fail("ExecutionException expected");
         } catch(ExecutionException e){
             assertTrue(e.getCause() instanceof DummyException);
         }
-        assertTrue("the callback failed to be called", latch.await(10, TimeUnit.SECONDS));
     }
 
     @Test
@@ -61,23 +53,14 @@ public class OperationServiceTest extends HazelcastTestSupport {
         DummyOperation op = new DummyOperation(exception);
         OperationService operationService = getOperationService(local);
         int partitionId = findAnyPartitionId(remote);
-        final CountDownLatch latch = new CountDownLatch(1);
-        Callback callback = new Callback() {
-            @Override
-            public void notify(Object object) {
-                latch.countDown();
-            }
-        };
-        Future f = operationService.createInvocationBuilder(null, op, partitionId).setCallback(callback).invoke();
+        Future f = operationService.invokeOnPartition(null, op, partitionId);
         try{
             f.get(1, TimeUnit.MINUTES);
             fail("ExecutionException expected");
         } catch(ExecutionException e){
             assertTrue(e.getCause() instanceof DummyException);
         }
-        assertTrue("the callback failed to be called", latch.await(10, TimeUnit.SECONDS));
     }
-
 
     @Test
     public void invokeOnLocalTarget_operationThrowsException()throws Exception {
@@ -92,21 +75,13 @@ public class OperationServiceTest extends HazelcastTestSupport {
         OperationService operationService = getOperationService(local);
         Address target = getAddress(remote);
 
-        final CountDownLatch latch = new CountDownLatch(1);
-        Callback callback = new Callback() {
-            @Override
-            public void notify(Object object) {
-                latch.countDown();
-            }
-        };
-        Future f = operationService.createInvocationBuilder(null, op, target).setCallback(callback).invoke();
+        Future f = operationService.invokeOnTarget(null, op, target);
         try{
             f.get(1, TimeUnit.MINUTES);
             fail("ExecutionException expected");
         } catch(ExecutionException e){
             assertTrue(e.getCause() instanceof DummyException);
         }
-        assertTrue("the callback failed to be called", latch.await(10, TimeUnit.SECONDS));
     }
 
     @Test
@@ -121,23 +96,14 @@ public class OperationServiceTest extends HazelcastTestSupport {
         DummyOperation op = new DummyOperation(exception);
         OperationService operationService = getOperationService(local);
         Address target = getAddress(remote);
-        final CountDownLatch latch = new CountDownLatch(1);
-        Callback callback = new Callback() {
-            @Override
-            public void notify(Object object) {
-                latch.countDown();
-            }
-        };
-        Future f = operationService.createInvocationBuilder(null, op, target).setCallback(callback).invoke();
+        Future f = operationService.invokeOnTarget(null, op, target);
         try{
             f.get(1, TimeUnit.MINUTES);
             fail("ExecutionException expected");
         } catch(ExecutionException e){
             assertTrue(e.getCause() instanceof DummyException);
         }
-        assertTrue("the callback failed to be called", latch.await(10, TimeUnit.SECONDS));
     }
-
 
     @Test
     public void invokeOnLocalTargetWithCallback() throws Exception {

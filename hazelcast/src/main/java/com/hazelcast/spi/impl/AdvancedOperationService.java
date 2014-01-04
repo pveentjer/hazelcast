@@ -1,22 +1,22 @@
 package com.hazelcast.spi.impl;
 
 import com.hazelcast.cluster.ClusterServiceImpl;
-import com.hazelcast.core.HazelcastInstanceNotActiveException;
+import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.instance.MemberImpl;
 import com.hazelcast.instance.OutOfMemoryErrorDispatcher;
 import com.hazelcast.nio.Address;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.nio.serialization.Data;
+import com.hazelcast.partition.InternalPartition;
 import com.hazelcast.partition.PartitionService;
-import com.hazelcast.partition.PartitionView;
 import com.hazelcast.spi.Callback;
 import com.hazelcast.spi.InternalCompletableFuture;
 import com.hazelcast.spi.InvocationBuilder;
 import com.hazelcast.spi.Notifier;
 import com.hazelcast.spi.Operation;
+import com.hazelcast.spi.OperationAccessor;
 import com.hazelcast.spi.OperationFactory;
-import com.hazelcast.spi.ResponseHandler;
 import com.hazelcast.spi.UrgentSystemOperation;
 import com.hazelcast.spi.WaitSupport;
 import com.hazelcast.spi.exception.CallerNotMemberException;
@@ -38,8 +38,6 @@ import static com.hazelcast.spi.OperationAccessor.setCallId;
 import static com.hazelcast.spi.OperationAccessor.setCallTimeout;
 import static com.hazelcast.spi.OperationAccessor.setCallerAddress;
 import static com.hazelcast.spi.OperationAccessor.setConnection;
-import static com.hazelcast.spi.impl.ResponseHandlerFactory.setLocalResponseHandler;
-import static com.hazelcast.spi.impl.ResponseHandlerFactory.setRemoteResponseHandler;
 import static com.hazelcast.util.ValidationUtil.isNotNull;
 
 
@@ -133,7 +131,7 @@ public class AdvancedOperationService extends AbstractOperationService {
         op.setPartitionId(partitionId);
         op.setReplicaIndex(replicaIndex);
         if (callback != null) {
-            setLocalResponseHandler(op, callback);
+            op.andThen(new CallbackAdapter(callback));
         }
 
         setCallTimeout(op, callTimeout);
@@ -164,8 +162,9 @@ public class AdvancedOperationService extends AbstractOperationService {
         if (serviceName != null) {
             op.setServiceName(serviceName);
         }
+
         if (callback != null) {
-            setLocalResponseHandler(op, callback);
+            op.andThen(new CallbackAdapter(callback));
         }
 
         if (isLocal(target)) {
@@ -222,18 +221,18 @@ public class AdvancedOperationService extends AbstractOperationService {
         }
         op.logError(e);
         op.set(e, false);
-        ResponseHandler responseHandler = op.getResponseHandler();
-        if (responseHandler != null && op.returnsResponse()) {
-            try {
-                if (node.isActive()) {
-                    responseHandler.sendResponse(e);
-                } else if (responseHandler.isLocal()) {
-                    responseHandler.sendResponse(new HazelcastInstanceNotActiveException());
-                }
-            } catch (Throwable t) {
-                logger.warning("While sending op error...", t);
-            }
-        }
+        //ResponseHandler responseHandler = op.getResponseHandler();
+        //if (responseHandler != null && op.returnsResponse()) {
+        //    try {
+        //        if (node.isActive()) {
+        //            responseHandler.sendResponse(e);
+        //        } else if (responseHandler.isLocal()) {
+        //            responseHandler.sendResponse(new HazelcastInstanceNotActiveException());
+        //        }
+        //    } catch (Throwable t) {
+        //        logger.warning("While sending op error...", t);
+        //    }
+        //}
     }
 
     @Override
@@ -279,10 +278,10 @@ public class AdvancedOperationService extends AbstractOperationService {
 
         op.set(response, false);
 
-        final ResponseHandler responseHandler = op.getResponseHandler();
-        if (responseHandler != null) {
-            responseHandler.sendResponse(response);
-        }
+        //final ResponseHandler responseHandler = op.getResponseHandler();
+        //if (responseHandler != null) {
+        //    responseHandler.sendResponse(response);
+        //}
     }
 
     @Override
@@ -307,10 +306,10 @@ public class AdvancedOperationService extends AbstractOperationService {
             if (op.returnsResponse()) {
                 response = op.getResponse();
 
-                ResponseHandler responseHandler = op.getResponseHandler();
-                if (responseHandler != null) {
-                    responseHandler.sendResponse(response);
-                }
+                //ResponseHandler responseHandler = op.getResponseHandler();
+                //if (responseHandler != null) {
+                //    responseHandler.sendResponse(response);
+                //}
             }
             op.set(response, false);
         } catch (Exception e) {
@@ -412,7 +411,7 @@ public class AdvancedOperationService extends AbstractOperationService {
                 if (op instanceof ResponseOperation) {
                     processResponse((ResponseOperation) op);
                 } else {
-                    setRemoteResponseHandler(nodeEngine, op);
+                    op.andThen(new RemoteOperationResponseHandler(op));
                     if (!isJoinOperation(op) && clusterService.getMember(op.getCallerAddress()) == null) {
                         final Exception error = new CallerNotMemberException(op.getCallerAddress(), op.getPartitionId(),
                                 op.getClass().getName(), op.getServiceName());
@@ -440,11 +439,11 @@ public class AdvancedOperationService extends AbstractOperationService {
     private class AdvancedInvocationBuilder extends InvocationBuilder {
 
         private AdvancedInvocationBuilder(NodeEngineImpl nodeEngine, String serviceName, Operation op, int partitionId) {
-            super(nodeEngine, serviceName, op, partitionId);
+            super(nodeEngine, serviceName, op, partitionId,null);
         }
 
         private AdvancedInvocationBuilder(NodeEngineImpl nodeEngine, String serviceName, Operation op, Address target) {
-            super(nodeEngine, serviceName, op, target);
+            super(nodeEngine, serviceName, op, -1, target);
         }
 
         @Override
@@ -544,6 +543,45 @@ public class AdvancedOperationService extends AbstractOperationService {
         }
     }
 
+    private class CallbackAdapter implements ExecutionCallback{
+        private final Callback callback;
+
+        private CallbackAdapter(Callback callback) {
+            this.callback = callback;
+        }
+
+        @Override
+        public void onResponse(Object response) {
+             callback.notify(response);
+        }
+
+        @Override
+        public void onFailure(Throwable t) {
+             callback.notify(t);
+        }
+    }
+
+    private class RemoteOperationResponseHandler implements ExecutionCallback{
+        private final Operation operation;
+
+        private RemoteOperationResponseHandler(Operation operation) {
+            this.operation = operation;
+        }
+
+        @Override
+        public void onResponse(Object response) {
+            long callId = operation.getCallId();
+            final ResponseOperation responseOp = new ResponseOperation(response);
+            OperationAccessor.setCallId(responseOp, callId);
+            send(responseOp, operation.getConnection());
+        }
+
+        @Override
+        public void onFailure(Throwable t) {
+            onResponse(t);
+        }
+    }
+
     /**
      * A Scheduler responsible for scheduling operations for a specific partitions.
      * The PartitionOperationScheduler will guarantee that at any given moment, at
@@ -582,7 +620,7 @@ public class AdvancedOperationService extends AbstractOperationService {
 
         private final ConcurrentLinkedQueue priorityQueue = new ConcurrentLinkedQueue();
 
-        private final PartitionView partitionView;
+        private final InternalPartition partitionView;
 
         public PartitionOperationScheduler(final int partitionId, int ringBufferSize) {
             this.partitionView = partitionService.getPartition(partitionId);
@@ -830,7 +868,7 @@ public class AdvancedOperationService extends AbstractOperationService {
                 op.setNodeEngine(nodeEngine);
                 setCallerAddress(op, caller);
                 setConnection(op, conn);
-                setRemoteResponseHandler(nodeEngine, op);
+                op.andThen(new RemoteOperationResponseHandler(op));
 
                 if (!isJoinOperation(op) && clusterService.getMember(op.getCallerAddress()) == null) {
                     final Exception error = new CallerNotMemberException(
@@ -890,10 +928,10 @@ public class AdvancedOperationService extends AbstractOperationService {
                 if (op.returnsResponse()) {
                     response = op.getResponse();
 
-                    final ResponseHandler responseHandler = op.getResponseHandler();
-                    if (responseHandler != null) {
-                        responseHandler.sendResponse(response);
-                    }
+                    //final ResponseHandler responseHandler = op.getResponseHandler();
+                    //if (responseHandler != null) {
+                    //    responseHandler.sendResponse(response);
+                    //}
                 }
                 op.set(response, callerRuns);
             } catch (Throwable e) {

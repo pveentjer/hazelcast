@@ -66,6 +66,7 @@ public abstract class Operation implements DataSerializable, InternalCompletable
     private transient Object service;
     private transient Address callerAddress;
     private transient Connection connection;
+    //todo: can be removed once making use of the callback functionality by the 'andThen'.
     private transient ResponseHandler responseHandler;
     private transient long startTime;
 
@@ -336,6 +337,25 @@ public abstract class Operation implements DataSerializable, InternalCompletable
                 notifyAll();
             }
         }
+
+        Object oldCallback = callback;
+        if(oldCallback == null){
+            return;
+        }
+
+        if(!callbackFieldUpdater.compareAndSet(this,oldCallback, null)){
+            return;
+        }
+
+        //todo: we need to deal with chain of callbacks
+        //todo: we need to offload
+        //todo: we need to deal with exception and unpacking
+        ExecutionCallback c = (ExecutionCallback)oldCallback;
+        if(result instanceof Throwable){
+            c.onFailure((Throwable)result);
+        } else{
+            c.onResponse(result);
+        }
     }
 
     private final static AtomicReferenceFieldUpdater<Operation,Object> callbackFieldUpdater =
@@ -351,6 +371,8 @@ public abstract class Operation implements DataSerializable, InternalCompletable
     @Override
     public void andThen(ExecutionCallback callback) {
         isNotNull(callback,"callback");
+
+        //todo: in the future we need to offload this to another thread.
 
         //if there already is a result, we can execute the callback.
         if (result != NO_RESULT) {
@@ -408,6 +430,7 @@ public abstract class Operation implements DataSerializable, InternalCompletable
     public Object get() throws InterruptedException, ExecutionException {
         Object response = internalGet();
         if(response instanceof Throwable){
+            //todo:
             //if (remote) {
             //    ExceptionUtil.fixRemoteStackTrace((Throwable) response, Thread.currentThread().getStackTrace());
             //}
