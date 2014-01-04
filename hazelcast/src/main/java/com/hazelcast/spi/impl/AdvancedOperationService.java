@@ -1,25 +1,43 @@
 package com.hazelcast.spi.impl;
 
 import com.hazelcast.cluster.ClusterServiceImpl;
+import com.hazelcast.core.HazelcastInstanceNotActiveException;
 import com.hazelcast.instance.MemberImpl;
+import com.hazelcast.instance.OutOfMemoryErrorDispatcher;
 import com.hazelcast.nio.Address;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.partition.PartitionService;
 import com.hazelcast.partition.PartitionView;
-import com.hazelcast.spi.*;
-import com.hazelcast.spi.exception.CallTimeoutException;
+import com.hazelcast.spi.Callback;
+import com.hazelcast.spi.InternalCompletableFuture;
+import com.hazelcast.spi.InvocationBuilder;
+import com.hazelcast.spi.Notifier;
+import com.hazelcast.spi.Operation;
+import com.hazelcast.spi.OperationFactory;
+import com.hazelcast.spi.ResponseHandler;
+import com.hazelcast.spi.UrgentSystemOperation;
+import com.hazelcast.spi.WaitSupport;
 import com.hazelcast.spi.exception.CallerNotMemberException;
 import com.hazelcast.spi.exception.WrongTargetException;
 
 import java.util.Collection;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 
-import static com.hazelcast.spi.OperationAccessor.*;
+import static com.hazelcast.spi.OperationAccessor.isJoinOperation;
+import static com.hazelcast.spi.OperationAccessor.setCallId;
+import static com.hazelcast.spi.OperationAccessor.setCallTimeout;
+import static com.hazelcast.spi.OperationAccessor.setCallerAddress;
+import static com.hazelcast.spi.OperationAccessor.setConnection;
 import static com.hazelcast.spi.impl.ResponseHandlerFactory.setLocalResponseHandler;
 import static com.hazelcast.spi.impl.ResponseHandlerFactory.setRemoteResponseHandler;
 import static com.hazelcast.util.ValidationUtil.isNotNull;
@@ -74,9 +92,9 @@ public class AdvancedOperationService extends AbstractOperationService {
     private final Executor defaultExecutor = Executors.newFixedThreadPool(10);
     private final Address thisAddress;
     private final AtomicLong callIdGen = new AtomicLong(0);
-    private final ConcurrentMap<Long, Operation> remoteOperations = new ConcurrentHashMap<Long,Operation>();
+    private final ConcurrentMap<Long, Operation> remoteOperations = new ConcurrentHashMap<Long, Operation>();
     private final int partitionCount;
-    private  PartitionService partitionService;
+    private PartitionService partitionService;
     private ClusterServiceImpl clusterService;
     int ringbufferSize = 8192;
 
@@ -89,7 +107,7 @@ public class AdvancedOperationService extends AbstractOperationService {
         }
         partitionCount = node.getGroupProperties().PARTITION_COUNT.getInteger();
         this.schedulers = new PartitionOperationScheduler[partitionCount];
-         this.callerRunsOptimizationEnabled = true;
+        this.callerRunsOptimizationEnabled = false;
 
         this.operationThreads = new OperationThread[16];
         for (int k = 0; k < operationThreads.length; k++) {
@@ -98,7 +116,7 @@ public class AdvancedOperationService extends AbstractOperationService {
         }
     }
 
-    private void executeOnOperationThread(Runnable runnable) {
+    private void assignToThread(Runnable runnable) {
         //todo: we need a better mechanism for finding a suitable threadpool.
         operationThreads[0].offer(runnable);
     }
@@ -118,17 +136,10 @@ public class AdvancedOperationService extends AbstractOperationService {
             setLocalResponseHandler(op, callback);
         }
 
-        setCallTimeout(op, callTimeout); 
+        setCallTimeout(op, callTimeout);
         PartitionOperationScheduler scheduler = schedulers[partitionId];
         scheduler.schedule(op);
         return op;
-    }
-
-    private boolean isLocal(Address thatAddress) {
-        if(thatAddress == null){
-            System.out.println("foo");
-        }
-        return thatAddress.equals(thisAddress);
     }
 
     @Override
@@ -205,8 +216,24 @@ public class AdvancedOperationService extends AbstractOperationService {
         }
     }
 
-    private void handleOperationError(Operation op, Exception error) {
-        throw new RuntimeException(error);
+    private void handleOperationError(Operation op, Throwable e) {
+        if (e instanceof OutOfMemoryError) {
+            OutOfMemoryErrorDispatcher.onOutOfMemory((OutOfMemoryError) e);
+        }
+        op.logError(e);
+        op.set(e, false);
+        ResponseHandler responseHandler = op.getResponseHandler();
+        if (responseHandler != null && op.returnsResponse()) {
+            try {
+                if (node.isActive()) {
+                    responseHandler.sendResponse(e);
+                } else if (responseHandler.isLocal()) {
+                    responseHandler.sendResponse(new HazelcastInstanceNotActiveException());
+                }
+            } catch (Throwable t) {
+                logger.warning("While sending op error...", t);
+            }
+        }
     }
 
     @Override
@@ -287,7 +314,7 @@ public class AdvancedOperationService extends AbstractOperationService {
             }
             op.set(response, false);
         } catch (Exception e) {
-            e.printStackTrace();
+            handleOperationError(op, e);
         }
     }
 
@@ -329,6 +356,10 @@ public class AdvancedOperationService extends AbstractOperationService {
     @Override
     public Map<Integer, Object> invokeOnTargetPartitions(String serviceName, OperationFactory operationFactory, Address target) throws Exception {
         throw new UnsupportedOperationException();
+    }
+
+    private boolean isLocal(Address thatAddress) {
+        return thatAddress.equals(thisAddress);
     }
 
     @Override
@@ -597,7 +628,7 @@ public class AdvancedOperationService extends AbstractOperationService {
                 setCallerAddress(op, thisAddress);
                 //todo: we need to do something with return value.
                 send(op, partitionId, replicaIndex);
-                  //todo: we need to do something with return value.
+                //todo: we need to do something with return value.
                 send(op, partitionId, replicaIndex);
             }
         }
@@ -613,8 +644,6 @@ public class AdvancedOperationService extends AbstractOperationService {
         }
 
         private void doSchedule(final Object task) {
-            //todo: we need to deal with overload.
-
             long oldProducerSeq = producerSeq.get();
 
             //this flag indicates if we need to schedule, or if scheduling already is taken care of.
@@ -653,7 +682,7 @@ public class AdvancedOperationService extends AbstractOperationService {
             slot.commit(newProducerSeq);
 
             if (schedule) {
-                executeOnOperationThread(this);
+                assignToThread(this);
             }
         }
 
@@ -711,8 +740,7 @@ public class AdvancedOperationService extends AbstractOperationService {
             if (producerSeq.get() > newProducerSeq) {
                 //work has been produced by another producer, and since we still own the scheduled bit, we can safely
                 //schedule this
-                //todo: shitty name
-                executeOnOperationThread(this);
+                assignToThread(this);
             } else {
                 //work has not yet been produced, so we are going to unset the scheduled bit.
                 if (producerSeq.compareAndSet(newProducerSeq, oldProducerSeq)) {
@@ -724,7 +752,7 @@ public class AdvancedOperationService extends AbstractOperationService {
                 //new work has been scheduled by other producers, but since we still own the scheduled bit,
                 //we can schedule the work.
                 //work has been produced, so we need to offload it.
-                executeOnOperationThread(this);
+                assignToThread(this);
             }
 
             return true;
@@ -827,9 +855,9 @@ public class AdvancedOperationService extends AbstractOperationService {
                 //    return;
                 //}
 
-                if(op.validatesTarget()){
+                if (op.validatesTarget()) {
                     Address targetAddress = partitionView.getReplicaAddress(op.getReplicaIndex());
-                    if(!isLocal(targetAddress)){
+                    if (!isLocal(targetAddress)) {
                         throw new WrongTargetException(node.getThisAddress(), targetAddress, partitionId, op.getReplicaIndex(),
                                 op.getClass().getName(), op.getServiceName());
                     }
@@ -869,7 +897,7 @@ public class AdvancedOperationService extends AbstractOperationService {
                 }
                 op.set(response, callerRuns);
             } catch (Throwable e) {
-                logger.severe(e);
+                handleOperationError(op, e);
             }
         }
 

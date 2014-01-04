@@ -24,6 +24,8 @@ import com.hazelcast.instance.TestUtil;
 import org.junit.After;
 import org.junit.runner.RunWith;
 
+import static org.junit.Assert.assertTrue;
+
 /**
  * @author mdogan 5/24/13
  */
