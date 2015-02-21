@@ -184,9 +184,9 @@ public abstract class AbstractClassicOperationExecutorTest extends HazelcastTest
                 throw new IllegalStateException("adHocHandler should only be created once");
             }
             // not the correct handler because it publishes the operation
-            DummyOperationRunner operationHandler = new DummyOperationRunner(-2);
-            adhocHandler = operationHandler;
-            return operationHandler;
+            DummyOperationRunner operationRunner = new DummyOperationRunner(-2);
+            adhocHandler = operationRunner;
+            return operationRunner;
         }
     }
 

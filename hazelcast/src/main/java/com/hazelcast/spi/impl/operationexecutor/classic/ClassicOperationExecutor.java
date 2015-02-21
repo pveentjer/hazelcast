@@ -309,7 +309,7 @@ public final class ClassicOperationExecutor implements OperationExecutor {
 
     @Override
     public int getResponseQueueSize() {
-        return responseThread.workQueue.size();
+        return responseThread.getWorkQueue().size();
     }
 
     @Override
@@ -351,8 +351,8 @@ public final class ClassicOperationExecutor implements OperationExecutor {
         checkOpPacket(packet);
 
         if (packet.isHeaderSet(Packet.HEADER_RESPONSE)) {
-            // it's a response packet
-            responseThread.workQueue.add(packet);
+           // it's a response packet
+            responseThread.getWorkQueue().add(packet);
         } else {
             // it must be an operation packet
             int partitionId = packet.getPartitionId();
@@ -423,6 +423,10 @@ public final class ClassicOperationExecutor implements OperationExecutor {
     }
 
     @Override
+    public void start() {
+    }
+
+    @Override
     public void shutdown() {
         responseThread.shutdown();
         shutdownAll(partitionOperationThreads);
@@ -462,7 +466,7 @@ public final class ClassicOperationExecutor implements OperationExecutor {
         }
         sb.append(responseThread.getName())
                 .append(" processedCount=").append(responseThread.processedResponses)
-                .append(" pendingCount=").append(responseThread.workQueue.size()).append('\n');
+                .append(" pendingCount=").append(responseThread.getWorkQueue().size()).append('\n');
     }
 
     @Override
