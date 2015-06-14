@@ -11,6 +11,8 @@ import org.junit.runner.RunWith;
 import java.util.concurrent.Callable;
 import java.util.concurrent.FutureTask;
 
+import static java.lang.Boolean.FALSE;
+import static java.lang.Boolean.TRUE;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(HazelcastSerialClassRunner.class)
@@ -21,7 +23,7 @@ public class ProgressiveOperationExecutor_isInvocationAllowedFromCurrentThreadTe
     public void test_whenNullOperation() {
         initExecutor();
 
-        executor.isInvocationAllowedFromCurrentThread(null);
+        executor.isInvocationAllowedFromCurrentThread(null,false);
     }
 
     // ============= generic operations ==============================
@@ -32,7 +34,7 @@ public class ProgressiveOperationExecutor_isInvocationAllowedFromCurrentThreadTe
 
         GenericOperation genericOperation = new GenericOperation();
 
-        boolean result = executor.isInvocationAllowedFromCurrentThread(genericOperation);
+        boolean result = executor.isInvocationAllowedFromCurrentThread(genericOperation, false);
 
         assertTrue(result);
     }
@@ -46,13 +48,13 @@ public class ProgressiveOperationExecutor_isInvocationAllowedFromCurrentThreadTe
         PartitionSpecificCallable task = new PartitionSpecificCallable(0) {
             @Override
             public Object call() {
-                return executor.isInvocationAllowedFromCurrentThread(genericOperation);
+                return executor.isInvocationAllowedFromCurrentThread(genericOperation, false);
             }
         };
 
         executor.execute(task);
 
-        assertCompletesEventually(task, Boolean.TRUE);
+        assertCompletesEventually(task, TRUE);
     }
 
     @Test
@@ -64,12 +66,12 @@ public class ProgressiveOperationExecutor_isInvocationAllowedFromCurrentThreadTe
         PartitionSpecificCallable task = new PartitionSpecificCallable(-1) {
             @Override
             public Object call() {
-                return executor.isInvocationAllowedFromCurrentThread(genericOperation);
+                return executor.isInvocationAllowedFromCurrentThread(genericOperation, false);
             }
         };
         executor.execute(task);
 
-        assertCompletesEventually(task, Boolean.TRUE);
+        assertCompletesEventually(task, TRUE);
     }
 
     @Test
@@ -81,14 +83,14 @@ public class ProgressiveOperationExecutor_isInvocationAllowedFromCurrentThreadTe
         FutureTask<Boolean> futureTask = new FutureTask<Boolean>(new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
-                return executor.isInvocationAllowedFromCurrentThread(genericOperation);
+                return executor.isInvocationAllowedFromCurrentThread(genericOperation, false);
             }
         });
 
         DummyNioThread nioThread = new DummyNioThread(futureTask);
         nioThread.start();
 
-        assertEqualsEventually(futureTask, Boolean.FALSE);
+        assertEqualsEventually(futureTask, FALSE);
     }
 
     // ===================== partition specific operations ========================
@@ -99,7 +101,7 @@ public class ProgressiveOperationExecutor_isInvocationAllowedFromCurrentThreadTe
 
         final PartitionOperation partitionOperation = new PartitionOperation();
 
-        boolean result = executor.isInvocationAllowedFromCurrentThread(partitionOperation);
+        boolean result = executor.isInvocationAllowedFromCurrentThread(partitionOperation, false);
 
         assertTrue(result);
     }
@@ -113,13 +115,13 @@ public class ProgressiveOperationExecutor_isInvocationAllowedFromCurrentThreadTe
         PartitionSpecificCallable task = new PartitionSpecificCallable(-1) {
             @Override
             public Object call() {
-                return executor.isInvocationAllowedFromCurrentThread(partitionOperation);
+                return executor.isInvocationAllowedFromCurrentThread(partitionOperation, false);
             }
         };
 
         executor.execute(task);
 
-        assertCompletesEventually(task, Boolean.TRUE);
+        assertCompletesEventually(task, TRUE);
     }
 
     @Test
@@ -131,13 +133,13 @@ public class ProgressiveOperationExecutor_isInvocationAllowedFromCurrentThreadTe
         PartitionSpecificCallable task = new PartitionSpecificCallable(partitionOperation.getPartitionId()) {
             @Override
             public Object call() {
-                return executor.isInvocationAllowedFromCurrentThread(partitionOperation);
+                return executor.isInvocationAllowedFromCurrentThread(partitionOperation, false);
             }
         };
 
         executor.execute(task);
 
-        assertCompletesEventually(task, Boolean.TRUE);
+        assertCompletesEventually(task, TRUE);
     }
 
     @Test
@@ -150,13 +152,13 @@ public class ProgressiveOperationExecutor_isInvocationAllowedFromCurrentThreadTe
         PartitionSpecificCallable task = new PartitionSpecificCallable(wrongPartition) {
             @Override
             public Object call() {
-                return executor.isInvocationAllowedFromCurrentThread(partitionOperation);
+                return executor.isInvocationAllowedFromCurrentThread(partitionOperation, false);
             }
         };
 
         executor.execute(task);
 
-        assertCompletesEventually(task, Boolean.FALSE);
+        assertCompletesEventually(task, FALSE);
     }
 
     @Test
@@ -168,13 +170,13 @@ public class ProgressiveOperationExecutor_isInvocationAllowedFromCurrentThreadTe
         FutureTask<Boolean> futureTask = new FutureTask<Boolean>(new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
-                return executor.isInvocationAllowedFromCurrentThread(operation);
+                return executor.isInvocationAllowedFromCurrentThread(operation, false);
             }
         });
 
         DummyNioThread nioThread = new DummyNioThread(futureTask);
         nioThread.start();
 
-        assertEqualsEventually(futureTask, Boolean.FALSE);
+        assertEqualsEventually(futureTask, FALSE);
     }
 }

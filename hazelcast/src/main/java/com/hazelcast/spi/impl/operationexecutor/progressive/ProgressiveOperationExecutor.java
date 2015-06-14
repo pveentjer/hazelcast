@@ -5,11 +5,11 @@ import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.instance.NodeExtension;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
-import com.hazelcast.nio.NIOThread;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationExecutor;
+import com.hazelcast.spi.impl.operationexecutor.OperationHostileThread;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunnerFactory;
 import com.hazelcast.spi.impl.operationexecutor.ResponsePacketHandler;
@@ -19,8 +19,6 @@ import com.hazelcast.spi.impl.operationexecutor.classic.OperationThread;
 import com.hazelcast.spi.impl.operationexecutor.classic.PartitionOperationThread;
 import com.hazelcast.spi.impl.operationexecutor.classic.ResponseThread;
 import com.hazelcast.spi.impl.operationexecutor.classic.ScheduleQueue;
-
-import java.util.concurrent.atomic.AtomicReference;
 
 public final class ProgressiveOperationExecutor implements OperationExecutor {
 
@@ -230,8 +228,8 @@ public final class ProgressiveOperationExecutor implements OperationExecutor {
         }
 
         Thread currentThread = Thread.currentThread();
-        if (currentThread instanceof NIOThread) {
-            throw new IllegalThreadStateException();
+        if (currentThread instanceof OperationHostileThread) {
+            throw new IllegalThreadStateException();//todo: exception
         }
 
         int partitionId = op.getPartitionId();
@@ -286,7 +284,7 @@ public final class ProgressiveOperationExecutor implements OperationExecutor {
         }
 
         Thread currentThread = Thread.currentThread();
-        if (currentThread instanceof NIOThread) {
+        if (currentThread instanceof OperationHostileThread) {
             // we always need to offload in case of an NIO thread.
             execute(op);
             return;
@@ -343,7 +341,7 @@ public final class ProgressiveOperationExecutor implements OperationExecutor {
         Thread currentThread = Thread.currentThread();
 
         // IO threads are not allowed to run any operation
-        if (currentThread instanceof NIOThread) {
+        if (currentThread instanceof OperationHostileThread) {
             return false;
         }
 
@@ -360,7 +358,7 @@ public final class ProgressiveOperationExecutor implements OperationExecutor {
     }
 
     @Override
-    public boolean isInvocationAllowedFromCurrentThread(Operation op) {
+    public boolean isInvocationAllowedFromCurrentThread(Operation op, boolean isAsync) {
         if (op == null) {
             throw new NullPointerException("op can't be null");
         }
@@ -368,7 +366,7 @@ public final class ProgressiveOperationExecutor implements OperationExecutor {
         Thread currentThread = Thread.currentThread();
 
         // IO threads are not allowed to run any operation
-        if (currentThread instanceof NIOThread) {
+        if (currentThread instanceof OperationHostileThread) {
             return false;
         }
 

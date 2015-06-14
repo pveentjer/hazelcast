@@ -7,18 +7,18 @@ import com.hazelcast.instance.GroupProperties;
 import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.logging.LoggingServiceImpl;
 import com.hazelcast.nio.Address;
-import com.hazelcast.nio.NIOThread;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.nio.serialization.DefaultSerializationServiceBuilder;
 import com.hazelcast.nio.serialization.SerializationService;
 import com.hazelcast.spi.Operation;
-import com.hazelcast.spi.impl.Response;
+import com.hazelcast.spi.impl.operationexecutor.OperationHostileThread;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunnerFactory;
 import com.hazelcast.spi.impl.operationexecutor.ResponsePacketHandler;
 import com.hazelcast.spi.impl.operationexecutor.classic.GenericOperationThread;
 import com.hazelcast.spi.impl.operationexecutor.classic.PartitionOperationThread;
 import com.hazelcast.spi.impl.operationexecutor.classic.PartitionSpecificCallable;
+import com.hazelcast.spi.impl.operationservice.impl.responses.Response;
 import com.hazelcast.test.AssertTask;
 import com.hazelcast.test.HazelcastTestSupport;
 import org.junit.After;
@@ -143,13 +143,9 @@ public abstract class AbstractProgressiveOperationExecutorTest extends Hazelcast
         protected List<Response> responses = synchronizedList(new LinkedList<Response>());
 
         @Override
-        public Response deserialize(Packet packet) throws Exception {
+        public void handle(Packet packet) throws Exception {
             packets.add(packet);
-            return serializationService.toObject(packet.getData());
-        }
-
-        @Override
-        public void process(Response task) throws Exception {
+            Response task = serializationService.toObject(packet.getData());
             responses.add(task);
         }
     }
@@ -235,7 +231,7 @@ public abstract class AbstractProgressiveOperationExecutorTest extends Hazelcast
         }
     }
 
-    protected static class DummyNioThread extends Thread implements NIOThread {
+    protected static class DummyNioThread extends Thread implements OperationHostileThread {
         protected DummyNioThread(Runnable task) {
             super(task);
         }

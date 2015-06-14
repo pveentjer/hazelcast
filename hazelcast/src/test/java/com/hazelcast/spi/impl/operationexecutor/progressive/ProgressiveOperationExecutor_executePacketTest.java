@@ -2,9 +2,8 @@ package com.hazelcast.spi.impl.operationexecutor.progressive;
 
 import com.hazelcast.nio.Packet;
 import com.hazelcast.nio.serialization.Data;
-import com.hazelcast.spi.impl.NormalResponse;
+import com.hazelcast.spi.impl.operationservice.impl.responses.NormalResponse;
 import com.hazelcast.test.AssertTask;
-import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastSerialClassRunner;
 import com.hazelcast.test.annotation.QuickTest;
 import org.junit.Assert;
@@ -32,7 +31,7 @@ public class ProgressiveOperationExecutor_executePacketTest extends AbstractProg
 
         final NormalResponse normalResponse = new NormalResponse(null, 1, 0, false);
         Data data = serializationService.toData(normalResponse);
-        final Packet packet = new Packet(data, 0, serializationService.getPortableContext());
+        final Packet packet = new Packet(data, 0);
         packet.setHeader(Packet.HEADER_RESPONSE);
         packet.setHeader(Packet.HEADER_OP);
         executor.execute(packet);
@@ -62,7 +61,7 @@ public class ProgressiveOperationExecutor_executePacketTest extends AbstractProg
 
         final GenericOperation op = new GenericOperation();
         Data data = serializationService.toData(op);
-        final Packet packet = new Packet(data, op.getPartitionId(), serializationService.getPortableContext());
+        final Packet packet = new Packet(data, op.getPartitionId());
         packet.setHeader(Packet.HEADER_OP);
         if (priority) {
             packet.setHeader(Packet.HEADER_URGENT);
@@ -103,7 +102,7 @@ public class ProgressiveOperationExecutor_executePacketTest extends AbstractProg
 
         final PartitionOperation op = new PartitionOperation();
         Data data = serializationService.toData(op);
-        final Packet packet = new Packet(data, op.getPartitionId(), serializationService.getPortableContext());
+        final Packet packet = new Packet(data, op.getPartitionId());
         packet.setHeader(Packet.HEADER_OP);
         if (priority) {
             packet.setHeader(Packet.HEADER_URGENT);
