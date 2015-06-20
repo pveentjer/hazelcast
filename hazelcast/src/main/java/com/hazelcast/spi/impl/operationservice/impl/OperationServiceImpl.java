@@ -122,19 +122,19 @@ public final class OperationServiceImpl implements InternalOperationService {
         this.operationBackupHandler = new OperationBackupHandler(this);
 
         if(groupProperties.PROGRESSIVE_SCHEDULER_ENABLED.getBoolean()) {
-            this.operationExecutor = new ClassicOperationExecutor(
+            this.operationExecutor = new ProgressiveOperationExecutor(
                     groupProperties,
                     node.loggingService,
-                    node.getThisAddress(),
                     new OperationRunnerFactoryImpl(this),
                     new ResponsePacketHandlerImpl(this),
                     node.getHazelcastThreadGroup(),
                     node.getNodeExtension()
             );
         }else{
-            this.operationExecutor = new ProgressiveOperationExecutor(
+            this.operationExecutor = new ClassicOperationExecutor(
                     groupProperties,
                     node.loggingService,
+                    node.getThisAddress(),
                     new OperationRunnerFactoryImpl(this),
                     new ResponsePacketHandlerImpl(this),
                     node.getHazelcastThreadGroup(),
