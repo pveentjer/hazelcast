@@ -57,6 +57,8 @@ public class SmallClusterTest
 
     @Before
     public void setup() {
+        setLoggingLog4j();
+
         instances = createHazelcastInstanceFactory(NODE_COUNT).newInstances(new Config());
     }
 
@@ -217,6 +219,7 @@ public class SmallClusterTest
     @Test(timeout = 30000)
     public void submitToMember_callable()
             throws Exception {
+
         final List<Future> futures = new ArrayList<Future>();
 
         for (int i = 0; i < instances.length; i++) {

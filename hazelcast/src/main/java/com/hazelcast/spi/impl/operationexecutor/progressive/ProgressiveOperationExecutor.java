@@ -63,6 +63,8 @@ public final class ProgressiveOperationExecutor implements OperationExecutor {
 
         this.partitionOperationThreads = initPartitionThreads();
         this.genericOperationThreads = initGenericThreads();
+
+        start();
     }
 
     private OperationRunner[] initGenericOperationHandlers(GroupProperties properties, OperationRunnerFactory handlerFactory) {
