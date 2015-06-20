@@ -80,8 +80,8 @@ public abstract class AbstractProgressiveOperationExecutorTest extends Hazelcast
     protected ProgressiveOperationExecutor initExecutor() {
         groupProperties = new GroupProperties(config);
         executor = new ProgressiveOperationExecutor(
-                groupProperties, loggingService, runnerFactory, nodeExtension, responsePacketHandler,
-                threadGroup);
+                groupProperties, loggingService, runnerFactory, responsePacketHandler, threadGroup, nodeExtension
+        );
         executor.start();
         return executor;
     }

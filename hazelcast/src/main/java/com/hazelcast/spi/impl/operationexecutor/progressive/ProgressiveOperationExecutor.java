@@ -42,9 +42,9 @@ public final class ProgressiveOperationExecutor implements OperationExecutor {
     public ProgressiveOperationExecutor(GroupProperties properties,
                                         LoggingService loggingService,
                                         OperationRunnerFactory operationRunnerFactory,
-                                        NodeExtension nodeExtension,
                                         ResponsePacketHandler responsePacketHandler,
-                                        HazelcastThreadGroup hazelcastThreadGroup) {
+                                        HazelcastThreadGroup hazelcastThreadGroup,
+                                        NodeExtension nodeExtension) {
         this.hazelcastThreadGroup = hazelcastThreadGroup;
         this.nodeExtension = nodeExtension;
         this.responsePacketHandler = responsePacketHandler;

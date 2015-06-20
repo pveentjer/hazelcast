@@ -38,6 +38,7 @@ import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationExecutor;
 import com.hazelcast.spi.impl.operationexecutor.classic.ClassicOperationExecutor;
+import com.hazelcast.spi.impl.operationexecutor.progressive.ProgressiveOperationExecutor;
 import com.hazelcast.spi.impl.operationexecutor.slowoperationdetector.SlowOperationDetector;
 import com.hazelcast.spi.impl.operationservice.InternalOperationService;
 import com.hazelcast.spi.impl.operationservice.impl.responses.Response;
@@ -120,15 +121,26 @@ public final class OperationServiceImpl implements InternalOperationService {
         this.invocationsRegistry = new InvocationRegistry(nodeEngine, logger, backpressureRegulator, concurrencyLevel);
         this.operationBackupHandler = new OperationBackupHandler(this);
 
-        this.operationExecutor = new ClassicOperationExecutor(
-                groupProperties,
-                node.loggingService,
-                node.getThisAddress(),
-                new OperationRunnerFactoryImpl(this),
-                new ResponsePacketHandlerImpl(this),
-                node.getHazelcastThreadGroup(),
-                node.getNodeExtension()
-        );
+        if(groupProperties.PROGRESSIVE_SCHEDULER_ENABLED.getBoolean()) {
+            this.operationExecutor = new ClassicOperationExecutor(
+                    groupProperties,
+                    node.loggingService,
+                    node.getThisAddress(),
+                    new OperationRunnerFactoryImpl(this),
+                    new ResponsePacketHandlerImpl(this),
+                    node.getHazelcastThreadGroup(),
+                    node.getNodeExtension()
+            );
+        }else{
+            this.operationExecutor = new ProgressiveOperationExecutor(
+                    groupProperties,
+                    node.loggingService,
+                    new OperationRunnerFactoryImpl(this),
+                    new ResponsePacketHandlerImpl(this),
+                    node.getHazelcastThreadGroup(),
+                    node.getNodeExtension()
+            );
+        }
 
         this.isStillRunningService = new IsStillRunningService(operationExecutor, nodeEngine, logger);
 
