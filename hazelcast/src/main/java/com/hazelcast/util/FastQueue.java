@@ -140,6 +140,7 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
             index = -1;
             return null;
         }
+        array[index]=null;
         index++;
         return item;
     }
