@@ -20,6 +20,7 @@ import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.instance.NodeExtension;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
+import com.hazelcast.util.FastQueue;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
@@ -31,10 +32,10 @@ public final class PartitionOperationThread extends OperationThread {
 
     @SuppressFBWarnings({"EI_EXPOSE_REP" })
     public PartitionOperationThread(String name, int threadId,
-                                    ScheduleQueue scheduleQueue, ILogger logger,
+                                    ILogger logger,
                                     HazelcastThreadGroup threadGroup, NodeExtension nodeExtension,
                                     OperationRunner[] partitionOperationRunners) {
-        super(name, threadId, scheduleQueue, logger, threadGroup, nodeExtension);
+        super(name, threadId, null, logger, threadGroup, nodeExtension);
         this.partitionOperationRunners = partitionOperationRunners;
     }
 

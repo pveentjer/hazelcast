@@ -24,6 +24,7 @@ import com.hazelcast.nio.SocketWritable;
 import com.hazelcast.nio.ascii.SocketTextWriter;
 import com.hazelcast.util.Clock;
 import com.hazelcast.util.EmptyStatement;
+import com.hazelcast.util.FastQueue;
 import com.hazelcast.util.counters.SwCounter;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
@@ -48,10 +49,10 @@ public final class WriteHandler extends AbstractSelectionHandler implements Runn
 
     private static final long TIMEOUT = 3;
 
-    @Probe(name = "out.writeQueueSize")
-    private final Queue<SocketWritable> writeQueue = new ConcurrentLinkedQueue<SocketWritable>();
-    @Probe(name = "out.priorityWriteQueueSize")
-    private final Queue<SocketWritable> urgentWriteQueue = new ConcurrentLinkedQueue<SocketWritable>();
+    //@Probe(name = "out.writeQueueSize")
+    private final FastQueue<SocketWritable> writeQueue;
+    //@Probe(name = "out.priorityWriteQueueSize")
+    private final FastQueue<SocketWritable> urgentWriteQueue;
     private final AtomicBoolean scheduled = new AtomicBoolean(false);
     private ByteBuffer outputBuffer;
     @Probe(name = "out.bytesWritten")
@@ -78,6 +79,9 @@ public final class WriteHandler extends AbstractSelectionHandler implements Runn
 
     WriteHandler(TcpIpConnection connection, IOSelector ioSelector) {
         super(connection, ioSelector, SelectionKey.OP_WRITE);
+
+        writeQueue = new FastQueue<SocketWritable>((AbstractIOSelector)ioSelector);
+        urgentWriteQueue = new FastQueue<SocketWritable>((AbstractIOSelector)ioSelector);
 
         // sensors
         this.metricsRegistry = connection.getConnectionManager().getMetricRegistry();
@@ -114,13 +118,13 @@ public final class WriteHandler extends AbstractSelectionHandler implements Runn
         return bytesPending(urgentWriteQueue);
     }
 
-    private long bytesPending(Queue<SocketWritable> writeQueue) {
+    private long bytesPending(FastQueue<SocketWritable> writeQueue) {
         long bytesPending = 0;
-        for (SocketWritable writable : writeQueue) {
-            if (writable instanceof Packet) {
-                bytesPending += ((Packet) writable).size();
-            }
-        }
+//        for (SocketWritable writable : writeQueue) {
+//            if (writable instanceof Packet) {
+//                bytesPending += ((Packet) writable).size();
+//            }
+//        }
         return bytesPending;
     }
 

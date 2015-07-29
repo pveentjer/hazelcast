@@ -24,6 +24,7 @@ import com.hazelcast.nio.Packet;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
+import com.hazelcast.util.FastQueue;
 import com.hazelcast.util.counters.SwCounter;
 import com.hazelcast.util.executor.HazelcastManagedThread;
 
@@ -64,12 +65,21 @@ public abstract class OperationThread extends HazelcastManagedThread {
     // for any form of synchronization.
     private OperationRunner currentOperationRunner;
 
-    public OperationThread(String name, int threadId, ScheduleQueue scheduleQueue,
-                           ILogger logger, HazelcastThreadGroup threadGroup, NodeExtension nodeExtension) {
+    public OperationThread(String name,
+                           int threadId,
+                           ScheduleQueue scheduleQueue,
+                           ILogger logger,
+                           HazelcastThreadGroup threadGroup,
+                           NodeExtension nodeExtension) {
         super(threadGroup.getInternalThreadGroup(), name);
         setContextClassLoader(threadGroup.getClassLoader());
-        this.scheduleQueue = scheduleQueue;
-        this.threadId = threadId;
+        if(scheduleQueue == null){
+            this.scheduleQueue = new DefaultScheduleQueue(new FastQueue(this), new FastQueue(this));
+        }else{
+            this.scheduleQueue =  scheduleQueue;
+
+        }
+         this.threadId = threadId;
         this.logger = logger;
         this.nodeExtension = nodeExtension;
     }

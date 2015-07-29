@@ -139,9 +139,7 @@ public final class ClassicOperationExecutor implements OperationExecutor {
         PartitionOperationThread[] threads = new PartitionOperationThread[threadCount];
         for (int threadId = 0; threadId < threads.length; threadId++) {
             String threadName = threadGroup.getThreadPoolNamePrefix("partition-operation") + threadId;
-            ScheduleQueue scheduleQueue = new DefaultScheduleQueue();
-
-            PartitionOperationThread operationThread = new PartitionOperationThread(threadName, threadId, scheduleQueue, logger,
+            PartitionOperationThread operationThread = new PartitionOperationThread(threadName, threadId, logger,
                     threadGroup, nodeExtension, partitionOperationRunners);
 
             threads[threadId] = operationThread;
