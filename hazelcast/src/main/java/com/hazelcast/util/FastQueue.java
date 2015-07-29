@@ -34,13 +34,11 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
     @Override
     public void put(E e) throws InterruptedException {
         throw new UnsupportedOperationException();
-
     }
 
     @Override
     public boolean offer(E e, long timeout, TimeUnit unit) throws InterruptedException {
         throw new UnsupportedOperationException();
-
     }
 
     @Override
@@ -56,13 +54,11 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
     @Override
     public int drainTo(Collection<? super E> c) {
         throw new UnsupportedOperationException();
-
     }
 
     @Override
     public int drainTo(Collection<? super E> c, int maxElements) {
         throw new UnsupportedOperationException();
-
     }
 
     @Override
@@ -141,7 +137,7 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
 
         E item = (E) array[index];
         if (item == null) {
-            index = 1;
+            index = -1;
             return null;
         }
         index++;
