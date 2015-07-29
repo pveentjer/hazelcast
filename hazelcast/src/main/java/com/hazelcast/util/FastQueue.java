@@ -135,12 +135,17 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
             return null;
         }
 
+        if (index == array.length) {
+            index = -1;
+            return null;
+        }
+
         E item = (E) array[index];
         if (item == null) {
             index = -1;
             return null;
         }
-        array[index]=null;
+        array[index] = null;
         index++;
         return item;
     }
