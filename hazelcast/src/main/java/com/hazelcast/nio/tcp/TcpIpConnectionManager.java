@@ -163,8 +163,8 @@ public class TcpIpConnectionManager implements ConnectionManager {
         this.socketKeepAlive = ioService.getSocketKeepAlive();
         this.socketNoDelay = ioService.getSocketNoDelay();
         this.selectorThreadCount = ioService.getSelectorThreadCount();
-        this.inSelectors = new InSelectorImpl[selectorThreadCount];
-        this.outSelectors = new OutSelectorImpl[selectorThreadCount];
+        this.inSelectors = new InSelectorImpl[Integer.getInteger("in.threadcount", selectorThreadCount)];
+        this.outSelectors = new OutSelectorImpl[Integer.getInteger("out.threadcount", selectorThreadCount)];
         final Collection<Integer> ports = ioService.getOutboundPorts();
         this.outboundPortCount = ports.size();
         this.outboundPorts.addAll(ports);
@@ -355,11 +355,10 @@ public class TcpIpConnectionManager implements ConnectionManager {
         connection.write(packet);
         //now you can send anything...
     }
-
-    private int nextSelectorIndex() {
-        int value = nextSelectorIndex.getAndIncrement();
-        return HashUtil.hashToIndex(value, selectorThreadCount);
-    }
+//
+//    private int nextSelectorIndex() {
+//        return HashUtil.hashToIndex(value, selectorThreadCount);
+//    }
 
     SocketChannelWrapper wrapSocketChannel(SocketChannel socketChannel, boolean client) throws Exception {
         SocketChannelWrapper wrapper = socketChannelWrapperFactory.wrapSocketChannel(socketChannel, client);
@@ -368,10 +367,14 @@ public class TcpIpConnectionManager implements ConnectionManager {
     }
 
     TcpIpConnection assignSocketChannel(SocketChannelWrapper channel, Address endpoint) {
-        int index = nextSelectorIndex();
+        // int index = nextSelectorIndex();
+        int value = nextSelectorIndex.getAndIncrement();
 
-        final TcpIpConnection connection = new TcpIpConnection(this, inSelectors[index],
-                outSelectors[index], connectionIdGen.incrementAndGet(), channel);
+        int inIndex = HashUtil.hashToIndex(value, inSelectors.length);
+        int outIndex = HashUtil.hashToIndex(value, outSelectors.length);
+
+        final TcpIpConnection connection = new TcpIpConnection(this, inSelectors[inIndex],
+                outSelectors[outIndex], connectionIdGen.incrementAndGet(), channel);
 
         connection.setEndPoint(endpoint);
         activeConnections.add(connection);
@@ -499,7 +502,9 @@ public class TcpIpConnectionManager implements ConnectionManager {
             inSelectors[i] = inSelector;
             metricRegistry.scanAndRegister(inSelector, "tcp." + inSelector.getName());
             inSelector.start();
+        }
 
+        for (int i = 0; i < outSelectors.length; i++) {
             OutSelectorImpl outSelector = new OutSelectorImpl(
                     ioService.getThreadGroup(),
                     ioService.getThreadPrefix() + "out-" + i,
@@ -509,6 +514,7 @@ public class TcpIpConnectionManager implements ConnectionManager {
             metricRegistry.scanAndRegister(outSelector, "tcp." + outSelector.getName());
             outSelector.start();
         }
+
         startIOBalancer();
 
         if (socketAcceptorThread != null) {
@@ -566,14 +572,16 @@ public class TcpIpConnectionManager implements ConnectionManager {
         if (logger.isFinestEnabled()) {
             log(Level.FINEST, "Shutting down IO selectors... Total: " + selectorThreadCount);
         }
-        for (int i = 0; i < selectorThreadCount; i++) {
+        for (int i = 0; i < inSelectors.length; i++) {
             IOSelector ioSelector = inSelectors[i];
             if (ioSelector != null) {
                 ioSelector.shutdown();
             }
             inSelectors[i] = null;
+        }
 
-            ioSelector = outSelectors[i];
+        for (int i = 0; i < outSelectors.length; i++) {
+            IOSelector ioSelector = outSelectors[i];
             if (ioSelector != null) {
                 ioSelector.shutdown();
             }
