@@ -128,6 +128,7 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
     @Override
     public E poll() {
         E item = next();
+
         if (item != null) {
             return item;
         }
