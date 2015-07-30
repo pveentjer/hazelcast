@@ -87,7 +87,7 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
     @Override
     public final void addTaskAndWakeup(Runnable task) {
         selectorQueue.add(task);
-        //spinTakeselector.wakeup();
+        selector.wakeup();
     }
 
     // shows how long this probe has been idle.
@@ -139,7 +139,7 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
                 }
 
                 try {
-                    int selectedKeyCount = selector.selectNow();
+                    int selectedKeyCount = selector.select(waitTime);
                     lastSelectTimeMs = System.currentTimeMillis();
 
                     if (selectedKeyCount == 0) {
