@@ -19,6 +19,7 @@ package com.hazelcast.nio.tcp;
 import com.hazelcast.core.HazelcastException;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.util.FastQueue;
 
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
@@ -34,7 +35,7 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
     private static final int SELECT_FAILURE_PAUSE_MILLIS = 1000;
 
     @Probe(name = "selectorQueueSize")
-    protected final Queue<Runnable> selectorQueue = new ConcurrentLinkedQueue<Runnable>();
+    protected final FastQueue<Runnable> selectorQueue;
 
     private final ILogger logger;
 
@@ -54,6 +55,7 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
         super(threadGroup, threadName);
         this.logger = logger;
         this.oomeHandler = oomeHandler;
+        this.selectorQueue = new FastQueue<Runnable>(this);
         // WARNING: This value has significant effect on idle CPU usage!
         this.waitTime = SELECT_WAIT_TIME_MILLIS;
         try {
