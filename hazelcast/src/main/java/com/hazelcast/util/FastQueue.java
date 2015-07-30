@@ -165,26 +165,27 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
         for (; ; ) {
             Node currentHead = head.get();
 
-            if (currentHead == null || currentHead == BLOCKED) {
+            if (currentHead == BLOCKED) {
+                park();
+            } else if (currentHead == null) {
                 // there is nothing to be take, so lets block.
                 if (!head.compareAndSet(null, BLOCKED)) {
                     continue;
                 }
                 park();
-
-                if (owningThread.isInterrupted()) {
-                    head.compareAndSet(BLOCKED, null);
-                    throw new InterruptedException();
-                }
-
             } else {
                 if (!head.compareAndSet(currentHead, null)) {
                     continue;
                 }
 
                 initArray(currentHead);
-                return;
+                break;
             }
+        }
+
+        if (owningThread.isInterrupted()) {
+            head.compareAndSet(BLOCKED, null);
+            throw new InterruptedException();
         }
     }
 
