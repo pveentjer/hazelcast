@@ -24,6 +24,7 @@ import com.hazelcast.nio.SocketWritable;
 import com.hazelcast.nio.ascii.SocketTextWriter;
 import com.hazelcast.util.Clock;
 import com.hazelcast.util.EmptyStatement;
+import com.hazelcast.util.FastQueue;
 import com.hazelcast.util.counters.SwCounter;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
@@ -48,10 +49,10 @@ public final class WriteHandler extends AbstractSelectionHandler implements Runn
 
     private static final long TIMEOUT = 3;
 
-    @Probe(name = "out.writeQueueSize")
-    private final Queue<SocketWritable> writeQueue = new ConcurrentLinkedQueue<SocketWritable>();
-    @Probe(name = "out.priorityWriteQueueSize")
-    private final Queue<SocketWritable> urgentWriteQueue = new ConcurrentLinkedQueue<SocketWritable>();
+   // @Probe(name = "out.writeQueueSize")
+    private final Queue<SocketWritable> writeQueue;
+    //@Probe(name = "out.priorityWriteQueueSize")
+    private final Queue<SocketWritable> urgentWriteQueue;
     private final AtomicBoolean scheduled = new AtomicBoolean(false);
     private ByteBuffer outputBuffer;
     @Probe(name = "out.bytesWritten")
@@ -82,6 +83,8 @@ public final class WriteHandler extends AbstractSelectionHandler implements Runn
         // sensors
         this.metricsRegistry = connection.getConnectionManager().getMetricRegistry();
         metricsRegistry.scanAndRegister(this, "tcp.connection[" + connection.getMetricsId() + "]");
+        writeQueue = new FastQueue<SocketWritable>((Thread)ioSelector);
+        urgentWriteQueue = new FastQueue<SocketWritable>((Thread)ioSelector);
     }
 
     @Probe(name = "out.interestedOps")
@@ -116,11 +119,11 @@ public final class WriteHandler extends AbstractSelectionHandler implements Runn
 
     private long bytesPending(Queue<SocketWritable> writeQueue) {
         long bytesPending = 0;
-        for (SocketWritable writable : writeQueue) {
-            if (writable instanceof Packet) {
-                bytesPending += ((Packet) writable).size();
-            }
-        }
+//        for (SocketWritable writable : writeQueue) {
+//            if (writable instanceof Packet) {
+//                bytesPending += ((Packet) writable).size();
+//            }
+//        }
         return bytesPending;
     }
 
