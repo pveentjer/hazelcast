@@ -87,7 +87,7 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
     @Override
     public final void addTaskAndWakeup(Runnable task) {
         selectorQueue.add(task);
-        selector.wakeup();
+        //spinTakeselector.wakeup();
     }
 
     // shows how long this probe has been idle.
