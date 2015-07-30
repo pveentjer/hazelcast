@@ -164,7 +164,7 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
         for (; ; ) {
             Node currentHead = head.get();
 
-            if (currentHead == null) {
+            if (currentHead == null || currentHead == BLOCKED) {
                 // there is nothing to be take, so lets block.
                 if (!head.compareAndSet(null, BLOCKED)) {
                     continue;
@@ -205,8 +205,8 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
     private void initArray(Node head) {
         int size = head.size;
 
-        assert size != 0;
         assert head != BLOCKED;
+        assert size != 0;
 
         Object[] drain = this.array;
         if (size > drain.length) {

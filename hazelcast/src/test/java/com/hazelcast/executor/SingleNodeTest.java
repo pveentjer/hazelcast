@@ -57,6 +57,7 @@ public class SingleNodeTest extends ExecutorServiceTestSupport {
 
     @Before
     public void setUp() {
+        setLoggingLog4j();
         executor = createSingleNodeExecutorService("test", 1);
     }
 
