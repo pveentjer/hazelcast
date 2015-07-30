@@ -32,7 +32,7 @@ public final class InSelectorImpl extends AbstractIOSelector {
 
     public InSelectorImpl(ThreadGroup threadGroup, String tname, ILogger logger,
                           IOSelectorOutOfMemoryHandler oomeHandler) {
-        super(threadGroup, tname, logger, oomeHandler);
+        super(threadGroup, tname, logger, oomeHandler, Boolean.getBoolean("in.spin"));
     }
 
 

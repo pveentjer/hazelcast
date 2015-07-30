@@ -44,6 +44,7 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
     private final Selector selector;
 
     private final IOSelectorOutOfMemoryHandler oomeHandler;
+    private final boolean spin;
 
     // field doesn't need to be volatile, is only accessed by the IOSelector-thread.
     private boolean running = true;
@@ -52,7 +53,14 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
 
     public AbstractIOSelector(ThreadGroup threadGroup, String threadName, ILogger logger,
                               IOSelectorOutOfMemoryHandler oomeHandler) {
+        this(threadGroup, threadName, logger, oomeHandler, false);
+    }
+
+
+        public AbstractIOSelector(ThreadGroup threadGroup, String threadName, ILogger logger,
+                              IOSelectorOutOfMemoryHandler oomeHandler, boolean spin) {
         super(threadGroup, threadName);
+       this.spin = spin;
         this.logger = logger;
         this.oomeHandler = oomeHandler;
         this.selectorQueue = new FastQueue<Runnable>(this);
@@ -89,7 +97,9 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
     @Override
     public final void addTaskAndWakeup(Runnable task) {
         selectorQueue.add(task);
-        selector.wakeup();
+        if(!spin) {
+            selector.wakeup();
+        }
     }
 
     // shows how long this probe has been idle.
@@ -141,7 +151,13 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
                 }
 
                 try {
-                    int selectedKeyCount = selector.select(waitTime);
+                    int selectedKeyCount;
+                    if(spin){
+                        selectedKeyCount= selector.selectNow();
+                    }else{
+                        selectedKeyCount= selector.select(waitTime);
+                    }
+
                     lastSelectTimeMs = System.currentTimeMillis();
 
                     if (selectedKeyCount == 0) {

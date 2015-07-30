@@ -31,7 +31,7 @@ public final class OutSelectorImpl extends AbstractIOSelector {
     private final SwCounter writeEvents = newSwCounter();
 
     public OutSelectorImpl(ThreadGroup threadGroup, String tname, ILogger logger, IOSelectorOutOfMemoryHandler oomeHandler) {
-        super(threadGroup, tname, logger, oomeHandler);
+        super(threadGroup, tname, logger, oomeHandler, Boolean.getBoolean("out.spin"));
     }
 
     /**
