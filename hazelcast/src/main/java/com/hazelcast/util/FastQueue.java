@@ -6,7 +6,9 @@ import java.util.Iterator;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.LockSupport;
+
+import static java.util.concurrent.locks.LockSupport.park;
+import static java.util.concurrent.locks.LockSupport.unpark;
 
 /**
  * Single consumer, multi producer variable length queue implementation.
@@ -71,10 +73,12 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
         throw new UnsupportedOperationException();
     }
 
+    @Override
     public void clear() {
         head.set(null);
     }
 
+    @Override
     public boolean offer(E value) {
         if (value == null) {
             throw new IllegalArgumentException("value can't be null");
@@ -99,38 +103,43 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
             }
 
             if (oldHead == BLOCKED) {
-                LockSupport.unpark(owningThread);
+                unpark(owningThread);
             }
 
             return true;
         }
     }
 
+    @Override
     public E take() throws InterruptedException {
-        E item = removeLocal();
-        if (item == null) {
-            takeAll();
-            index = 0;
+        E item = next();
+        if (item != null) {
+            return item;
         }
 
-        return removeLocal();
+        takeAll();
+        assert index == 0;
+        assert array[index] != null;
+
+        return next();
+
     }
 
+    @Override
     public E poll() {
-        E item = removeLocal();
-
-        if (item == null) {
-            if (!pollAll()) {
-                return null;
-            }
-
-            index = 0;
+        E item = next();
+        if (item != null) {
+            return item;
         }
 
-        return removeLocal();
+        if (!pollAll()) {
+            return null;
+        }
+
+        return next();
     }
 
-    private E removeLocal() {
+    private E next() {
         if (index == -1) {
             return null;
         }
@@ -160,7 +169,7 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
                 if (!head.compareAndSet(null, BLOCKED)) {
                     continue;
                 }
-                LockSupport.park();
+                park();
 
                 if (owningThread.isInterrupted()) {
                     head.compareAndSet(BLOCKED, null);
@@ -172,7 +181,8 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
                     continue;
                 }
 
-                copyToDrain(currentHead);
+                initArray(currentHead);
+                return;
             }
         }
     }
@@ -186,14 +196,17 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
             }
 
             if (head.compareAndSet(headNode, null)) {
-                copyToDrain(headNode);
+                initArray(headNode);
                 return true;
             }
         }
     }
 
-    private Object[] copyToDrain(Node head) {
+    private void initArray(Node head) {
         int size = head.size;
+
+        assert size != 0;
+        assert head != BLOCKED;
 
         Object[] drain = this.array;
         if (size > drain.length) {
@@ -201,18 +214,28 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
             this.array = drain;
         }
 
-        for (int index = size - 1; index >= 0; index--) {
-            drain[index] = head.value;
+        for (int i = size - 1; i >= 0; i--) {
+            drain[i] = head.value;
             head = head.next;
         }
-        return drain;
+
+        for (int k = 0; k < array.length; k++) {
+            if (array[k] == null) {
+                break;
+            }
+        }
+
+        index = 0;
+        assert array[0] != null;
     }
 
+    @Override
     public int size() {
         Node h = head.get();
         return h == null ? 0 : h.size;
     }
 
+    @Override
     public boolean isEmpty() {
         return head.get() == null;
     }
