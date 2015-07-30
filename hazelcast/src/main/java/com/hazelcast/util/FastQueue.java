@@ -125,6 +125,15 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
 
     }
 
+    public E spinTake() {
+       for(;;){
+           E item = poll();
+           if(item!=null){
+               return item;
+           }
+       }
+    }
+
     @Override
     public E poll() {
         E item = next();
@@ -139,6 +148,8 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
 
         return next();
     }
+
+
 
     private E next() {
         if (index == -1) {
@@ -165,13 +176,15 @@ public final class FastQueue<E> extends AbstractQueue<E> implements BlockingQueu
         for (; ; ) {
             Node currentHead = head.get();
 
-            if (currentHead == BLOCKED) {
-                park();
-            } else if (currentHead == null) {
+            if (currentHead == null) {
+
                 // there is nothing to be take, so lets block.
                 if (!head.compareAndSet(null, BLOCKED)) {
                     continue;
                 }
+
+                park();
+            } else if (currentHead == BLOCKED) {
                 park();
             } else {
                 if (!head.compareAndSet(currentHead, null)) {

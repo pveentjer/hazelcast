@@ -47,7 +47,7 @@ import static com.hazelcast.util.Preconditions.checkTrue;
 public class AsyncResponsePacketHandler implements PacketHandler {
 
     private final ResponseThread responseThread;
-    private final BlockingQueue<Packet> workQueue;
+    private final FastQueue<Packet> workQueue;
     private final ILogger logger;
 
     public AsyncResponsePacketHandler(HazelcastThreadGroup threadGroup,
@@ -108,14 +108,14 @@ public class AsyncResponsePacketHandler implements PacketHandler {
         private void doRun() {
             for (; ; ) {
                 Packet responsePacket;
-                try {
-                    responsePacket = workQueue.take();
-                } catch (InterruptedException e) {
-                    if (shutdown) {
-                        return;
-                    }
-                    continue;
-                }
+              //  try {
+                    responsePacket = workQueue.spinTake();
+//                } catch (InterruptedException e) {
+//                    if (shutdown) {
+//                        return;
+//                    }
+//                    continue;
+//                }
 
                 if (shutdown) {
                     return;
