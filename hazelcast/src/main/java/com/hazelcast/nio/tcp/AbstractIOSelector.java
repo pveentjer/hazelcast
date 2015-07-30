@@ -19,7 +19,6 @@ package com.hazelcast.nio.tcp;
 import com.hazelcast.core.HazelcastException;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.logging.ILogger;
-import com.hazelcast.util.FastQueue;
 
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
@@ -35,7 +34,7 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
     private static final int SELECT_FAILURE_PAUSE_MILLIS = 1000;
 
     @Probe(name = "selectorQueueSize")
-    protected final FastQueue<Runnable> selectorQueue;
+    protected final Queue<Runnable> selectorQueue = new ConcurrentLinkedQueue<Runnable>();
 
     private final ILogger logger;
 
@@ -44,7 +43,6 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
     private final Selector selector;
 
     private final IOSelectorOutOfMemoryHandler oomeHandler;
-    private final boolean spin;
 
     // field doesn't need to be volatile, is only accessed by the IOSelector-thread.
     private boolean running = true;
@@ -53,17 +51,9 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
 
     public AbstractIOSelector(ThreadGroup threadGroup, String threadName, ILogger logger,
                               IOSelectorOutOfMemoryHandler oomeHandler) {
-        this(threadGroup, threadName, logger, oomeHandler, false);
-    }
-
-
-        public AbstractIOSelector(ThreadGroup threadGroup, String threadName, ILogger logger,
-                              IOSelectorOutOfMemoryHandler oomeHandler, boolean spin) {
         super(threadGroup, threadName);
-       this.spin = spin;
         this.logger = logger;
         this.oomeHandler = oomeHandler;
-        this.selectorQueue = new FastQueue<Runnable>(this);
         // WARNING: This value has significant effect on idle CPU usage!
         this.waitTime = SELECT_WAIT_TIME_MILLIS;
         try {
@@ -97,9 +87,7 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
     @Override
     public final void addTaskAndWakeup(Runnable task) {
         selectorQueue.add(task);
-        if(!spin) {
-            selector.wakeup();
-        }
+        selector.wakeup();
     }
 
     // shows how long this probe has been idle.
@@ -151,13 +139,7 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
                 }
 
                 try {
-                    int selectedKeyCount;
-                    if(spin){
-                        selectedKeyCount= selector.selectNow();
-                    }else{
-                        selectedKeyCount= selector.select(waitTime);
-                    }
-
+                    int selectedKeyCount = selector.select(waitTime);
                     lastSelectTimeMs = System.currentTimeMillis();
 
                     if (selectedKeyCount == 0) {
