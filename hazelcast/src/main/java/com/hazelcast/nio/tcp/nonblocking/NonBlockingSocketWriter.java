@@ -27,6 +27,7 @@ import com.hazelcast.nio.tcp.SocketWriter;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 import com.hazelcast.nio.tcp.WriteHandler;
 import com.hazelcast.util.counters.SwCounter;
+import org.jctools.queues.MpscArrayQueue;
 
 import java.io.IOException;
 import java.net.SocketException;
@@ -60,9 +61,9 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     @Probe(name = "out.eventCount")
     private final SwCounter eventCount = newSwCounter();
     @Probe(name = "out.writeQueueSize")
-    private final Queue<OutboundFrame> writeQueue = new ConcurrentLinkedQueue<OutboundFrame>();
+    private final Queue<OutboundFrame> writeQueue = new MpscArrayQueue<OutboundFrame>(100000);
     @Probe(name = "out.priorityWriteQueueSize")
-    private final Queue<OutboundFrame> urgentWriteQueue = new ConcurrentLinkedQueue<OutboundFrame>();
+    private final Queue<OutboundFrame> urgentWriteQueue = new MpscArrayQueue<OutboundFrame>(100000);
     private final AtomicBoolean scheduled = new AtomicBoolean(false);
     private ByteBuffer outputBuffer;
     @Probe(name = "out.bytesWritten")
