@@ -223,15 +223,15 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
                 return null;
             }
 
-            if (frame instanceof TaskFrame) {
+            if (frame.getClass() == Packet.class) {
+                if (urgent) {
+                    priorityFramesWritten.inc();
+                } else {
+                    normalFramesWritten.inc();
+                }
+            } else if (frame instanceof TaskFrame) {
                 ((TaskFrame) frame).run();
                 continue;
-            }
-
-            if (urgent) {
-                priorityFramesWritten.inc();
-            } else {
-                normalFramesWritten.inc();
             }
 
             return frame;

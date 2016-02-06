@@ -240,7 +240,8 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
     }
 
     private NonBlockingIOThread getTargetIoThread(Runnable task) {
-        if (task instanceof MigratableHandler) {
+        Class clazz = task.getClass();
+        if (clazz == NonBlockingSocketReader.class || clazz == NonBlockingSocketWriter.class) {
             return ((MigratableHandler) task).getOwner();
         } else {
             return this;
