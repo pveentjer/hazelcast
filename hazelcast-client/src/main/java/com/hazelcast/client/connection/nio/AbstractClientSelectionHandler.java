@@ -19,13 +19,14 @@ package com.hazelcast.client.connection.nio;
 import com.hazelcast.client.connection.ClientConnectionManager;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.Logger;
+import com.hazelcast.nio.tcp.nonblocking.AbstractLinkedRunnable;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingIOThread;
 import com.hazelcast.nio.tcp.nonblocking.SelectionHandler;
 import com.hazelcast.nio.tcp.SocketChannelWrapper;
 
 import java.nio.channels.SelectionKey;
 
-public abstract class AbstractClientSelectionHandler implements SelectionHandler, Runnable {
+public abstract class AbstractClientSelectionHandler extends AbstractLinkedRunnable implements SelectionHandler {
 
     protected final ILogger logger;
     protected final SocketChannelWrapper socketChannel;
