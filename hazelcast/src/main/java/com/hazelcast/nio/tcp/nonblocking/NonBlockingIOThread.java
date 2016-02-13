@@ -276,7 +276,7 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
         for (; ; ) {
             LinkedRunnable oldHead = head.get();
             if (oldHead == null || oldHead == BLOCKED) {
-                return false;
+                return true;
             }
 
             if (head.compareAndSet(oldHead, null)) {
