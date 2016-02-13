@@ -50,7 +50,7 @@ import static java.lang.Math.max;
 /**
  * The writing side of the {@link TcpIpConnection}.
  */
-public final class NonBlockingSocketWriter extends AbstractHandler implements Runnable, SocketWriter {
+public final class NonBlockingSocketWriter extends AbstractHandler implements LinkedRunnable, SocketWriter {
 
     public final static Packet BLOCKED = new Packet();
 
@@ -93,6 +93,18 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
         // sensors
         this.metricsRegistry = metricsRegistry;
         metricsRegistry.scanAndRegister(this, "tcp.connection[" + connection.getMetricsId() + "]");
+    }
+
+    private LinkedRunnable next;
+
+    @Override
+    public LinkedRunnable getNext() {
+        return next;
+    }
+
+    @Override
+    public void setNext(LinkedRunnable next) {
+        this.next = next;
     }
 
     @Probe(name = "out.interestedOps", level = DEBUG)
@@ -163,7 +175,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     @Override
     public void setProtocol(final String protocol) {
         final CountDownLatch latch = new CountDownLatch(1);
-        ioThread.addTaskAndWakeup(new Runnable() {
+        ioThread.addTaskAndWakeup(new AbstractLinkedRunnable() {
             @Override
             public void run() {
                 try {

@@ -116,7 +116,7 @@ public abstract class AbstractHandler implements MigratableHandler {
         selectionKey = null;
         selector = null;
 
-        newOwner.addTaskAndWakeup(new Runnable() {
+        newOwner.addTaskAndWakeup(new AbstractLinkedRunnable() {
             @Override
             public void run() {
                 try {

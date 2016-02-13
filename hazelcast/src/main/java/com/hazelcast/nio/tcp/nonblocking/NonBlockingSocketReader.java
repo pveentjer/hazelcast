@@ -115,7 +115,7 @@ public final class NonBlockingSocketReader extends AbstractHandler implements So
 
     @Override
     public void init() {
-        ioThread.addTaskAndWakeup(new Runnable() {
+        ioThread.addTaskAndWakeup(new AbstractLinkedRunnable() {
             @Override
             public void run() {
                 try {
@@ -238,7 +238,7 @@ public final class NonBlockingSocketReader extends AbstractHandler implements So
         //todo:
         // ioThread race, shutdown can end up on the old selector
         metricRegistry.deregister(this);
-        ioThread.addTaskAndWakeup(new Runnable() {
+        ioThread.addTaskAndWakeup(new AbstractLinkedRunnable() {
             @Override
             public void run() {
                 try {
@@ -255,7 +255,7 @@ public final class NonBlockingSocketReader extends AbstractHandler implements So
         return connection + ".socketReader";
     }
 
-    private class StartMigrationTask implements Runnable {
+    private class StartMigrationTask extends AbstractLinkedRunnable {
         private final NonBlockingIOThread newOwner;
 
         public StartMigrationTask(NonBlockingIOThread newOwner) {

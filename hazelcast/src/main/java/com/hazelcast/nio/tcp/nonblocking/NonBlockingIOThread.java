@@ -28,22 +28,31 @@ import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.Iterator;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
 import static java.lang.Math.max;
 import static java.lang.System.currentTimeMillis;
 
 public class NonBlockingIOThread extends Thread implements OperationHostileThread {
+
+    private final static LinkedRunnable BLOCKED = new AbstractLinkedRunnable() {
+        @Override
+        public void run() {
+        }
+    };
+
     public static final int MAXIMUM_ITEMS_TAKEN_FROM_TASK_QUEUE_RENAME_ME_I_AM_SILLY = Integer.getInteger("ioselector.batchsize", 10);
 
     // WARNING: This value has significant effect on idle CPU usage!
     private static final int SELECT_WAIT_TIME_MILLIS = 5000;
     private static final int SELECT_FAILURE_PAUSE_MILLIS = 1000;
 
-    @Probe(name = "taskQueueSize")
-    private final Queue<Runnable> taskQueue = new ConcurrentLinkedQueue<Runnable>();
+//    @Probe(name = "taskQueueSize")
+//    private final Queue<Runnable> taskQueue = new ConcurrentLinkedQueue<Runnable>();
+
+    private final AtomicReference<LinkedRunnable> head = new AtomicReference<LinkedRunnable>(BLOCKED);
+
     @Probe
     private final SwCounter eventCount = newSwCounter();
     @Probe
@@ -134,8 +143,15 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
      * @param task the task to add
      * @throws NullPointerException if task is null
      */
-    public final void addTask(Runnable task) {
-        taskQueue.add(task);
+    public final void addTask(LinkedRunnable task) {
+        for (; ; ) {
+            LinkedRunnable oldHead = head.get();
+            task.setNext(oldHead == BLOCKED ? null : oldHead);
+
+            if (head.compareAndSet(oldHead, task)) {
+                break;
+            }
+        }
     }
 
     /**
@@ -145,9 +161,24 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
      * @param task the task to add.
      * @throws NullPointerException if task is null
      */
-    public void addTaskAndWakeup(Runnable task) {
-        taskQueue.add(task);
-        if (!selectNow) {
+    public void addTaskAndWakeup(LinkedRunnable task) {
+        boolean blocked;
+        for (; ; ) {
+            LinkedRunnable oldHead = head.get();
+            if (oldHead == BLOCKED) {
+                task.setNext(null);
+                blocked = true;
+            } else {
+                blocked = false;
+                task.setNext(oldHead);
+            }
+
+            if (head.compareAndSet(oldHead, task)) {
+                break;
+            }
+        }
+
+        if (!selectNow && blocked) {
             selector.wakeup();
         }
     }
@@ -227,7 +258,6 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
         }
     }
 
-    private Runnable pending;
 //
 //    private void processTaskQueue() {
 //        while (!isInterrupted()) {
@@ -239,33 +269,39 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
 //        }
 //    }
 
+    // returns true if queue is empty
+    // false if there is more
     private boolean processTaskQueue() {
-        Runnable first = pending;
-
-        if (first != null) {
-            executeTask(first);
-            pending = null;
-        }
-
+        LinkedRunnable pending;
         for (; ; ) {
-//        for (int i = 0; i < MAXIMUM_ITEMS_TAKEN_FROM_TASK_QUEUE_RENAME_ME_I_AM_SILLY && !isInterrupted(); i++) {
-            Runnable task = taskQueue.poll();
-            if (task == null) {
-                return true;
-            } else if (first == null) {
-                first = task;
-            } else if (first == task) {
-                pending = first;
+            LinkedRunnable oldHead = head.get();
+            if (oldHead == null || oldHead == BLOCKED) {
                 return false;
             }
 
-            executeTask(task);
+            if (head.compareAndSet(oldHead, null)) {
+                pending = oldHead;
+                break;
+            }
         }
-        //return false;
+
+        LinkedRunnable next;
+        do {
+            next = pending.getNext();
+            pending.setNext(next);
+            executeTask(pending);
+        } while (next != null);
+
+        if(selectNow){
+            return false;
+        }
+
+        return !(head.get() != null || !head.compareAndSet(null, BLOCKED));
     }
 
-    private void executeTask(Runnable task) {
+    private void executeTask(LinkedRunnable task) {
         NonBlockingIOThread target = getTargetIoThread(task);
+
         if (target == this) {
             task.run();
         } else {
@@ -273,7 +309,7 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
         }
     }
 
-    private NonBlockingIOThread getTargetIoThread(Runnable task) {
+    private NonBlockingIOThread getTargetIoThread(LinkedRunnable task) {
         if (task.getClass() == NonBlockingSocketWriter.class) {
             return ((NonBlockingSocketWriter) task).getOwner();
         } else {
@@ -321,7 +357,7 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
     }
 
     public final void shutdown() {
-        taskQueue.clear();
+        //taskQueue.clear();
         interrupt();
     }
 
