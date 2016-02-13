@@ -35,6 +35,7 @@ import static java.lang.Math.max;
 import static java.lang.System.currentTimeMillis;
 
 public class NonBlockingIOThread extends Thread implements OperationHostileThread {
+    public static final int MAXIMUM_ITEMS_TAKEN_FROM_TASK_QUEUE_RENAME_ME_I_AM_SILLY = Integer.getInteger("ioselector.batchsize", 10);
 
     // WARNING: This value has significant effect on idle CPU usage!
     private static final int SELECT_WAIT_TIME_MILLIS = 5000;
@@ -198,9 +199,9 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
 
     private void runSelectLoop() throws IOException {
         while (!isInterrupted()) {
-            processTaskQueue();
+            boolean queueFullyProcessed = processTaskQueue();
 
-            int selectedKeys = selector.select(SELECT_WAIT_TIME_MILLIS);
+            int selectedKeys = queueFullyProcessed ? selector.select(SELECT_WAIT_TIME_MILLIS) : selector.selectNow();
             if (selectedKeys > 0) {
                 lastSelectTimeMs = currentTimeMillis();
                 handleSelectionKeys();
@@ -219,16 +220,42 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
             }
         }
     }
+    private Runnable pending;
+//
+//    private void processTaskQueue() {
+//        while (!isInterrupted()) {
+//            Runnable task = taskQueue.poll();
+//            if (task == null) {
+//                return;
+//            }
+//            executeTask(task);
+//        }
+//    }
 
-    private void processTaskQueue() {
-        while (!isInterrupted()) {
+    private boolean processTaskQueue() {
+        Runnable first = pending;
+
+        if (first != null) {
+            executeTask(first);
+            pending = null;
+        }
+
+        for (int i = 0; i < MAXIMUM_ITEMS_TAKEN_FROM_TASK_QUEUE_RENAME_ME_I_AM_SILLY && !isInterrupted(); i++) {
             Runnable task = taskQueue.poll();
             if (task == null) {
-                return;
+                return true;
+            } else if (first == null) {
+                first = task;
+            } else if (first == task) {
+                pending = first;
+                return false;
             }
+
             executeTask(task);
         }
+        return false;
     }
+
 
     private void executeTask(Runnable task) {
         NonBlockingIOThread target = getTargetIoThread(task);
