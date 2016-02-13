@@ -51,7 +51,7 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
 //    @Probe(name = "taskQueueSize")
 //    private final Queue<Runnable> taskQueue = new ConcurrentLinkedQueue<Runnable>();
 
-    private final AtomicReference<LinkedRunnable> head = new AtomicReference<LinkedRunnable>(BLOCKED);
+    private final AtomicReference<LinkedRunnable> head = new AtomicReference<LinkedRunnable>();
 
     @Probe
     private final SwCounter eventCount = newSwCounter();
@@ -236,9 +236,9 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
 
     private void runSelectLoop() throws IOException {
         while (!isInterrupted()) {
-            boolean queueFullyProcessed = processTaskQueue();
+            boolean queueEmpty = processTaskQueue();
 
-            int selectedKeys = queueFullyProcessed ? selector.select(SELECT_WAIT_TIME_MILLIS) : selector.selectNow();
+            int selectedKeys = queueEmpty ? selector.select(SELECT_WAIT_TIME_MILLIS) : selector.selectNow();
             if (selectedKeys > 0) {
                 lastSelectTimeMs = currentTimeMillis();
                 handleSelectionKeys();
@@ -274,13 +274,12 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
     private boolean processTaskQueue() {
         LinkedRunnable pending;
         for (; ; ) {
-            LinkedRunnable oldHead = head.get();
-            if (oldHead == null || oldHead == BLOCKED) {
+            pending = head.get();
+            if (pending == null || pending == BLOCKED) {
                 return true;
             }
 
-            if (head.compareAndSet(oldHead, null)) {
-                pending = oldHead;
+            if (head.compareAndSet(pending, null)) {
                 break;
             }
         }
@@ -288,15 +287,19 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
         LinkedRunnable next;
         do {
             next = pending.getNext();
-            pending.setNext(next);
+            pending.setNext(null);
             executeTask(pending);
         } while (next != null);
 
-        if(selectNow){
+        if (selectNow) {
             return false;
         }
 
-        return !(head.get() != null || !head.compareAndSet(null, BLOCKED));
+        if (head.get() != null || !head.compareAndSet(null, BLOCKED)) {
+            return false;
+        }
+
+        return true;
     }
 
     private void executeTask(LinkedRunnable task) {
