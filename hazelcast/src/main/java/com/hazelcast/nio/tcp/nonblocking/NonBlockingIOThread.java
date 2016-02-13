@@ -236,9 +236,15 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
 
     private void runSelectLoop() throws IOException {
         while (!isInterrupted()) {
-            boolean queueEmpty = processTaskQueue();
+            processTaskQueue();
 
-            int selectedKeys = queueEmpty ? selector.select(SELECT_WAIT_TIME_MILLIS) : selector.selectNow();
+            int selectedKeys;
+            if (head.get() == null && head.compareAndSet(null, BLOCKED)) {
+                selectedKeys = selector.select(SELECT_WAIT_TIME_MILLIS);
+            } else {
+                selectedKeys = selector.selectNow();
+            }
+
             if (selectedKeys > 0) {
                 lastSelectTimeMs = currentTimeMillis();
                 handleSelectionKeys();
@@ -269,38 +275,29 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
 //        }
 //    }
 
-    // returns true if queue is empty
-    // false if there is more
-    private boolean processTaskQueue() {
-        LinkedRunnable pending;
+    private void processTaskQueue() {
+        LinkedRunnable checkedOutHead;
         for (; ; ) {
-            pending = head.get();
-            if (pending == null || pending == BLOCKED) {
-                return true;
+            checkedOutHead = head.get();
+            if (checkedOutHead == BLOCKED) {
+                throw new RuntimeException("Unexpected blocked head");
             }
 
-            if (head.compareAndSet(pending, null)) {
+            if (checkedOutHead == null) {
+                return;
+            }
+
+            if (head.compareAndSet(checkedOutHead, null)) {
                 break;
             }
         }
 
         LinkedRunnable next;
         do {
-            next = pending.getNext();
-            pending.setNext(null);
-            executeTask(pending);
+            next = checkedOutHead.getNext();
+            checkedOutHead.setNext(null);
+            executeTask(checkedOutHead);
         } while (next != null);
-
-        if (selectNow) {
-            // doesn't matter what is returned.
-            return false;
-        }
-
-        if (head.get() != null || !head.compareAndSet(null, BLOCKED)) {
-            return false;
-        }
-
-        return true;
     }
 
     private void executeTask(LinkedRunnable task) {
