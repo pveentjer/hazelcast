@@ -60,7 +60,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 //    @Probe(name = "out.writeQueueSize")
 //    public final Queue<OutboundFrame> writeQueue = new ConcurrentLinkedQueue<OutboundFrame>();
 
-    public final AtomicReference<OutboundFrame> head = new AtomicReference<OutboundFrame>();
+    public final AtomicReference<OutboundFrame> head = new AtomicReference<OutboundFrame>(BLOCKED);
 
     //    @SuppressWarnings("checkstyle:visibilitymodifier")
 //    @Probe(name = "out.priorityWriteQueueSize")
@@ -214,7 +214,8 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
         OutboundFrame oldHead;
         for (; ; ) {
             oldHead = head.get();
-            frame.setNext(frame);
+
+            frame.setNext(oldHead == BLOCKED ? null : oldHead);
 
             if (head.compareAndSet(oldHead, frame)) {
                 break;
