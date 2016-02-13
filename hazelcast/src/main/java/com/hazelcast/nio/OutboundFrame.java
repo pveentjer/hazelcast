@@ -46,4 +46,8 @@ public interface OutboundFrame {
      * @return true if urgent, false otherwise.
      */
     boolean isUrgent();
+
+    OutboundFrame getNext();
+
+    void setNext(OutboundFrame next);
 }

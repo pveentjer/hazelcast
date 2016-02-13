@@ -137,7 +137,18 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
     public void setProtocol(final String protocol) {
         final CountDownLatch latch = new CountDownLatch(1);
         urgentWriteQueue.add(new TaskFrame() {
+            private OutboundFrame next;
+
+
             @Override
+            public OutboundFrame getNext() {
+                return next;
+            }
+
+            @Override
+            public void setNext(OutboundFrame next) {
+                this.next = next;
+            }  @Override
             public void run() {
                 logger.info("Setting protocol: " + protocol);
                 createWriter(protocol);
@@ -320,7 +331,18 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
 
     private class ShutdownTask extends TaskFrame {
         private final CountDownLatch latch = new CountDownLatch(1);
+        private OutboundFrame next;
 
+
+        @Override
+        public OutboundFrame getNext() {
+            return next;
+        }
+
+        @Override
+        public void setNext(OutboundFrame next) {
+            this.next = next;
+        }
         @Override
         void run() {
             try {

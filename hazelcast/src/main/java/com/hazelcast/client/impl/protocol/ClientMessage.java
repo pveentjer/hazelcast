@@ -62,6 +62,15 @@ public class ClientMessage
         extends MessageFlyweight
         implements OutboundFrame {
 
+    @Override
+    public OutboundFrame getNext() {
+        return null;
+    }
+
+    @Override
+    public void setNext(OutboundFrame next) {
+
+    }
 
     /**
      * Current protocol version

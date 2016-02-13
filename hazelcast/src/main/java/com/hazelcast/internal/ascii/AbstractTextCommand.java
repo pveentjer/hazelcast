@@ -16,6 +16,7 @@
 
 package com.hazelcast.internal.ascii;
 
+import com.hazelcast.nio.OutboundFrame;
 import com.hazelcast.nio.ascii.TextReadHandler;
 import com.hazelcast.nio.ascii.TextWriteHandler;
 
@@ -27,6 +28,16 @@ public abstract class AbstractTextCommand implements TextCommand {
 
     protected AbstractTextCommand(TextCommandConstants.TextCommandType type) {
         this.type = type;
+    }
+
+    @Override
+    public OutboundFrame getNext() {
+        return null;
+    }
+
+    @Override
+    public void setNext(OutboundFrame next) {
+
     }
 
     @Override

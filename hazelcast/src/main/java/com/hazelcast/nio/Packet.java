@@ -33,6 +33,8 @@ import static com.hazelcast.nio.Bits.INT_SIZE_IN_BYTES;
  */
 public final class Packet extends HeapData implements OutboundFrame {
 
+    public OutboundFrame next;
+
     public static final byte VERSION = 4;
 
     public static final int HEADER_OP = 0;
@@ -60,6 +62,16 @@ public final class Packet extends HeapData implements OutboundFrame {
     private int size;
     // Stores the current 'phase' of read/write. This is needed so that repeated calls can be made to read/write.
     private short persistStatus;
+
+    @Override
+    public OutboundFrame getNext() {
+        return next;
+    }
+
+    @Override
+    public void setNext(OutboundFrame next) {
+        this.next = next;
+    }
 
     public Packet() {
     }

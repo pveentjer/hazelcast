@@ -32,10 +32,9 @@ import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.DEBUG;
@@ -53,17 +52,22 @@ import static java.lang.Math.max;
  */
 public final class NonBlockingSocketWriter extends AbstractHandler implements Runnable, SocketWriter {
 
+    public final static Packet BLOCKED = new Packet();
+
     private static final long TIMEOUT = 3;
 
-    @SuppressWarnings("checkstyle:visibilitymodifier")
-    @Probe(name = "out.writeQueueSize")
-    public final Queue<OutboundFrame> writeQueue = new ConcurrentLinkedQueue<OutboundFrame>();
-    @SuppressWarnings("checkstyle:visibilitymodifier")
-    @Probe(name = "out.priorityWriteQueueSize")
-    public final Queue<OutboundFrame> urgentWriteQueue = new ConcurrentLinkedQueue<OutboundFrame>();
+//    @SuppressWarnings("checkstyle:visibilitymodifier")
+//    @Probe(name = "out.writeQueueSize")
+//    public final Queue<OutboundFrame> writeQueue = new ConcurrentLinkedQueue<OutboundFrame>();
+
+    public final AtomicReference<OutboundFrame> head = new AtomicReference<OutboundFrame>();
+
+    //    @SuppressWarnings("checkstyle:visibilitymodifier")
+//    @Probe(name = "out.priorityWriteQueueSize")
+//    public final Queue<OutboundFrame> urgentWriteQueue = new ConcurrentLinkedQueue<OutboundFrame>();
     @Probe(name = "out.eventCount")
     private final SwCounter eventCount = newSwCounter();
-    private final AtomicBoolean scheduled = new AtomicBoolean(false);
+    //private final AtomicBoolean scheduled = new AtomicBoolean(false);
     private ByteBuffer outputBuffer;
     @Probe(name = "out.bytesWritten")
     private final SwCounter bytesWritten = newSwCounter();
@@ -105,7 +109,13 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @Override
     public int totalFramesPending() {
-        return writeQueue.size();// + urgentWriteQueue.size();
+//        Packet head = this.head.get();
+//        while(head!=null){
+//
+//        }
+//
+//        return writeQueue.size();// + urgentWriteQueue.size();
+        return 0;
     }
 
     @Override
@@ -120,7 +130,8 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @Probe(name = "out.writeQueuePendingBytes", level = DEBUG)
     public long bytesPending() {
-        return bytesPending(writeQueue);
+        //return bytesPending(writeQueue);
+        return 0;
     }
 
     @Probe(name = "out.priorityWriteQueuePendingBytes", level = DEBUG)
@@ -145,7 +156,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @Probe(name = "out.isScheduled", level = DEBUG)
     private long isScheduled() {
-        return scheduled.get() ? 1 : 0;
+        return 0;//scheduled.get() ? 1 : 0;
     }
 
     // accessed from ReadHandler and SocketConnector
@@ -200,36 +211,42 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @Override
     public void offer(OutboundFrame frame) {
-        //if (frame.isUrgent()) {
-        //    urgentWriteQueue.offer(frame);
-        //} else {
-        writeQueue.offer(frame);
-        // }
+        OutboundFrame oldHead;
+        for (; ; ) {
+            oldHead = head.get();
+            frame.setNext(frame);
 
-        schedule();
+            if (head.compareAndSet(oldHead, frame)) {
+                break;
+            }
+        }
+
+        if (oldHead == BLOCKED) {
+            ioThread.addTaskAndWakeup(this);
+        }
     }
 
-    private OutboundFrame poll() {
-        for (; ; ) {
-            boolean urgent = false;
-            OutboundFrame frame = writeQueue.poll();
-//
-//            if (frame == null) {
-//                urgent = false;
-//                frame = writeQueue.poll();
-//            }
+    OutboundFrame pending;
 
+    private OutboundFrame poll() {
+
+        for (; ; ) {
+            OutboundFrame frame = null;
+            if (pending == null) {
+                pending = head.getAndSet(null);
+            }
+
+            if (pending != null) {
+                frame = pending;
+                pending = pending.getNext();
+
+            }
             if (frame == null) {
                 return null;
             }
 
             if (frame.getClass() == Packet.class) {
-                if (urgent) {
-                    priorityFramesWritten.inc();
-                } else {
-                    normalFramesWritten.inc();
-                }
-
+                normalFramesWritten.inc();
                 return frame;
             }
 
@@ -237,30 +254,30 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
         }
     }
 
-    /**
-     * Makes sure this WriteHandler is scheduled to be executed by the IO thread.
-     * <p/>
-     * This call is made by 'outside' threads that interact with the connection. For example when a frame is placed
-     * on the connection to be written. It will never be made by an IO thread.
-     * <p/>
-     * If the WriteHandler already is scheduled, the call is ignored.
-     */
-    private void schedule() {
-        if (scheduled.get()) {
-            // So this WriteHandler is still scheduled, we don't need to schedule it again
-            return;
-        }
-
-        if (!scheduled.compareAndSet(false, true)) {
-            // Another thread already has scheduled this WriteHandler, we are done. It
-            // doesn't matter which thread does the scheduling, as long as it happens.
-            return;
-        }
-
-        // We managed to schedule this WriteHandler. This means we need to add a task to
-        // the ioThread and give it a kick so that it processes our frames.
-        ioThread.addTaskAndWakeup(this);
-    }
+//    /**
+//     * Makes sure this WriteHandler is scheduled to be executed by the IO thread.
+//     * <p/>
+//     * This call is made by 'outside' threads that interact with the connection. For example when a frame is placed
+//     * on the connection to be written. It will never be made by an IO thread.
+//     * <p/>
+//     * If the WriteHandler already is scheduled, the call is ignored.
+//     */
+//    private void schedule() {
+//        if (scheduled.get()) {
+//            // So this WriteHandler is still scheduled, we don't need to schedule it again
+//            return;
+//        }
+//
+//        if (!scheduled.compareAndSet(false, true)) {
+//            // Another thread already has scheduled this WriteHandler, we are done. It
+//            // doesn't matter which thread does the scheduling, as long as it happens.
+//            return;
+//        }
+//
+//        // We managed to schedule this WriteHandler. This means we need to add a task to
+//        // the ioThread and give it a kick so that it processes our frames.
+//        ioThread.addTaskAndWakeup(this);
+//    }
 
     /**
      * Tries to unschedule this WriteHandler.
@@ -289,25 +306,10 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
         // since everything is written, we are not interested anymore in write-events, so lets unsubscribe
         unregisterOp(SelectionKey.OP_WRITE);
-        // So the outputBuffer is empty, so we are going to unschedule ourselves.
-        scheduled.set(false);
 
-        if (writeQueue.isEmpty()) {
-            // there are no remaining frames, so we are done.
-            return;
+        if (head.get() != null || !head.compareAndSet(null, BLOCKED)) {
+            ioThread.addTask(this);
         }
-
-        // So there are frames, but we just unscheduled ourselves. If we don't try to reschedule, then these
-        // Frames are at risk not to be send.
-        if (!scheduled.compareAndSet(false, true)) {
-            //someone else managed to schedule this WriteHandler, so we are done.
-            return;
-        }
-
-        // We managed to reschedule. So lets add ourselves to the ioThread so we are processed again.
-        // We don't need to call wakeup because the current thread is the IO-thread and the selectionQueue will be processed
-        // till it is empty. So it will also pick up tasks that are added while it is processing the selectionQueue.
-        ioThread.addTask(this);
     }
 
     @Override
@@ -425,8 +427,8 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     @Override
     public void shutdown() {
         metricsRegistry.deregister(this);
-        writeQueue.clear();
-        urgentWriteQueue.clear();
+//        writeQueue.clear();
+//        urgentWriteQueue.clear();
 
         ShutdownTask shutdownTask = new ShutdownTask();
         offer(shutdownTask);
@@ -478,6 +480,19 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
             this.theNewOwner = theNewOwner;
         }
 
+        private OutboundFrame next;
+
+
+        @Override
+        public OutboundFrame getNext() {
+            return next;
+        }
+
+        @Override
+        public void setNext(OutboundFrame next) {
+            this.next = next;
+        }
+
         @Override
         void run() {
             assert newOwner == null : "No migration can be in progress";
@@ -493,6 +508,18 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     private class ShutdownTask extends TaskFrame {
         private final CountDownLatch latch = new CountDownLatch(1);
+        private OutboundFrame next;
+
+
+        @Override
+        public OutboundFrame getNext() {
+            return next;
+        }
+
+        @Override
+        public void setNext(OutboundFrame next) {
+            this.next = next;
+        }
 
         @Override
         void run() {
