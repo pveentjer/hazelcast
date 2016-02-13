@@ -220,6 +220,7 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
             }
         }
     }
+
     private Runnable pending;
 //
 //    private void processTaskQueue() {
@@ -240,7 +241,8 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
             pending = null;
         }
 
-        for (int i = 0; i < MAXIMUM_ITEMS_TAKEN_FROM_TASK_QUEUE_RENAME_ME_I_AM_SILLY && !isInterrupted(); i++) {
+        for (; ; ) {
+//        for (int i = 0; i < MAXIMUM_ITEMS_TAKEN_FROM_TASK_QUEUE_RENAME_ME_I_AM_SILLY && !isInterrupted(); i++) {
             Runnable task = taskQueue.poll();
             if (task == null) {
                 return true;
@@ -253,9 +255,8 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
 
             executeTask(task);
         }
-        return false;
+        //return false;
     }
-
 
     private void executeTask(Runnable task) {
         NonBlockingIOThread target = getTargetIoThread(task);
