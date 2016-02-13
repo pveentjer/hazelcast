@@ -292,6 +292,7 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
         } while (next != null);
 
         if (selectNow) {
+            // doesn't matter what is returned.
             return false;
         }
 
