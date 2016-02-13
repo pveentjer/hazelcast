@@ -105,7 +105,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @Override
     public int totalFramesPending() {
-        return writeQueue.size() + urgentWriteQueue.size();
+        return writeQueue.size();// + urgentWriteQueue.size();
     }
 
     @Override
@@ -125,7 +125,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @Probe(name = "out.priorityWriteQueuePendingBytes", level = DEBUG)
     public long priorityBytesPending() {
-        return bytesPending(urgentWriteQueue);
+        return 0;//return bytesPending(urgentWriteQueue);
     }
 
     private long bytesPending(Queue<OutboundFrame> writeQueue) {
@@ -200,24 +200,24 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @Override
     public void offer(OutboundFrame frame) {
-        if (frame.isUrgent()) {
-            urgentWriteQueue.offer(frame);
-        } else {
+        //if (frame.isUrgent()) {
+        //    urgentWriteQueue.offer(frame);
+        //} else {
             writeQueue.offer(frame);
-        }
+       // }
 
         schedule();
     }
 
     private OutboundFrame poll() {
         for (; ; ) {
-            boolean urgent = true;
-            OutboundFrame frame = urgentWriteQueue.poll();
-
-            if (frame == null) {
-                urgent = false;
-                frame = writeQueue.poll();
-            }
+            boolean urgent = false;
+            OutboundFrame frame = writeQueue.poll();
+//
+//            if (frame == null) {
+//                urgent = false;
+//                frame = writeQueue.poll();
+//            }
 
             if (frame == null) {
                 return null;
@@ -293,7 +293,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
         // So the outputBuffer is empty, so we are going to unschedule ourselves.
         scheduled.set(false);
 
-        if (writeQueue.isEmpty() && urgentWriteQueue.isEmpty()) {
+        if (writeQueue.isEmpty()) {
             // there are no remaining frames, so we are done.
             return;
         }
