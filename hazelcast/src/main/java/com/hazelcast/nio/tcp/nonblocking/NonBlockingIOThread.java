@@ -20,6 +20,7 @@ import com.hazelcast.core.HazelcastException;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.nio.tcp.SelectorOptimizer;
 import com.hazelcast.spi.impl.operationexecutor.OperationHostileThread;
 
 import java.io.IOException;
@@ -70,7 +71,7 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
                                ILogger logger,
                                NonBlockingIOThreadOutOfMemoryHandler oomeHandler,
                                boolean selectNow) {
-        this(threadGroup, threadName, logger, oomeHandler, selectNow, newSelector());
+        this(threadGroup, threadName, logger, oomeHandler, selectNow, newSelector(logger));
     }
 
     public NonBlockingIOThread(ThreadGroup threadGroup,
@@ -86,13 +87,18 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
         this.selector = selector;
     }
 
-    private static Selector newSelector() {
+    private static Selector newSelector(ILogger logger) {
         try {
-            return Selector.open();
-        } catch (IOException e) {
+            Selector selector = Selector.open();
+            if (Boolean.getBoolean("tcp.optimizedselector")) {
+                SelectorOptimizer.optimize(selector, logger);
+            }
+            return selector;
+        } catch (final IOException e) {
             throw new HazelcastException("Failed to open a Selector", e);
         }
     }
+
 
     /**
      * Gets the Selector
