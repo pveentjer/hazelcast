@@ -60,7 +60,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Li
 //    @Probe(name = "out.writeQueueSize")
 //    public final Queue<OutboundFrame> writeQueue = new ConcurrentLinkedQueue<OutboundFrame>();
 
-    public final AtomicReference<OutboundFrame> head = new AtomicReference<OutboundFrame>(BLOCKED);
+    public final AtomicReference<OutboundFrame> head = new AtomicReference<OutboundFrame>(null);
 
     //    @SuppressWarnings("checkstyle:visibilitymodifier")
 //    @Probe(name = "out.priorityWriteQueueSize")
@@ -222,41 +222,46 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Li
     }
 
     @Override
-    public void offer(OutboundFrame frame) {
-        OutboundFrame oldHead;
+    public void offer(OutboundFrame newState) {
+        OutboundFrame oldState;
         for (; ; ) {
-            oldHead = head.get();
+            oldState = head.get();
 
-            frame.setNext(oldHead == BLOCKED ? null : oldHead);
+            newState.setNext(oldState == BLOCKED ? null : oldState);
 
-            if (head.compareAndSet(oldHead, frame)) {
+            if (head.compareAndSet(oldState, newState)) {
                 break;
             }
         }
 
-        if (oldHead == BLOCKED) {
+        if (oldState == BLOCKED) {
             ioThread.addTaskAndWakeup(this);
         }
     }
 
-    OutboundFrame pending;
+    OutboundFrame checkedOut;
 
     private OutboundFrame poll() {
-
         for (; ; ) {
-            OutboundFrame frame = null;
-            if (pending == null) {
-                pending = head.getAndSet(null);
+            if (checkedOut == null) {
+                // there is no work checked out, so lets try that first.
+                for (; ; ) {
+                    OutboundFrame old = head.get();
+                    if (old == BLOCKED || old == null) {
+                        return null;
+                    }
+
+                    if (head.compareAndSet(old, null)) {
+                        checkedOut = old;
+                        break;
+                    }
+                }
             }
 
-            if (pending != null) {
-                frame = pending;
-                pending = pending.getNext();
-
-            }
-            if (frame == null) {
-                return null;
-            }
+            // work was successfully checked out, so lets take the first item
+            OutboundFrame frame = checkedOut;
+            // checked out is updated to the next item in the line.
+            checkedOut = checkedOut.getNext();
 
             if (frame.getClass() == Packet.class) {
                 normalFramesWritten.inc();
