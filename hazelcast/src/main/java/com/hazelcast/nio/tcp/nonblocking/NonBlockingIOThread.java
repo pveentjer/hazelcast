@@ -18,9 +18,9 @@ package com.hazelcast.nio.tcp.nonblocking;
 
 import com.hazelcast.core.HazelcastException;
 import com.hazelcast.internal.metrics.Probe;
+import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.spi.impl.operationexecutor.OperationHostileThread;
-import com.hazelcast.internal.util.counters.SwCounter;
 
 import java.io.IOException;
 import java.nio.channels.CancelledKeyException;
@@ -240,8 +240,8 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
     }
 
     private NonBlockingIOThread getTargetIoThread(Runnable task) {
-        if (task instanceof MigratableHandler) {
-            return ((MigratableHandler) task).getOwner();
+        if (task.getClass() == NonBlockingSocketWriter.class) {
+            return ((NonBlockingSocketWriter) task).getOwner();
         } else {
             return this;
         }

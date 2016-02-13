@@ -18,6 +18,7 @@ package com.hazelcast.nio.tcp.nonblocking;
 
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
+import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.nio.OutboundFrame;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.nio.ascii.TextWriteHandler;
@@ -25,7 +26,6 @@ import com.hazelcast.nio.tcp.NewClientWriteHandler;
 import com.hazelcast.nio.tcp.SocketWriter;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 import com.hazelcast.nio.tcp.WriteHandler;
-import com.hazelcast.internal.util.counters.SwCounter;
 
 import java.io.IOException;
 import java.net.SocketException;
@@ -39,13 +39,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.DEBUG;
+import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
 import static com.hazelcast.nio.IOService.KILO_BYTE;
 import static com.hazelcast.nio.Protocols.CLIENT_BINARY_NEW;
 import static com.hazelcast.nio.Protocols.CLUSTER;
 import static com.hazelcast.util.Clock.currentTimeMillis;
 import static com.hazelcast.util.EmptyStatement.ignore;
 import static com.hazelcast.util.StringUtil.stringToBytes;
-import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
 import static java.lang.Math.max;
 
 /**
@@ -203,8 +203,8 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
         //if (frame.isUrgent()) {
         //    urgentWriteQueue.offer(frame);
         //} else {
-            writeQueue.offer(frame);
-       // }
+        writeQueue.offer(frame);
+        // }
 
         schedule();
     }
@@ -223,18 +223,17 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
                 return null;
             }
 
-            if (frame instanceof TaskFrame) {
-                ((TaskFrame) frame).run();
-                continue;
+            if (frame.getClass() == Packet.class) {
+                if (urgent) {
+                    priorityFramesWritten.inc();
+                } else {
+                    normalFramesWritten.inc();
+                }
+
+                return frame;
             }
 
-            if (urgent) {
-                priorityFramesWritten.inc();
-            } else {
-                normalFramesWritten.inc();
-            }
-
-            return frame;
+            ((TaskFrame) frame).run();
         }
     }
 
