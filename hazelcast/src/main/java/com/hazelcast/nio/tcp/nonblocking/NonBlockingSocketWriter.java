@@ -222,46 +222,46 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Li
     }
 
     @Override
-    public void offer(OutboundFrame newState) {
-        OutboundFrame oldState;
+    public void offer(OutboundFrame newHead) {
+        OutboundFrame oldHead;
         for (; ; ) {
-            oldState = head.get();
+            oldHead = head.get();
 
-            newState.setNext(oldState == BLOCKED ? null : oldState);
+            newHead.setNext(oldHead == BLOCKED ? null : oldHead);
 
-            if (head.compareAndSet(oldState, newState)) {
+            if (head.compareAndSet(oldHead, newHead)) {
                 break;
             }
         }
 
-        if (oldState == BLOCKED) {
+        if (oldHead == BLOCKED) {
             ioThread.addTaskAndWakeup(this);
         }
     }
 
-    OutboundFrame checkedOut;
+    OutboundFrame checkedOutHead;
 
     private OutboundFrame poll() {
         for (; ; ) {
-            if (checkedOut == null) {
+            if (checkedOutHead == null) {
                 // there is no work checked out, so lets try that first.
                 for (; ; ) {
-                    OutboundFrame old = head.get();
-                    if (old == BLOCKED || old == null) {
+                    OutboundFrame oldHead = head.get();
+                    if (oldHead == BLOCKED || oldHead == null) {
                         return null;
                     }
 
-                    if (head.compareAndSet(old, null)) {
-                        checkedOut = old;
+                    if (head.compareAndSet(oldHead, null)) {
+                        checkedOutHead = oldHead;
                         break;
                     }
                 }
             }
 
             // work was successfully checked out, so lets take the first item
-            OutboundFrame frame = checkedOut;
+            OutboundFrame frame = checkedOutHead;
             // checked out is updated to the next item in the line.
-            checkedOut = checkedOut.getNext();
+            checkedOutHead = checkedOutHead.getNext();
 
             if (frame.getClass() == Packet.class) {
                 normalFramesWritten.inc();
@@ -326,6 +326,8 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Li
         unregisterOp(SelectionKey.OP_WRITE);
 
         if (head.get() != null || !head.compareAndSet(null, BLOCKED)) {
+            // if there is currently an item, or if we didn't managed to swap out the null head with blocked, then
+            //there must be an item as well. In both cases we'll call the ioThread.addTask
             ioThread.addTask(this);
         }
     }
