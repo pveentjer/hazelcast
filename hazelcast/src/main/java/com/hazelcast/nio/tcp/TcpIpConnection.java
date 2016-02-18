@@ -246,7 +246,7 @@ public final class TcpIpConnection implements Connection {
             message += t.getClass().getName() + "[" + t.getMessage() + "]";
         }
 
-        logger.info(message);
+        logger.warning(message, t);
         connectionManager.destroyConnection(this);
         connectionManager.getIoService().onDisconnect(endPoint);
         if (t != null && monitor != null) {
