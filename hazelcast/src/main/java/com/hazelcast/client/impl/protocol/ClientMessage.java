@@ -143,6 +143,11 @@ public class ClientMessage
         if (desiredMessageSize < 0) {
             throw new MaxMessageSizeExceeded();
         }
+
+        if(desiredMessageSize == 1024){
+            return 180000;
+        }
+
         desiredMessageSize = QuickMath.nextPowerOfTwo(desiredMessageSize);
         if (desiredMessageSize < 0) {
             desiredMessageSize = Integer.MAX_VALUE;
