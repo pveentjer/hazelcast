@@ -192,7 +192,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     }
 
     private void configureBuffers(int size) {
-        outputBuffer = ByteBuffer.allocate(size);
+        outputBuffer = ByteBuffer.allocateDirect(size);
         try {
             connection.setSendBufferSize(size);
         } catch (SocketException e) {

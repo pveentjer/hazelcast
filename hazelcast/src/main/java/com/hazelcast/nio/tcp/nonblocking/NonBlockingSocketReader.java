@@ -230,7 +230,7 @@ public final class NonBlockingSocketReader extends AbstractHandler implements So
     }
 
     private void configureBuffers(int size) {
-        inputBuffer = ByteBuffer.allocate(size);
+        inputBuffer = ByteBuffer.allocateDirect(size);
         try {
             connection.setReceiveBufferSize(size);
         } catch (SocketException e) {
