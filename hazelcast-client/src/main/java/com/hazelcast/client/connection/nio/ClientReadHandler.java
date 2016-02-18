@@ -35,7 +35,7 @@ public class ClientReadHandler
 
     public ClientReadHandler(final ClientConnection connection, NonBlockingIOThread ioThread, int bufferSize) {
         super(connection, ioThread);
-        buffer = ByteBuffer.allocate(bufferSize);
+        buffer = ByteBuffer.allocateDirect(bufferSize);
         lastHandle = Clock.currentTimeMillis();
         builder = new ClientMessageBuilder(new ClientMessageBuilder.MessageHandler() {
             @Override

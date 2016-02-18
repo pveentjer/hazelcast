@@ -44,7 +44,7 @@ public class ClientWriteHandler extends AbstractClientSelectionHandler implement
 
     public ClientWriteHandler(ClientConnection connection, NonBlockingIOThread ioThread, int bufferSize) {
         super(connection, ioThread);
-        buffer = ByteBuffer.allocate(bufferSize);
+        buffer = ByteBuffer.allocateDirect(bufferSize);
     }
 
     @Override

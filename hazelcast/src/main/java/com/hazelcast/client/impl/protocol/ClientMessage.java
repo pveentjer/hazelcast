@@ -96,7 +96,7 @@ public class ClientMessage
 
     private static final String PROP_HAZELCAST_PROTOCOL_UNSAFE = "hazelcast.protocol.unsafe.enabled";
     private static final boolean USE_UNSAFE = Boolean.getBoolean(PROP_HAZELCAST_PROTOCOL_UNSAFE);
-    private static final int INITIAL_BUFFER_SIZE = 1024;
+    private static final int INITIAL_BUFFER_SIZE = 180000;
 
     private static final int FRAME_LENGTH_FIELD_OFFSET = 0;
     private static final int VERSION_FIELD_OFFSET = FRAME_LENGTH_FIELD_OFFSET + Bits.INT_SIZE_IN_BYTES;
