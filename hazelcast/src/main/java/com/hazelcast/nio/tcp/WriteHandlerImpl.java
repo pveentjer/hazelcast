@@ -31,16 +31,18 @@ public class WriteHandlerImpl implements WriteHandler {
 
     @Override
     public int onWrite(byte[] src, int offset, ByteBuffer dst) {
-        int available = dst.remaining();
-        int required = src.length - offset;
+        int spaceInBuffer = dst.remaining();
+        int bytesPending = src.length - offset;
 
-        if (available >= required) {
-            dst.put(src, offset, required);
+        if (bytesPending <= spaceInBuffer) {
+            // there is enough space in the buffer, we can write everything
+            dst.put(src, offset, bytesPending);
+            // we return 0 to indicate we are done.
             return 0;
         } else {
-            int length = required - available;
-            dst.put(src, offset, length);
-            return offset + length;
+            // there is not enough space in the buffer.
+            dst.put(src, offset, spaceInBuffer);
+            return offset + spaceInBuffer;
         }
     }
 }
