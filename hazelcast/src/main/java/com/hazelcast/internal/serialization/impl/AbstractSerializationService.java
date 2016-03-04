@@ -145,9 +145,6 @@ public abstract class AbstractSerializationService implements SerializationServi
     public void write(BufferObjectDataOutput out, Object obj) throws IOException {
         SerializerAdapter serializer = serializerFor(obj);
         int partitionHash = calculatePartitionHash(obj, globalPartitioningStrategy);
-        if(obj instanceof Operation) {
-            System.out.println("actual partitionHash:" + partitionHash);
-        }
         out.writeInt(partitionHash, ByteOrder.BIG_ENDIAN);
         out.writeInt(serializer.getTypeId(), ByteOrder.BIG_ENDIAN);
         serializer.write(out, obj);
