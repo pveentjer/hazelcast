@@ -35,11 +35,11 @@ public class WriteHandlerImpl implements WriteHandler {
         int required = src.length - offset;
 
         if (available >= required) {
-            dst.put(src);
+            dst.put(src, offset, required);
             return 0;
         } else {
-            int length = required-available;
-            dst.put(src, offset,length);
+            int length = required - available;
+            dst.put(src, offset, length);
             return offset + length;
         }
     }
