@@ -398,7 +398,7 @@ public class MockIOService implements IOService {
 
     @Override
     public WriteHandler createWriteHandler(TcpIpConnection connection) {
-        return new MemberWriteHandler();
+        return new WriteHandlerImpl();
     }
 
 }

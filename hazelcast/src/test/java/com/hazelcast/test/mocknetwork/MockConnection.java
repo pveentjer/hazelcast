@@ -19,6 +19,7 @@ package com.hazelcast.test.mocknetwork;
 
 import com.hazelcast.instance.NodeState;
 import com.hazelcast.nio.Address;
+import com.hazelcast.nio.Bits;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.ConnectionType;
 import com.hazelcast.nio.OutboundFrame;
@@ -50,6 +51,25 @@ public class MockConnection implements Connection {
 
     public Address getEndPoint() {
         return remoteEndpoint;
+    }
+
+    @Override
+    public boolean write(byte[] bytes, boolean urgent) {
+        if (!live) {
+            return false;
+        }
+
+        if (nodeEngine.getNode().getState() == NodeState.SHUT_DOWN) {
+            return false;
+        }
+
+
+        ByteBuffer bb  = ByteBuffer.wrap(bytes);
+        Packet newPacket = new Packet();
+        newPacket.readFrom(bb);
+
+        nodeEngine.getPacketDispatcher().dispatch(newPacket);
+        return true;
     }
 
     public boolean write(OutboundFrame frame) {

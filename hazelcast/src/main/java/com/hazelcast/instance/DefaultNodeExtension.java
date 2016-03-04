@@ -34,7 +34,7 @@ import com.hazelcast.nio.IOService;
 import com.hazelcast.nio.MemberSocketInterceptor;
 import com.hazelcast.nio.tcp.DefaultSocketChannelWrapperFactory;
 import com.hazelcast.nio.tcp.MemberReadHandler;
-import com.hazelcast.nio.tcp.MemberWriteHandler;
+import com.hazelcast.nio.tcp.WriteHandlerImpl;
 import com.hazelcast.nio.tcp.ReadHandler;
 import com.hazelcast.nio.tcp.SocketChannelWrapperFactory;
 import com.hazelcast.nio.tcp.TcpIpConnection;
@@ -184,7 +184,7 @@ public class DefaultNodeExtension implements NodeExtension {
 
     @Override
     public WriteHandler createWriteHandler(TcpIpConnection connection, IOService ioService) {
-        return new MemberWriteHandler();
+        return new WriteHandlerImpl();
     }
 
     @Override

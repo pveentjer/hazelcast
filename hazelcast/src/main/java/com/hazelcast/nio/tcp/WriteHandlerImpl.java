@@ -30,9 +30,17 @@ import java.nio.ByteBuffer;
 public class WriteHandlerImpl implements WriteHandler {
 
     @Override
-    public int onWrite(byte[] packet, ByteBuffer dst) {
-        dst.put(packet);
+    public int onWrite(byte[] src, int offset, ByteBuffer dst) {
+        int available = dst.remaining();
+        int required = src.length - offset;
 
-        return packet.writeTo(dst);
+        if (available >= required) {
+            dst.put(src);
+            return 0;
+        } else {
+            int length = required-available;
+            dst.put(src, offset,length);
+            return offset + length;
+        }
     }
 }

@@ -583,6 +583,17 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         return connection.write(packet);
     }
 
+    @Override
+    public boolean transmit(byte[] payload, boolean urgent, Connection connection) {
+        checkNotNull(payload, "Packet can't be null");
+
+        if (connection == null) {
+            return false;
+        }
+
+        return connection.write(payload, urgent);
+    }
+
     /**
      * Retries sending packet maximum 5 times until connection to target becomes available.
      */

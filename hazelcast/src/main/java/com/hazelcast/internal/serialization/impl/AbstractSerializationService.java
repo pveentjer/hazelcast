@@ -20,6 +20,7 @@ import com.hazelcast.core.HazelcastInstanceNotActiveException;
 import com.hazelcast.core.ManagedContext;
 import com.hazelcast.core.PartitioningStrategy;
 import com.hazelcast.internal.serialization.InputOutputFactory;
+import com.hazelcast.internal.serialization.PortableContext;
 import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.internal.serialization.impl.bufferpool.BufferPool;
 import com.hazelcast.internal.serialization.impl.bufferpool.BufferPoolFactory;
@@ -34,9 +35,12 @@ import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.nio.serialization.DataSerializable;
 import com.hazelcast.nio.serialization.HazelcastSerializationException;
 import com.hazelcast.nio.serialization.Portable;
+import com.hazelcast.nio.serialization.PortableReader;
 import com.hazelcast.nio.serialization.Serializer;
+import com.hazelcast.spi.Operation;
 
 import java.io.Externalizable;
+import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteOrder;
 import java.util.IdentityHashMap;
@@ -86,8 +90,8 @@ public abstract class AbstractSerializationService implements SerializationServi
     private ILogger logger = Logger.getLogger(SerializationService.class);
 
     AbstractSerializationService(InputOutputFactory inputOutputFactory, byte version, ClassLoader classLoader,
-            ManagedContext managedContext, PartitioningStrategy globalPartitionStrategy, int initialOutputBufferSize,
-            BufferPoolFactory bufferPoolFactory) {
+                                 ManagedContext managedContext, PartitioningStrategy globalPartitionStrategy, int initialOutputBufferSize,
+                                 BufferPoolFactory bufferPoolFactory) {
         this.inputOutputFactory = inputOutputFactory;
         this.version = version;
         this.classLoader = classLoader;
@@ -96,6 +100,21 @@ public abstract class AbstractSerializationService implements SerializationServi
         this.outputBufferSize = initialOutputBufferSize;
         this.bufferPoolThreadLocal = new BufferPoolThreadLocal(this, bufferPoolFactory);
         this.nullSerializerAdapter = createSerializerAdapter(new ConstantSerializers.NullSerializer(), this);
+    }
+
+    @Override
+    public BufferPool getThreadLocalBufferPool() {
+        return bufferPoolThreadLocal.get();
+    }
+
+    @Override
+    public PortableReader createPortableReader(Data data) throws IOException {
+        return null;
+    }
+
+    @Override
+    public PortableContext getPortableContext() {
+        return null;
     }
 
     //region Serialization Service
@@ -123,16 +142,30 @@ public abstract class AbstractSerializationService implements SerializationServi
     }
 
     @Override
+    public void write(BufferObjectDataOutput out, Object obj) throws IOException {
+        SerializerAdapter serializer = serializerFor(obj);
+        int partitionHash = calculatePartitionHash(obj, globalPartitioningStrategy);
+        if(obj instanceof Operation) {
+            System.out.println("actual partitionHash:" + partitionHash);
+        }
+        out.writeInt(partitionHash, ByteOrder.BIG_ENDIAN);
+        out.writeInt(serializer.getTypeId(), ByteOrder.BIG_ENDIAN);
+        serializer.write(out, obj);
+    }
+
+
+    @Override
     public byte[] toBytes(Object obj, PartitioningStrategy strategy) {
         checkNotNull(obj);
 
         BufferPool pool = bufferPoolThreadLocal.get();
         BufferObjectDataOutput out = pool.takeOutputBuffer();
         try {
-            SerializerAdapter serializer = serializerFor(obj);
             int partitionHash = calculatePartitionHash(obj, strategy);
+
             out.writeInt(partitionHash, ByteOrder.BIG_ENDIAN);
 
+            SerializerAdapter serializer = serializerFor(obj);
             out.writeInt(serializer.getTypeId(), ByteOrder.BIG_ENDIAN);
 
             serializer.write(out, obj);
@@ -389,7 +422,7 @@ public abstract class AbstractSerializationService implements SerializationServi
         Class type = object.getClass();
 
         //2-Default serializers, Dataserializable, Portable, primitives, arrays, String and some helper Java types(BigInteger etc)
-        SerializerAdapter  serializer = lookupDefaultSerializer(type);
+        SerializerAdapter serializer = lookupDefaultSerializer(type);
 
         //3-Custom registered types by user
         if (serializer == null) {

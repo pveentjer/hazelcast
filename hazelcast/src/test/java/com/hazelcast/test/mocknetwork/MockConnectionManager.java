@@ -202,6 +202,11 @@ public class MockConnectionManager implements ConnectionManager {
         return send(packet, target, null);
     }
 
+    @Override
+    public boolean transmit(byte[] payload, boolean urgent, Connection connection) {
+        return (connection != null && connection.write(payload,urgent));
+    }
+
     private boolean send(Packet packet, Address target, SendTask sendTask) {
         Connection connection = getConnection(target);
         if (connection != null) {

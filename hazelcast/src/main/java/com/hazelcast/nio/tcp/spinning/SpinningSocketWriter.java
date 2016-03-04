@@ -283,11 +283,11 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
                 }
             }
 
-            // Lets write the currentFrame to the outputBuffer.
-            if (!writeHandler.onWrite(currentFrame, outputBuffer)) {
-                // We are done for this round because not all data of the current frame fits in the outputBuffer
-                return;
-            }
+//            // Lets write the currentFrame to the outputBuffer.
+//            if (!writeHandler.onWrite(currentFrame, outputBuffer)) {
+//                // We are done for this round because not all data of the current frame fits in the outputBuffer
+//                return;
+//            }
 
             // The current frame has been written completely. So lets null it and lets try to write another frame.
             currentFrame = null;

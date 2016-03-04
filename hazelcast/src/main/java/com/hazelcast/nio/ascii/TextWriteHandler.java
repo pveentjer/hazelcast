@@ -24,7 +24,7 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class TextWriteHandler implements WriteHandler<TextCommand> {
+public class TextWriteHandler implements WriteHandler {
     private final TcpIpConnection connection;
     private final Map<Long, TextCommand> responses = new ConcurrentHashMap<Long, TextCommand>(100);
     private long currentRequestId;
@@ -56,9 +56,15 @@ public class TextWriteHandler implements WriteHandler<TextCommand> {
             response = responses.remove(currentRequestId);
         }
     }
+//
+//    @Override
+//    public boolean onWrite(TextCommand textCommand, ByteBuffer dst) throws Exception {
+//        return textCommand.writeTo(dst);
+//    }
+
 
     @Override
-    public boolean onWrite(TextCommand textCommand, ByteBuffer dst) throws Exception {
-        return textCommand.writeTo(dst);
+    public int onWrite(byte[] src, int offset, ByteBuffer dst) throws Exception {
+        throw new UnsupportedOperationException();
     }
 }

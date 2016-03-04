@@ -16,22 +16,27 @@
 
 package com.hazelcast.spi.impl.operationservice.impl;
 
-import com.hazelcast.internal.cluster.ClusterClock;
 import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.instance.GroupProperties;
 import com.hazelcast.instance.GroupProperty;
 import com.hazelcast.instance.MemberImpl;
 import com.hazelcast.instance.Node;
+import com.hazelcast.internal.cluster.ClusterClock;
 import com.hazelcast.internal.management.dto.SlowOperationDTO;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
+import com.hazelcast.internal.partition.InternalPartitionService;
 import com.hazelcast.internal.serialization.SerializationService;
+import com.hazelcast.internal.serialization.impl.bufferpool.BufferPool;
+import com.hazelcast.internal.util.counters.MwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Address;
+import com.hazelcast.nio.Bits;
+import com.hazelcast.nio.BufferObjectDataOutput;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.ConnectionManager;
 import com.hazelcast.nio.Packet;
-import com.hazelcast.internal.partition.InternalPartitionService;
+import com.hazelcast.nio.serialization.HazelcastSerializationException;
 import com.hazelcast.spi.ExecutionService;
 import com.hazelcast.spi.InternalCompletableFuture;
 import com.hazelcast.spi.InvocationBuilder;
@@ -48,10 +53,10 @@ import com.hazelcast.spi.impl.operationexecutor.slowoperationdetector.SlowOperat
 import com.hazelcast.spi.impl.operationservice.InternalOperationService;
 import com.hazelcast.spi.impl.operationservice.impl.responses.Response;
 import com.hazelcast.util.EmptyStatement;
-import com.hazelcast.internal.util.counters.MwCounter;
 import com.hazelcast.util.executor.ExecutorType;
 import com.hazelcast.util.executor.ManagedExecutorService;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -61,6 +66,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.MANDATORY;
+import static com.hazelcast.nio.Packet.FLAG_OP;
+import static com.hazelcast.nio.Packet.FLAG_RESPONSE;
+import static com.hazelcast.nio.Packet.FLAG_URGENT;
+import static com.hazelcast.nio.Packet.VERSION;
 import static com.hazelcast.spi.InvocationBuilder.DEFAULT_CALL_TIMEOUT;
 import static com.hazelcast.spi.InvocationBuilder.DEFAULT_DESERIALIZE_RESULT;
 import static com.hazelcast.spi.InvocationBuilder.DEFAULT_REPLICA_INDEX;
@@ -263,9 +272,9 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
     @Override
     public void handle(Packet packet) throws Exception {
         checkNotNull(packet, "packet can't be null");
-        checkTrue(packet.isFlagSet(Packet.FLAG_OP), "Packet.FLAG_OP should be set!");
+        checkTrue(packet.isFlagSet(FLAG_OP), "Packet.FLAG_OP should be set!");
 
-        if (packet.isFlagSet(Packet.FLAG_RESPONSE)) {
+        if (packet.isFlagSet(FLAG_RESPONSE)) {
             responsePacketExecutor.handle(packet);
         } else {
             operationExecutor.execute(packet);
@@ -386,7 +395,6 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
         return invokeOnPartitions.invoke();
     }
 
-    @Override
     public boolean send(Operation op, Address target) {
         if (target == null) {
             throw new IllegalArgumentException("Target is required!");
@@ -396,22 +404,41 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
             throw new IllegalArgumentException("Target is this node! -> " + target + ", op: " + op);
         }
 
-        byte[] bytes = serializationService.toBytes(op);
-        int partitionId = op.getPartitionId();
-        Packet packet = new Packet(bytes, partitionId);
-        packet.setFlag(Packet.FLAG_OP);
+        BufferPool bufferPool = serializationService.getThreadLocalBufferPool();
+        BufferObjectDataOutput out = bufferPool.takeOutputBuffer();
+        boolean urgent = op.isUrgent();
+        byte[] bytes;
+        try {
+            out.writeByte(VERSION);
+            if (urgent) {
+                out.writeShort(FLAG_OP | FLAG_URGENT);
+            } else {
+                out.writeShort(FLAG_OP);
+            }
+            out.writeInt(op.getPartitionId());
 
-        if (op instanceof UrgentSystemOperation) {
-            packet.setFlag(Packet.FLAG_URGENT);
+            int sizePos = out.position();
+            out.writeInt(0);//size placeholder
+
+            int dataStartPos = out.position();
+            serializationService.write(out, op);
+
+            int size = out.position()-dataStartPos;
+            out.writeInt(sizePos, size);
+
+            bytes = out.toByteArray();
+        } catch (IOException e) {
+            throw new HazelcastSerializationException(e);
+        } finally {
+            bufferPool.returnOutputBuffer(out);
         }
 
         ConnectionManager connectionManager = node.getConnectionManager();
         Connection connection = connectionManager.getOrConnect(target);
-        return connectionManager.transmit(packet, connection);
+        return connectionManager.transmit(bytes, urgent, connection);
     }
 
-    @Override
-    public boolean send(Response response, Address target) {
+     public boolean send(Response response, Address target) {
         if (target == null) {
             throw new IllegalArgumentException("Target is required!");
         }
@@ -420,19 +447,91 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
             throw new IllegalArgumentException("Target is this node! -> " + target + ", response: " + response);
         }
 
-        byte[] bytes = serializationService.toBytes(response);
-        Packet packet = new Packet(bytes, -1);
-        packet.setFlag(Packet.FLAG_OP);
-        packet.setFlag(Packet.FLAG_RESPONSE);
+        BufferPool bufferPool = serializationService.getThreadLocalBufferPool();
+        BufferObjectDataOutput out = bufferPool.takeOutputBuffer();
+        boolean urgent = response.isUrgent();
+        byte[] bytes;
+        try {
+            //version
+            out.writeByte(VERSION);
+            //flags
+            if (urgent) {
+                out.writeShort(FLAG_OP | FLAG_RESPONSE | FLAG_URGENT);
+            } else {
+                out.writeShort(FLAG_OP | FLAG_RESPONSE);
+            }
+            //partition id
+            out.writeInt(0);
+            //size
+            int sizePos = out.position();
+            out.writeInt(0);//size placeholder
+            //data
+            int dataStartPos = out.position();
+            serializationService.write(out, response);
+            //correcting the size
+            int size = out.position()-dataStartPos;
+            out.writeInt(sizePos, size);
 
-        if (response.isUrgent()) {
-            packet.setFlag(Packet.FLAG_URGENT);
+            bytes = out.toByteArray();
+        } catch (IOException e) {
+            throw new HazelcastSerializationException(e);
+        } finally {
+            bufferPool.returnOutputBuffer(out);
         }
 
         ConnectionManager connectionManager = node.getConnectionManager();
         Connection connection = connectionManager.getOrConnect(target);
-        return connectionManager.transmit(packet, connection);
+        return connection.write(bytes, urgent);
     }
+
+//    public boolean sendx(Operation op, Address target) {
+//        if (target == null) {
+//            throw new IllegalArgumentException("Target is required!");
+//        }
+//
+//        if (nodeEngine.getThisAddress().equals(target)) {
+//            throw new IllegalArgumentException("Target is this node! -> " + target + ", op: " + op);
+//        }
+//
+//        byte[] bytes = serializationService.toBytes(op);
+//        int partitionId = op.getPartitionId();
+//        Packet packet = new Packet(bytes, partitionId);
+//        packet.setFlag(Packet.FLAG_OP);
+//
+//        if (op instanceof UrgentSystemOperation) {
+//            packet.setFlag(Packet.FLAG_URGENT);
+//        }
+//
+//        ConnectionManager connectionManager = node.getConnectionManager();
+//        Connection connection = connectionManager.getOrConnect(target);
+//        return connectionManager.transmit(packet, connection);
+//    }
+
+//    @Override
+//    public boolean send(Response response, Address target) {
+//        if (target == null) {
+//            throw new IllegalArgumentException("Target is required!");
+//        }
+//
+//        if (nodeEngine.getThisAddress().equals(target)) {
+//            throw new IllegalArgumentException("Target is this node! -> " + target + ", response: " + response);
+//        }
+//
+//        byte[] bytes = serializationService.toBytes(response);
+//        Packet packet = new Packet(bytes, -1);
+//        packet.setFlag(Packet.FLAG_OP);
+//        packet.setFlag(Packet.FLAG_RESPONSE);
+//
+//        if (response.isUrgent()) {
+//            packet.setFlag(Packet.FLAG_URGENT);
+//        }
+//
+//        ConnectionManager connectionManager = node.getConnectionManager();
+//        Connection connection = connectionManager.getOrConnect(target);
+//        return connectionManager.transmit(packet, connection);
+//    }
+//
+
 
     public void onMemberLeft(MemberImpl member) {
         invocationMonitor.onMemberLeft(member);

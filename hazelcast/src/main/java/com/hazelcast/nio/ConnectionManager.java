@@ -116,6 +116,8 @@ public interface ConnectionManager {
      */
     boolean transmit(Packet packet, Connection connection);
 
+    boolean transmit(byte[] payload, boolean urgent, Connection connection);
+
     /**
      * Transmits a packet to a certain address.
      *

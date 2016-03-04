@@ -28,7 +28,7 @@ import java.nio.ByteBuffer;
  * It reads as many packets from the src ByteBuffer as possible, and each of the Packets is send to the {@link PacketDispatcher}.
  *
  * @see PacketDispatcher
- * @see MemberWriteHandler
+ * @see WriteHandlerImpl
  */
 public class MemberReadHandler implements ReadHandler {
 

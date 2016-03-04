@@ -104,6 +104,11 @@ public class ClientConnection implements Connection {
     }
 
     @Override
+    public boolean write(byte[] bytes, boolean urgent) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public boolean write(OutboundFrame frame) {
         if (!live.get()) {
             if (logger.isFinestEnabled()) {
