@@ -27,10 +27,12 @@ import java.nio.ByteBuffer;
  *
  * @see MemberReadHandler
  */
-public class MemberWriteHandler implements WriteHandler<Packet> {
+public class WriteHandlerImpl implements WriteHandler {
 
     @Override
-    public boolean onWrite(Packet packet, ByteBuffer dst) {
+    public int onWrite(byte[] packet, ByteBuffer dst) {
+        dst.put(packet);
+
         return packet.writeTo(dst);
     }
 }
