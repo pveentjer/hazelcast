@@ -118,6 +118,8 @@ public interface Connection extends Closeable {
      */
     boolean write(OutboundFrame frame);
 
+    boolean write(byte[] bytes, boolean urgent);
+
     /**
      * Closes this connection.
      * <p>

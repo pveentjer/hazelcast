@@ -226,6 +226,11 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
         shutdownTask.awaitCompletion();
     }
 
+    @Override
+    public void offer(byte[] bytes, boolean urgent) {
+        throw new RuntimeException();
+    }
+
     public void write() throws Exception {
         if (!connection.isAlive()) {
             return;

@@ -43,7 +43,7 @@ public final class Packet extends HeapData implements OutboundFrame {
     public static final int FLAG_URGENT = 1 << 4;
     public static final int FLAG_BIND = 1 << 5;
 
-    private static final int HEADER_SIZE = BYTE_SIZE_IN_BYTES + SHORT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
+    public static final int HEADER_SIZE = BYTE_SIZE_IN_BYTES + SHORT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
 
     private short flags;
     private int partitionId;

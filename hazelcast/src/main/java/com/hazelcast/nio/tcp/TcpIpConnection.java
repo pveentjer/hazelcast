@@ -201,6 +201,18 @@ public final class TcpIpConnection implements Connection {
     }
 
     @Override
+    public boolean write(byte[] bytes, boolean urgent) {
+        if (!alive.get()) {
+            if (logger.isFinestEnabled()) {
+                logger.finest("Connection is closed, won't write packet");
+            }
+            return false;
+        }
+        socketWriter.offer(bytes, urgent);
+        return true;
+    }
+
+    @Override
     public boolean equals(Object o) {
         if (this == o) {
             return true;

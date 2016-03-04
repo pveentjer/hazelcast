@@ -97,4 +97,6 @@ public interface SocketWriter {
      * @see #start()
      */
     void shutdown();
+
+    void offer(byte[] bytes, boolean urgent);
 }
