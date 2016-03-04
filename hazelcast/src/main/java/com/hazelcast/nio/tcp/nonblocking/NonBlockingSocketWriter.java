@@ -75,8 +75,8 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     private final SwCounter priorityFramesWritten = newSwCounter();
     private final MetricsRegistry metricsRegistry;
 
-    private byte[] data;
-    private int dataOffset;
+    private byte[] frame;
+    private int frameOffset;
 
     private WriteHandler writeHandler;
     private volatile long lastWriteTime;
@@ -208,7 +208,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @Override
     public void offer(OutboundFrame frame) {
-        if(frame instanceof Packet) {
+        if (frame instanceof Packet) {
             Packet packet = (Packet) frame;
 
             byte[] bytes = new byte[((Packet) frame).packetSize()];
@@ -216,7 +216,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
             packet.writeTo(bb);
 
             offer(bytes, frame.isUrgent());
-        }else{
+        } else {
             if (frame.isUrgent()) {
                 urgentWriteQueue.offer(frame);
             } else {
@@ -225,6 +225,11 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
             schedule();
         }
+    }
+
+    private void offer(Runnable runnable) {
+        urgentWriteQueue.add(runnable);
+        schedule();
     }
 
     @Override
@@ -262,7 +267,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
                 return (byte[]) frame;
             }
 
-            ((TaskFrame) frame).run();
+            ((Runnable) frame).run();
         }
     }
 
@@ -306,7 +311,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
      * This call is only made by the IO thread.
      */
     private void unschedule() throws IOException {
-        if (dirtyOutputBuffer() || data != null) {
+        if (dirtyOutputBuffer() || frame != null) {
             // Because not all data was written to the socket, we need to register for OP_WRITE so we get
             // notified when the socketChannel is ready for more data.
             registerOp(SelectionKey.OP_WRITE);
@@ -423,23 +428,23 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
             }
 
             // If there currently is not frame sending, lets try to get one.
-            if (data == null) {
-                data = poll();
-                if (data == null) {
+            if (frame == null) {
+                frame = poll();
+                if (frame == null) {
                     // There is no frames to write, we are done.
                     return;
                 }
             }
 
             // Lets write the data to the outputBuffer.
-            dataOffset = writeHandler.onWrite(data, dataOffset, outputBuffer);
-            if (dataOffset > 0) {
+            frameOffset = writeHandler.onWrite(frame, frameOffset, outputBuffer);
+            if (frameOffset > 0) {
                 // We are done for this round because not all data of the current frame fits in the outputBuffer
                 return;
             }
 
             // The current frame has been written completely. So lets null it and lets try to write another frame.
-            data = null;
+            frame = null;
         }
     }
 
@@ -479,27 +484,12 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     }
 
     /**
-     * The TaskFrame is not really a Frame. It is a way to put a task on one of the frame-queues. Using this approach we
-     * can lift on top of the Frame scheduling mechanism and we can prevent having:
-     * - multiple NonBlockingIOThread-tasks for a SocketWriter on multiple NonBlockingIOThread
-     * - multiple NonBlockingIOThread-tasks for a SocketWriter on the same NonBlockingIOThread.
-     */
-    private abstract class TaskFrame implements OutboundFrame {
-        abstract void run();
-
-        @Override
-        public boolean isUrgent() {
-            return true;
-        }
-    }
-
-    /**
      * Triggers the migration when executed by setting the SocketWriter.newOwner field. When the handle method completes, it
      * checks if this field if set, if so, the migration starts.
      *
      * If the current ioThread is the same as 'theNewOwner' then the call is ignored.
      */
-    private class StartMigrationTask extends TaskFrame {
+    private class StartMigrationTask implements Runnable {
         // field is called 'theNewOwner' to prevent any ambiguity problems with the writeHandler.newOwner.
         // Else you get a lot of ugly WriteHandler.this.newOwner is ...
         private final NonBlockingIOThread theNewOwner;
@@ -509,7 +499,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
         }
 
         @Override
-        void run() {
+        public void run() {
             assert newOwner == null : "No migration can be in progress";
 
             if (ioThread == theNewOwner) {
@@ -521,11 +511,11 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
         }
     }
 
-    private class ShutdownTask extends TaskFrame {
+    private class ShutdownTask implements Runnable {
         private final CountDownLatch latch = new CountDownLatch(1);
 
         @Override
-        void run() {
+        public void run() {
             shutdown = true;
             try {
                 socketChannel.closeOutbound();

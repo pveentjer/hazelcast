@@ -37,7 +37,6 @@ import com.hazelcast.nio.serialization.HazelcastSerializationException;
 import com.hazelcast.nio.serialization.Portable;
 import com.hazelcast.nio.serialization.PortableReader;
 import com.hazelcast.nio.serialization.Serializer;
-import com.hazelcast.spi.Operation;
 
 import java.io.Externalizable;
 import java.io.IOException;
@@ -90,8 +89,8 @@ public abstract class AbstractSerializationService implements SerializationServi
     private ILogger logger = Logger.getLogger(SerializationService.class);
 
     AbstractSerializationService(InputOutputFactory inputOutputFactory, byte version, ClassLoader classLoader,
-                                 ManagedContext managedContext, PartitioningStrategy globalPartitionStrategy, int initialOutputBufferSize,
-                                 BufferPoolFactory bufferPoolFactory) {
+                                 ManagedContext managedContext, PartitioningStrategy globalPartitionStrategy,
+                                 int initialOutputBufferSize, BufferPoolFactory bufferPoolFactory) {
         this.inputOutputFactory = inputOutputFactory;
         this.version = version;
         this.classLoader = classLoader;
