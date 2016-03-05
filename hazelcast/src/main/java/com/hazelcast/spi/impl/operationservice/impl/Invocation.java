@@ -45,6 +45,7 @@ import com.hazelcast.spi.impl.operationexecutor.OperationExecutor;
 import com.hazelcast.spi.impl.operationservice.impl.responses.CallTimeoutResponse;
 import com.hazelcast.spi.impl.operationservice.impl.responses.ErrorResponse;
 import com.hazelcast.spi.impl.operationservice.impl.responses.NormalResponse;
+import com.hazelcast.spi.impl.operationservice.impl.responses.Response;
 import com.hazelcast.util.Clock;
 import com.hazelcast.util.ExceptionUtil;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -389,6 +390,8 @@ public abstract class Invocation implements OperationResponseHandler, Runnable {
 
     void notifyError(Object error) {
         assert error != null;
+
+        error = Response.deserializeValue(operationService.serializationService, error);
 
         Throwable cause;
         if (error instanceof Throwable) {

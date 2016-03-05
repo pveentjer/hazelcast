@@ -16,6 +16,7 @@
 
 package com.hazelcast.spi.impl.operationservice.impl.responses;
 
+import com.hazelcast.nio.BufferObjectDataOutput;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
@@ -81,12 +82,17 @@ public class NormalResponse extends Response {
         super.writeData(out);
         out.writeInt(backupCount);
 
+        BufferObjectDataOutput b = (BufferObjectDataOutput)out;
+        System.out.println(b.position());
+
         final boolean isData = value instanceof Data;
         out.writeBoolean(isData);
         if (isData) {
             out.writeData((Data) value);
         } else {
+            System.out.println("before:"+b.position());
             out.writeObject(value);
+            System.out.println("after:"+b.position());
         }
     }
 

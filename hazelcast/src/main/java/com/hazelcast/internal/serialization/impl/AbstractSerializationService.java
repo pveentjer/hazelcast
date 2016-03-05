@@ -26,6 +26,7 @@ import com.hazelcast.internal.serialization.impl.bufferpool.BufferPoolFactory;
 import com.hazelcast.internal.serialization.impl.bufferpool.BufferPoolThreadLocal;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.Logger;
+import com.hazelcast.nio.Bits;
 import com.hazelcast.nio.BufferObjectDataInput;
 import com.hazelcast.nio.BufferObjectDataOutput;
 import com.hazelcast.nio.ObjectDataInput;
@@ -86,8 +87,8 @@ public abstract class AbstractSerializationService implements SerializationServi
     private ILogger logger = Logger.getLogger(SerializationService.class);
 
     AbstractSerializationService(InputOutputFactory inputOutputFactory, byte version, ClassLoader classLoader,
-            ManagedContext managedContext, PartitioningStrategy globalPartitionStrategy, int initialOutputBufferSize,
-            BufferPoolFactory bufferPoolFactory) {
+                                 ManagedContext managedContext, PartitioningStrategy globalPartitionStrategy, int initialOutputBufferSize,
+                                 BufferPoolFactory bufferPoolFactory) {
         this.inputOutputFactory = inputOutputFactory;
         this.version = version;
         this.classLoader = classLoader;
@@ -102,6 +103,33 @@ public abstract class AbstractSerializationService implements SerializationServi
     @Override
     public final Data toData(Object obj) {
         return toData(obj, globalPartitioningStrategy);
+    }
+
+    @Override
+    public <T> T bytesToObject(byte[] bytes, int offset) {
+        BufferPool pool = bufferPoolThreadLocal.get();
+        BufferObjectDataInput in = pool.takeInputBuffer(bytes, offset);
+        in.position(offset);
+        try {
+            int typeId = in.readInt(ByteOrder.BIG_ENDIAN);
+            SerializerAdapter serializer = serializerFor(typeId);
+            if (serializer == null) {
+                if (active) {
+                    throw newHazelcastSerializationException(typeId);
+                }
+                throw new HazelcastInstanceNotActiveException();
+            }
+
+            Object obj = serializer.read(in);
+            if (managedContext != null) {
+                obj = managedContext.initialize(obj);
+            }
+            return (T) obj;
+        } catch (Throwable e) {
+            throw handleException(e);
+        } finally {
+            pool.returnInputBuffer(in);
+        }
     }
 
     @Override
@@ -389,7 +417,7 @@ public abstract class AbstractSerializationService implements SerializationServi
         Class type = object.getClass();
 
         //2-Default serializers, Dataserializable, Portable, primitives, arrays, String and some helper Java types(BigInteger etc)
-        SerializerAdapter  serializer = lookupDefaultSerializer(type);
+        SerializerAdapter serializer = lookupDefaultSerializer(type);
 
         //3-Custom registered types by user
         if (serializer == null) {

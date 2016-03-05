@@ -32,6 +32,7 @@ import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.ConnectionManager;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.internal.partition.InternalPartitionService;
+import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.ExecutionService;
 import com.hazelcast.spi.InternalCompletableFuture;
 import com.hazelcast.spi.InvocationBuilder;
@@ -121,11 +122,11 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
     final OperationBackupHandler operationBackupHandler;
     final BackpressureRegulator backpressureRegulator;
     final long defaultCallTimeoutMillis;
+    final SerializationService serializationService;
 
     private final SlowOperationDetector slowOperationDetector;
     private final IsStillRunningService isStillRunningService;
     private final AsyncResponsePacketHandler responsePacketExecutor;
-    private final SerializationService serializationService;
     private final InvocationMonitor invocationMonitor;
 
     public OperationServiceImpl(NodeEngineImpl nodeEngine) {
