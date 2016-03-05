@@ -41,6 +41,7 @@ import static com.hazelcast.spi.impl.operationservice.impl.InternalResponse.WAIT
 import static com.hazelcast.util.ExceptionUtil.fixRemoteStackTrace;
 import static com.hazelcast.util.Preconditions.isNotNull;
 import static java.lang.Math.min;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 /**
  * The InvocationFuture is the {@link com.hazelcast.spi.InternalCompletableFuture} that waits on the completion
@@ -200,7 +201,7 @@ final class InvocationFuture<E> implements InternalCompletableFuture<E> {
     @Override
     public E get() throws InterruptedException, ExecutionException {
         try {
-            return get(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+            return get(Long.MAX_VALUE, MILLISECONDS);
         } catch (TimeoutException e) {
             invocation.logger.severe("Unexpected timeout while processing " + this, e);
             return null;
@@ -289,16 +290,18 @@ final class InvocationFuture<E> implements InternalCompletableFuture<E> {
     }
 
     private void pollResponse(long pollTimeoutMs) throws InterruptedException {
+        long pollTimeoutNs = MILLISECONDS.toNanos(pollTimeoutMs);
+
         //we should only wait if there is any timeout. We can't call wait with 0, because it is interpreted as infinite.
         if (pollTimeoutMs <= 0 || response != null) {
             return;
         }
 
-        long currentTimeoutNs = TimeUnit.MILLISECONDS.toNanos(pollTimeoutMs);
+        long currentTimeoutNs = pollTimeoutNs;
         long waitStartNs = System.nanoTime();
         while (currentTimeoutNs > 0 && response == null) {
             LockSupport.parkNanos(currentTimeoutNs);
-            currentTimeoutNs = pollTimeoutMs - (System.nanoTime() - waitStartNs);
+            currentTimeoutNs = pollTimeoutNs - (System.nanoTime() - waitStartNs);
         }
     }
 
