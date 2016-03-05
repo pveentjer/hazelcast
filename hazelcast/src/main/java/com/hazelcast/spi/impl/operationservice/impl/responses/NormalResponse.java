@@ -83,16 +83,13 @@ public class NormalResponse extends Response {
         out.writeInt(backupCount);
 
         BufferObjectDataOutput b = (BufferObjectDataOutput)out;
-        System.out.println(b.position());
 
         final boolean isData = value instanceof Data;
         out.writeBoolean(isData);
         if (isData) {
             out.writeData((Data) value);
         } else {
-            System.out.println("before:"+b.position());
             out.writeObject(value);
-            System.out.println("after:"+b.position());
         }
     }
 
