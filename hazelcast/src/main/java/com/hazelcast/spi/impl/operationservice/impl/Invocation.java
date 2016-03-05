@@ -121,7 +121,7 @@ public abstract class Invocation implements OperationResponseHandler, Runnable {
 
     // writes to that are normally handled through the INVOKE_COUNT to ensure atomic increments / decrements
     volatile int invokeCount;
-
+    final Thread thread = Thread.currentThread();
 
     Invocation(NodeEngineImpl nodeEngine, String serviceName, Operation op, int partitionId,
                int replicaIndex, int tryCount, long tryPauseMillis, long callTimeout, ExecutionCallback callback,

@@ -32,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
+import java.util.concurrent.locks.LockSupport;
 
 import static com.hazelcast.spi.impl.operationservice.impl.InternalResponse.INTERRUPTED_RESPONSE;
 import static com.hazelcast.spi.impl.operationservice.impl.InternalResponse.NULL_RESPONSE;
@@ -156,33 +157,33 @@ final class InvocationFuture<E> implements InternalCompletableFuture<E> {
         }
 
         ExecutionCallbackNode<E> callbackChain;
-        synchronized (this) {
-            if (response != null && !(response instanceof InternalResponse)) {
-                //it can be that this invocation future already received an answer, e.g. when an invocation
-                //already received a response, but before it cleans up itself, it receives a
-                //HazelcastInstanceNotActiveException.
+        //synchronized (this) {
+        if (response != null && !(response instanceof InternalResponse)) {
+            //it can be that this invocation future already received an answer, e.g. when an invocation
+            //already received a response, but before it cleans up itself, it receives a
+            //HazelcastInstanceNotActiveException.
 
-                // this is no good; no logging while holding a lock
-                ILogger logger = invocation.logger;
-                if (logger.isFinestEnabled()) {
-                    logger.finest("Future response is already set! Current response: "
-                            + response + ", Offered response: " + offeredResponse + ", Invocation: " + invocation);
-                }
-
-                operationService.invocationsRegistry.deregister(invocation);
-                return false;
+            // this is no good; no logging while holding a lock
+            ILogger logger = invocation.logger;
+            if (logger.isFinestEnabled()) {
+                logger.finest("Future response is already set! Current response: "
+                        + response + ", Offered response: " + offeredResponse + ", Invocation: " + invocation);
             }
-
-            response = offeredResponse;
-            if (offeredResponse == WAIT_RESPONSE) {
-                return true;
-            }
-            callbackChain = callbackHead;
-            callbackHead = null;
-            notifyAll();
 
             operationService.invocationsRegistry.deregister(invocation);
+            return false;
         }
+
+        response = offeredResponse;
+        if (offeredResponse == WAIT_RESPONSE) {
+            return true;
+        }
+        callbackChain = callbackHead;
+        callbackHead = null;
+        //notifyAll();
+        LockSupport.unpark(invocation.thread);
+        operationService.invocationsRegistry.deregister(invocation);
+        //}
 
 
         notifyCallbacks(callbackChain);
@@ -295,11 +296,9 @@ final class InvocationFuture<E> implements InternalCompletableFuture<E> {
 
         long currentTimeoutMs = pollTimeoutMs;
         long waitStart = Clock.currentTimeMillis();
-        synchronized (this) {
-            while (currentTimeoutMs > 0 && response == null) {
-                wait(currentTimeoutMs);
-                currentTimeoutMs = pollTimeoutMs - (Clock.currentTimeMillis() - waitStart);
-            }
+        while (currentTimeoutMs > 0 && response == null) {
+            LockSupport.park();
+            currentTimeoutMs = pollTimeoutMs - (Clock.currentTimeMillis() - waitStart);
         }
     }
 
@@ -373,7 +372,7 @@ final class InvocationFuture<E> implements InternalCompletableFuture<E> {
 
         Object response = unresolvedResponse;
         if (invocation.resultDeserialized && response instanceof Data) {
-            response = Response.deserializeValue(operationService.serializationService, (Data)response);
+            response = Response.deserializeValue(operationService.serializationService, (Data) response);
             if (response == null) {
                 return null;
             }
@@ -402,7 +401,7 @@ final class InvocationFuture<E> implements InternalCompletableFuture<E> {
 
     @Override
     public boolean isDone() {
-         return responseAvailable(response);
+        return responseAvailable(response);
     }
 
     @Override
