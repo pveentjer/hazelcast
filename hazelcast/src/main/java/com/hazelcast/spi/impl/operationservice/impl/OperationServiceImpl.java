@@ -269,7 +269,8 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
         checkTrue(packet.isFlagSet(Packet.FLAG_OP), "Packet.FLAG_OP should be set!");
 
         if (packet.isFlagSet(Packet.FLAG_RESPONSE)) {
-            responsePacketHandler.handle(packet);
+            //responsePacketHandler.handle(packet);
+            responsePacketExecutor.handle(packet);
         } else {
             operationExecutor.execute(packet);
         }
