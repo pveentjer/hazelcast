@@ -19,6 +19,7 @@ package com.hazelcast.spi.impl.operationservice.impl;
 import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Packet;
+import com.hazelcast.spi.impl.ByteArrayPacketHandler;
 import com.hazelcast.spi.impl.PacketHandler;
 import com.hazelcast.spi.impl.operationexecutor.OperationHostileThread;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -43,15 +44,15 @@ import static com.hazelcast.util.Preconditions.checkTrue;
  * {@link com.hazelcast.spi.impl.operationservice.impl.responses.Response} and let the invocation-future
  * deal with the response can be rather expensive currently.
  */
-public class AsyncResponsePacketHandler implements PacketHandler {
+public class AsyncResponsePacketHandler implements ByteArrayPacketHandler {
 
     private final ResponseThread responseThread;
-    private final BlockingQueue<Packet> workQueue = new LinkedBlockingQueue<Packet>();
+    private final BlockingQueue<byte[]> workQueue = new LinkedBlockingQueue<byte[]>();
     private final ILogger logger;
 
     public AsyncResponsePacketHandler(HazelcastThreadGroup threadGroup,
                                       ILogger logger,
-                                      PacketHandler responsePacketHandler) {
+                                      ByteArrayPacketHandler responsePacketHandler) {
         this.logger = logger;
         this.responseThread = new ResponseThread(threadGroup, responsePacketHandler);
         responseThread.start();
@@ -66,10 +67,10 @@ public class AsyncResponsePacketHandler implements PacketHandler {
     }
 
     @Override
-    public void handle(Packet packet) {
-        checkNotNull(packet, "packet can't be null");
-        checkTrue(packet.isFlagSet(FLAG_OP), "FLAG_OP should be set");
-        checkTrue(packet.isFlagSet(FLAG_RESPONSE), "FLAG_RESPONSE should be set");
+    public void handle(byte[] packet) {
+//        checkNotNull(packet, "packet can't be null");
+//        checkTrue(packet.isFlagSet(FLAG_OP), "FLAG_OP should be set");
+//        checkTrue(packet.isFlagSet(FLAG_RESPONSE), "FLAG_RESPONSE should be set");
 
         workQueue.add(packet);
     }
@@ -83,11 +84,11 @@ public class AsyncResponsePacketHandler implements PacketHandler {
         // field is only written by the response-thread itself, but can be read by other threads.
         volatile long processedResponses;
 
-        private final PacketHandler responsePacketHandler;
+        private final ByteArrayPacketHandler responsePacketHandler;
         private volatile boolean shutdown;
 
         public ResponseThread(HazelcastThreadGroup threadGroup,
-                              PacketHandler responsePacketHandler) {
+                              ByteArrayPacketHandler responsePacketHandler) {
             super(threadGroup.getInternalThreadGroup(), threadGroup.getThreadNamePrefix("response"));
             setContextClassLoader(threadGroup.getClassLoader());
             this.responsePacketHandler = responsePacketHandler;
@@ -105,7 +106,7 @@ public class AsyncResponsePacketHandler implements PacketHandler {
 
         private void doRun() {
             for (; ; ) {
-                Packet responsePacket;
+                byte[] responsePacket;
                 try {
                     responsePacket = workQueue.take();
                 } catch (InterruptedException e) {
@@ -124,7 +125,7 @@ public class AsyncResponsePacketHandler implements PacketHandler {
         }
 
         @SuppressFBWarnings("VO_VOLATILE_INCREMENT")
-        private void process(Packet responsePacket) {
+        private void process(byte[] responsePacket) {
             processedResponses++;
             try {
                 responsePacketHandler.handle(responsePacket);

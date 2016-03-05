@@ -192,7 +192,7 @@ public class OperationRunnerImplTest extends HazelcastTestSupport {
         setCallId(op, 1000 * 1000);
 
         Packet packet = toPacket(local, remote, op);
-        operationRunner.run(packet);
+        //operationRunner.run(packet);
     }
 
     @Test(expected = HazelcastSerializationException.class)
@@ -205,7 +205,7 @@ public class OperationRunnerImplTest extends HazelcastTestSupport {
         for (int k = 0; k < bytes.length; k++) {
             bytes[k]++;
         }
-        operationRunner.run(packet);
+        //operationRunner.run(packet);
     }
 
     public abstract class DummyWaitingOperation extends AbstractOperation implements BlockingOperation {

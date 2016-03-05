@@ -37,6 +37,11 @@ class DroppingConnection implements Connection {
     }
 
     @Override
+    public int getConnectionId() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public boolean write(OutboundFrame frame) {
         return true;
     }

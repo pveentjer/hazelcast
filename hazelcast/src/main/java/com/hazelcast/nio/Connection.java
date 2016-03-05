@@ -33,6 +33,8 @@ public interface Connection extends Closeable {
      */
     boolean isAlive();
 
+    int getConnectionId();
+
     /**
      * Returns the clock time in milliseconds of the most recent read using this connection.
      *

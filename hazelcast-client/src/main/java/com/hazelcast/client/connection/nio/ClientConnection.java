@@ -87,6 +87,11 @@ public class ClientConnection implements Connection {
         logger = client.getLoggingService().getLogger(ClientConnection.class);
     }
 
+    @Override
+    public int getConnectionId() {
+        throw new UnsupportedOperationException();
+    }
+
     public void incrementPendingPacketCount() {
         pendingPacketCount.incrementAndGet();
     }

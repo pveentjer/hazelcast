@@ -47,6 +47,11 @@ public abstract class AbstractOutOfMemoryHandlerTest extends HazelcastTestSuppor
         }
 
         @Override
+        public Connection getConnection(short id) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public int getCurrentClientConnections() {
             return 0;
         }

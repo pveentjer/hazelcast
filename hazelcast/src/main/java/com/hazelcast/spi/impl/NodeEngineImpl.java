@@ -118,7 +118,8 @@ public class NodeEngineImpl implements NodeEngine {
         this.wanReplicationService = node.getNodeExtension().createService(WanReplicationService.class);
         this.packetDispatcher = new PacketDispatcherImpl(
                 logger,
-                operationService,
+                (ByteArrayPacketHandler)operationService.getOperationExecutor(),
+                operationService.getResponsePacketExecutor(),
                 eventService,
                 wanReplicationService,
                 new ConnectionManagerPacketHandler());

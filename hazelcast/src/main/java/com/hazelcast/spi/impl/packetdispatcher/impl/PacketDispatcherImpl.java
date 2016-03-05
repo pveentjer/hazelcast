@@ -17,7 +17,9 @@
 package com.hazelcast.spi.impl.packetdispatcher.impl;
 
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.nio.Bits;
 import com.hazelcast.nio.Packet;
+import com.hazelcast.spi.impl.ByteArrayPacketHandler;
 import com.hazelcast.spi.impl.PacketHandler;
 import com.hazelcast.spi.impl.packetdispatcher.PacketDispatcher;
 
@@ -25,7 +27,9 @@ import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutputMem
 import static com.hazelcast.nio.Packet.FLAG_BIND;
 import static com.hazelcast.nio.Packet.FLAG_EVENT;
 import static com.hazelcast.nio.Packet.FLAG_OP;
+import static com.hazelcast.nio.Packet.FLAG_RESPONSE;
 import static com.hazelcast.nio.Packet.FLAG_WAN_REPLICATION;
+import static com.hazelcast.nio.Packet.OFFSET_FLAGS;
 
 /**
  * Default {@link PacketDispatcher} implementation.
@@ -35,34 +39,49 @@ public class PacketDispatcherImpl implements PacketDispatcher {
     private final ILogger logger;
     private final PacketHandler eventPacketHandler;
     private final PacketHandler wanReplicationPacketHandler;
-    private final PacketHandler operationPacketHandler;
+    private final ByteArrayPacketHandler operationPacketHandler;
+    private final ByteArrayPacketHandler responsePacketHandler;
     private final PacketHandler connectionPacketHandler;
 
     public PacketDispatcherImpl(ILogger logger,
-                                PacketHandler operationPacketHandler,
+                                ByteArrayPacketHandler operationPacketHandler,
+                                ByteArrayPacketHandler responsePacketHandler,
                                 PacketHandler eventPacketHandler,
                                 PacketHandler wanReplicationPacketHandler,
                                 PacketHandler connectionPacketHandler) {
         this.logger = logger;
         this.operationPacketHandler = operationPacketHandler;
+        this.responsePacketHandler = responsePacketHandler;
         this.eventPacketHandler = eventPacketHandler;
         this.wanReplicationPacketHandler = wanReplicationPacketHandler;
         this.connectionPacketHandler = connectionPacketHandler;
     }
 
     @Override
-    public void dispatch(Packet packet) {
+    public void dispatch(byte[] packet) {
+        short flags = Bits.readShort(packet, OFFSET_FLAGS, true);
+
         try {
-            if (packet.isFlagSet(FLAG_OP)) {
-                operationPacketHandler.handle(packet);
-            } else if (packet.isFlagSet(FLAG_EVENT)) {
-                eventPacketHandler.handle(packet);
-            } else if (packet.isFlagSet(FLAG_WAN_REPLICATION)) {
-                wanReplicationPacketHandler.handle(packet);
-            } else if (packet.isFlagSet(FLAG_BIND)) {
-                connectionPacketHandler.handle(packet);
+            if ((flags & FLAG_OP) != 0) {
+                if ((flags & FLAG_RESPONSE) != 0) {
+                    responsePacketHandler.handle(packet);
+                } else {
+                    operationPacketHandler.handle(packet);
+                }
+            } else if ((flags & FLAG_EVENT) != 0) {
+                Packet p = new Packet();
+                p.readFrom(packet);
+                eventPacketHandler.handle(p);
+            } else if ((flags & FLAG_WAN_REPLICATION) != 0) {
+                Packet p = new Packet();
+                p.readFrom(packet);
+                wanReplicationPacketHandler.handle(p);
+            } else if ((flags & FLAG_BIND) != 0) {
+                Packet p = new Packet();
+                p.readFrom(packet);
+                connectionPacketHandler.handle(p);
             } else {
-                logger.severe("Unknown packet type! Header: " + packet.getFlags());
+                logger.severe("Unknown packet type! Header: " + flags);
             }
         } catch (Throwable t) {
             inspectOutputMemoryError(t);

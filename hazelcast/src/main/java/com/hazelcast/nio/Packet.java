@@ -34,6 +34,12 @@ import static com.hazelcast.nio.Bits.SHORT_SIZE_IN_BYTES;
  */
 public final class Packet extends HeapData implements OutboundFrame {
 
+    public static final int OFFSET_VERSION = 0;
+    public static final int OFFSET_FLAGS = OFFSET_VERSION + Bits.BYTE_SIZE_IN_BYTES;
+    public static final int OFFSET_PARTITION_ID = OFFSET_FLAGS + Bits.SHORT_SIZE_IN_BYTES;
+    public static final int OFFSET_SIZE = OFFSET_PARTITION_ID + Bits.INT_SIZE_IN_BYTES;
+    public static final int OFFSET_PAYLOAD = OFFSET_SIZE+ Bits.INT_SIZE_IN_BYTES;
+
     public static final byte VERSION = 4;
 
     public static final int FLAG_OP = 1 << 0;
@@ -43,7 +49,7 @@ public final class Packet extends HeapData implements OutboundFrame {
     public static final int FLAG_URGENT = 1 << 4;
     public static final int FLAG_BIND = 1 << 5;
 
-    public static final int HEADER_SIZE = BYTE_SIZE_IN_BYTES + SHORT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
+    public static final int PACKET_HEADER_SIZE = BYTE_SIZE_IN_BYTES + SHORT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
 
     private short flags;
     private int partitionId;
@@ -65,6 +71,11 @@ public final class Packet extends HeapData implements OutboundFrame {
     public Packet(byte[] payload, int partitionId) {
         super(payload);
         this.partitionId = partitionId;
+    }
+
+    public void readFrom(byte[] bytes) {
+        ByteBuffer bb = ByteBuffer.wrap(bytes);
+        readFrom(bb);
     }
 
     /**
@@ -149,7 +160,7 @@ public final class Packet extends HeapData implements OutboundFrame {
 
     public boolean writeTo(ByteBuffer dst) {
         if (!headerComplete) {
-            if (dst.remaining() < HEADER_SIZE) {
+            if (dst.remaining() < PACKET_HEADER_SIZE) {
                 return false;
             }
 
@@ -166,7 +177,7 @@ public final class Packet extends HeapData implements OutboundFrame {
 
     public boolean readFrom(ByteBuffer src) {
         if (!headerComplete) {
-            if (src.remaining() < HEADER_SIZE) {
+            if (src.remaining() < PACKET_HEADER_SIZE) {
                 return false;
             }
 
@@ -256,7 +267,7 @@ public final class Packet extends HeapData implements OutboundFrame {
      * @return the size of the packet.
      */
     public int packetSize() {
-        return (payload != null ? totalSize() : 0) + HEADER_SIZE;
+        return (payload != null ? totalSize() : 0) + PACKET_HEADER_SIZE;
     }
 
     @Override

@@ -16,11 +16,18 @@
 
 package com.hazelcast.nio.tcp;
 
+import com.hazelcast.internal.util.counters.Counter;
+import com.hazelcast.nio.Bits;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.spi.impl.packetdispatcher.PacketDispatcher;
-import com.hazelcast.internal.util.counters.Counter;
 
 import java.nio.ByteBuffer;
+
+import static com.hazelcast.nio.Bits.INT_SIZE_IN_BYTES;
+import static com.hazelcast.nio.Bits.SHORT_SIZE_IN_BYTES;
+import static com.hazelcast.nio.Packet.OFFSET_FLAGS;
+import static com.hazelcast.nio.Packet.OFFSET_SIZE;
+import static com.hazelcast.nio.Packet.PACKET_HEADER_SIZE;
 
 /**
  * The {@link ReadHandler} for member to member communication.
@@ -32,9 +39,12 @@ import java.nio.ByteBuffer;
  */
 public class MemberReadHandler implements ReadHandler {
 
-    protected final TcpIpConnection connection;
-    protected Packet packet;
+    public static final boolean BIG_ENDIAN = true;
 
+    protected final TcpIpConnection connection;
+    protected byte[] packet;
+
+    private final byte[] header = new byte[PACKET_HEADER_SIZE];
     private final PacketDispatcher packetDispatcher;
     private final Counter normalPacketsRead;
     private final Counter priorityPacketsRead;
@@ -49,11 +59,33 @@ public class MemberReadHandler implements ReadHandler {
 
     @Override
     public void onRead(ByteBuffer src) throws Exception {
+        int offset = 0;
+        int size;
         while (src.hasRemaining()) {
             if (packet == null) {
-                packet = new Packet();
+                if (src.remaining() < PACKET_HEADER_SIZE) {
+                    return;
+                }
+
+                // we read the header
+                src.get(header);
+
+                // we extract the size
+                size = Bits.readInt(header, OFFSET_SIZE, BIG_ENDIAN);
+                offset = header.length;
+
+                // we create the packet: the length of the array is the size of the payload, the packet-header and the id
+                // of the connection is written at the end so we can look it up.
+                packet = new byte[size + PACKET_HEADER_SIZE + INT_SIZE_IN_BYTES];
+                System.arraycopy(header, 0, packet, 0, header.length);
+
+                // at the end we write the id of the connection
+                Bits.writeInt(packet, packet.length - 1 - Bits.INT_SIZE_IN_BYTES, connection.getConnectionId(), BIG_ENDIAN);
             }
-            boolean complete = packet.readFrom(src);
+
+            src.get(packet);
+
+            boolean complete = false;//packet.readFrom(src);
             if (complete) {
                 handlePacket(packet);
                 packet = null;
@@ -63,14 +95,14 @@ public class MemberReadHandler implements ReadHandler {
         }
     }
 
-    protected void handlePacket(Packet packet) {
-        if (packet.isFlagSet(Packet.FLAG_URGENT)) {
+    protected void handlePacket(byte[] packet) {
+        short flags = Bits.readShort(packet, OFFSET_FLAGS, BIG_ENDIAN);
+
+        if ((flags & Packet.FLAG_URGENT) != 0) {
             priorityPacketsRead.inc();
         } else {
             normalPacketsRead.inc();
         }
-
-        packet.setConn(connection);
 
         packetDispatcher.dispatch(packet);
     }

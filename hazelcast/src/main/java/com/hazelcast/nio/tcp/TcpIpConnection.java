@@ -149,6 +149,7 @@ public final class TcpIpConnection implements Connection {
         return monitor;
     }
 
+    @Override
     public int getConnectionId() {
         return connectionId;
     }

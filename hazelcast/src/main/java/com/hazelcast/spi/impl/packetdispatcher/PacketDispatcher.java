@@ -16,8 +16,6 @@
 
 package com.hazelcast.spi.impl.packetdispatcher;
 
-import com.hazelcast.nio.Packet;
-
 /**
  * The {@link PacketDispatcher} is responsible for dispatching a Packet to the appropriate service.
  *
@@ -45,5 +43,5 @@ public interface PacketDispatcher {
      *
      * @param packet the Packet to dispatch.
      */
-    void dispatch(Packet packet);
+    void dispatch(byte[] packet);
 }

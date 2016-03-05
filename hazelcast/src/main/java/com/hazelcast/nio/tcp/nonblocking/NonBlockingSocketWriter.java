@@ -136,11 +136,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
         long bytesPending = 0;
         for (Object frame : writeQueue) {
             if (frame.getClass() == byte[].class) {
-                bytesPending += Bits.INT_SIZE_IN_BYTES + ((byte[]) frame).length;
-            }
-
-            if (frame instanceof Packet) {
-                bytesPending += ((Packet) frame).packetSize();
+                bytesPending += ((byte[]) frame).length;
             }
         }
         return bytesPending;

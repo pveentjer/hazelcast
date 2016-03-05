@@ -19,12 +19,12 @@ package com.hazelcast.spi.impl.operationexecutor.classic;
 import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.instance.NodeExtension;
 import com.hazelcast.internal.metrics.Probe;
+import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
-import com.hazelcast.nio.Packet;
+import com.hazelcast.nio.Bits;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
-import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.util.executor.HazelcastManagedThread;
 
 import java.util.concurrent.TimeUnit;
@@ -128,13 +128,13 @@ public abstract class OperationThread extends HazelcastManagedThread {
     private void process(Object task) {
         processedTotalCount.inc();
 
-        if (task instanceof Operation) {
-            processOperation((Operation) task);
+        if (task.getClass() == byte[].class) {
+            processPacket((byte[]) task);
             return;
         }
 
-        if (task instanceof Packet) {
-            processPacket((Packet) task);
+        if (task instanceof Operation) {
+            processOperation((Operation) task);
             return;
         }
 
@@ -176,11 +176,12 @@ public abstract class OperationThread extends HazelcastManagedThread {
         }
     }
 
-    private void processPacket(Packet packet) {
+    private void processPacket(byte[] packet) {
         processedPacketCount.inc();
 
         try {
-            currentOperationRunner = getOperationRunner(packet.getPartitionId());
+            int partitionId = Bits.readInt(packet, Bits.BYTE_SIZE_IN_BYTES + Bits.SHORT_SIZE_IN_BYTES, true);
+            currentOperationRunner = getOperationRunner(partitionId);
             currentOperationRunner.run(packet);
         } catch (Throwable e) {
             inspectOutputMemoryError(e);

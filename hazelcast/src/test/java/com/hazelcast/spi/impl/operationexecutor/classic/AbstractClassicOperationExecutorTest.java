@@ -216,8 +216,8 @@ public abstract class AbstractClassicOperationExecutorTest extends HazelcastTest
         }
 
         @Override
-        public void run(Packet packet) throws Exception {
-            packets.add(packet);
+        public void run(byte[] packet) throws Exception {
+           // packets.add(packet);
             Operation op = serializationService.toObject(packet);
             run(op);
         }

@@ -363,14 +363,14 @@ class OperationRunnerImpl extends OperationRunner {
     }
 
     @Override
-    public void run(Packet packet) throws Exception {
+    public void run(byte[] packet) throws Exception {
         boolean publishCurrentTask = publishCurrentTask();
 
         if (publishCurrentTask) {
             currentTask = packet;
         }
 
-        Connection connection = packet.getConn();
+        Connection connection = null;//packet.getConn();
         Address caller = connection.getEndPoint();
         try {
             Object object = nodeEngine.toObject(packet);
@@ -391,10 +391,10 @@ class OperationRunnerImpl extends OperationRunner {
             run(op);
         } catch (Throwable throwable) {
             // If exception happens we need to extract the callId from the bytes directly!
-            long callId = extractOperationCallId(packet, node.getSerializationService());
-            operationService.send(new ErrorResponse(throwable, callId, packet.isUrgent()), caller);
-            logOperationDeserializationException(throwable, callId);
-            throw ExceptionUtil.rethrow(throwable);
+//            long callId = extractOperationCallId(packet, node.getSerializationService());
+//            operationService.send(new ErrorResponse(throwable, callId, packet.isUrgent()), caller);
+//            logOperationDeserializationException(throwable, callId);
+//            throw ExceptionUtil.rethrow(throwable);
         } finally {
             if (publishCurrentTask) {
                 currentTask = null;

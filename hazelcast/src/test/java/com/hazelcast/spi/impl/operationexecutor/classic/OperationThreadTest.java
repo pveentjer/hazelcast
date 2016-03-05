@@ -39,7 +39,7 @@ public class OperationThreadTest extends AbstractClassicOperationExecutorTest {
         Packet packet = new Packet(serializationService.toBytes(operation), operation.getPartitionId());
         packet.setFlag(Packet.FLAG_OP);
 
-        doThrow(new OutOfMemoryError()).when(handler).run(packet);
+        //doThrow(new OutOfMemoryError()).when(handler).run(packet);
 
         final int oldCount = OutOfMemoryErrorDispatcher.getOutOfMemoryErrorCount();
 

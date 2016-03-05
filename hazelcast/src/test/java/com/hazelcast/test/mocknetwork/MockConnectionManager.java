@@ -66,6 +66,11 @@ public class MockConnectionManager implements ConnectionManager {
     }
 
     @Override
+    public Connection getConnection(short id) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public Connection getConnection(Address address) {
         return mapConnections.get(address);
     }

@@ -107,8 +107,13 @@ public class MemberReadHandlerTest extends TcpIpConnection_AbstractTest {
         private List<Packet> packets = new LinkedList<Packet>();
 
         @Override
-        public void dispatch(Packet packet) {
-            packets.add(packet);
+        public void dispatch(byte[] packet) {
+
         }
+//
+//        @Override
+//        public void dispatch(Packet packet) {
+//            packets.add(packet);
+//        }
     }
 }

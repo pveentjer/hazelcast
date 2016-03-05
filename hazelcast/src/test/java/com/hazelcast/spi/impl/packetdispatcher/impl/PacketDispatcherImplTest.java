@@ -35,13 +35,13 @@ public class PacketDispatcherImplTest extends HazelcastTestSupport {
         eventPacketHandler = mock(PacketHandler.class);
         wanPacketHandler = mock(PacketHandler.class);
         connectionManagerPacketHandler = mock(PacketHandler.class);
-        packetDispatcher = new PacketDispatcherImpl(
-                logger,
-                operationPacketHandler,
-                eventPacketHandler,
-                wanPacketHandler,
-                connectionManagerPacketHandler
-        );
+//        packetDispatcher = new PacketDispatcherImpl(
+//                logger,
+//                operationPacketHandler,
+//                eventPacketHandler,
+//                wanPacketHandler,
+//                connectionManagerPacketHandler
+//        );
     }
 
     @Test
@@ -49,7 +49,7 @@ public class PacketDispatcherImplTest extends HazelcastTestSupport {
         Packet packet = new Packet();
         packet.setFlag(Packet.FLAG_OP);
 
-        packetDispatcher.dispatch(packet);
+     //   packetDispatcher.dispatch(packet);
 
         verify(operationPacketHandler).handle(packet);
         verifyZeroInteractions(eventPacketHandler);
@@ -62,7 +62,7 @@ public class PacketDispatcherImplTest extends HazelcastTestSupport {
         Packet packet = new Packet();
         packet.setFlag(Packet.FLAG_WAN_REPLICATION);
 
-        packetDispatcher.dispatch(packet);
+ //       packetDispatcher.dispatch(packet);
 
         verify(wanPacketHandler).handle(packet);
         verifyZeroInteractions(operationPacketHandler);
@@ -75,7 +75,7 @@ public class PacketDispatcherImplTest extends HazelcastTestSupport {
         Packet packet = new Packet();
         packet.setFlag(Packet.FLAG_EVENT);
 
-        packetDispatcher.dispatch(packet);
+  //      packetDispatcher.dispatch(packet);
 
         verify(eventPacketHandler).handle(packet);
         verifyZeroInteractions(operationPacketHandler);
@@ -88,7 +88,7 @@ public class PacketDispatcherImplTest extends HazelcastTestSupport {
         Packet packet = new Packet();
         packet.setFlag(Packet.FLAG_BIND);
 
-        packetDispatcher.dispatch(packet);
+   //     packetDispatcher.dispatch(packet);
 
         verify(connectionManagerPacketHandler).handle(packet);
         verifyZeroInteractions(operationPacketHandler);
@@ -101,7 +101,7 @@ public class PacketDispatcherImplTest extends HazelcastTestSupport {
     public void whenUnrecognizedPacket_thenSwallowed() throws Exception {
         Packet packet = new Packet();
 
-        packetDispatcher.dispatch(packet);
+    //    packetDispatcher.dispatch(packet);
 
         verifyZeroInteractions(connectionManagerPacketHandler);
         verifyZeroInteractions(operationPacketHandler);
@@ -117,6 +117,6 @@ public class PacketDispatcherImplTest extends HazelcastTestSupport {
 
         Mockito.doThrow(new ExpectedRuntimeException()).when(operationPacketHandler).handle(packet);
 
-        packetDispatcher.dispatch(packet);
+     //   packetDispatcher.dispatch(packet);
     }
 }

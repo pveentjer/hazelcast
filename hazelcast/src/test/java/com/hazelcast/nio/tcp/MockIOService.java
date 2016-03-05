@@ -379,19 +379,19 @@ public class MockIOService implements IOService {
             private ILogger logger = getLogger("MockIOService");
 
             @Override
-            public void dispatch(Packet packet) {
-                try {
-                    if (packet.isFlagSet(Packet.FLAG_BIND)) {
-                        connection.getConnectionManager().handle(packet);
-                    } else {
-                        PacketHandler handler = packetHandler;
-                        if (handler != null) {
-                            handler.handle(packet);
-                        }
-                    }
-                } catch (Exception e) {
-                    logger.severe(e);
-                }
+            public void dispatch(byte[] packet) {
+//                try {
+//                    if (packet.isFlagSet(Packet.FLAG_BIND)) {
+//                        connection.getConnectionManager().handle(packet);
+//                    } else {
+//                        PacketHandler handler = packetHandler;
+//                        if (handler != null) {
+//                            handler.handle(packet);
+//                        }
+//                    }
+//                } catch (Exception e) {
+//                    logger.severe(e);
+//                }
             }
         });
     }

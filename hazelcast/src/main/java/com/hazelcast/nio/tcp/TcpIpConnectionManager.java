@@ -52,6 +52,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.MANDATORY;
 import static com.hazelcast.nio.IOService.KILO_BYTE;
@@ -505,6 +506,11 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         connectionsMap.clear();
         monitors.clear();
         activeConnections.clear();
+    }
+
+    @Override
+    public Connection getConnection(short id) {
+        return null;
     }
 
     private void destroySilently(Connection conn) {

@@ -160,4 +160,6 @@ public interface ConnectionManager {
      * This method has no effect if it is already shutdown.
      */
     void shutdown();
+
+    Connection getConnection(short id);
 }

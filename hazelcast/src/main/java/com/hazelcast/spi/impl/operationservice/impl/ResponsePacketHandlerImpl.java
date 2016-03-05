@@ -20,6 +20,7 @@ import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Address;
 import com.hazelcast.nio.Packet;
+import com.hazelcast.spi.impl.ByteArrayPacketHandler;
 import com.hazelcast.spi.impl.PacketHandler;
 import com.hazelcast.spi.impl.operationservice.impl.responses.BackupResponse;
 import com.hazelcast.spi.impl.operationservice.impl.responses.CallTimeoutResponse;
@@ -30,7 +31,7 @@ import com.hazelcast.spi.impl.operationservice.impl.responses.Response;
 /**
  * Responsible for handling responses.
  */
-final class ResponsePacketHandlerImpl implements PacketHandler {
+final class ResponsePacketHandlerImpl implements ByteArrayPacketHandler {
 
     private final ILogger logger;
     private final SerializationService serializationService;
@@ -45,9 +46,9 @@ final class ResponsePacketHandlerImpl implements PacketHandler {
     }
 
     @Override
-    public void handle(Packet packet) throws Exception {
+    public void handle(byte[] packet) throws Exception {
         Response response = serializationService.toObject(packet);
-        Address sender = packet.getConn().getEndPoint();
+        Address sender = null;//packet.getConn().getEndPoint();
         try {
             if (response instanceof NormalResponse) {
                 NormalResponse normalResponse = (NormalResponse) response;

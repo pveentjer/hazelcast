@@ -39,6 +39,7 @@ import com.hazelcast.spi.InvocationBuilder;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationFactory;
 import com.hazelcast.spi.OperationService;
+import com.hazelcast.spi.impl.ByteArrayPacketHandler;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.PacketHandler;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
@@ -90,7 +91,7 @@ import static com.hazelcast.util.Preconditions.checkTrue;
  * @see PartitionInvocation
  * @see TargetInvocation
  */
-public final class OperationServiceImpl implements InternalOperationService, PacketHandler {
+public final class OperationServiceImpl implements InternalOperationService {
 
     private static final int CORE_SIZE_CHECK = 8;
     private static final int CORE_SIZE_FACTOR = 4;
@@ -258,22 +259,14 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
         return operationExecutor;
     }
 
+    public AsyncResponsePacketHandler getResponsePacketExecutor() {
+        return responsePacketExecutor;
+    }
+
     @Probe(name = "response-queue.size", level = MANDATORY)
     @Override
     public int getResponseQueueSize() {
         return responsePacketExecutor.getQueueSize();
-    }
-
-    @Override
-    public void handle(Packet packet) throws Exception {
-        checkNotNull(packet, "packet can't be null");
-        checkTrue(packet.isFlagSet(FLAG_OP), "Packet.FLAG_OP should be set!");
-
-        if (packet.isFlagSet(FLAG_RESPONSE)) {
-            responsePacketExecutor.handle(packet);
-        } else {
-            operationExecutor.execute(packet);
-        }
     }
 
     @Override

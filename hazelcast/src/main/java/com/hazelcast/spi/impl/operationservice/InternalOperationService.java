@@ -33,7 +33,7 @@ import java.util.List;
  * It exposes methods that will not be called by regular code, like shutdown, but will only be called by
  * the the SPI management.
  */
-public interface InternalOperationService extends OperationService, PacketHandler {
+public interface InternalOperationService extends OperationService {
 
     /**
      * Checks if this call is timed out. A timed out call is not going to be executed.

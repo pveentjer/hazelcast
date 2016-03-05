@@ -42,7 +42,7 @@ public abstract class OperationRunner {
         this.partitionId = partitionId;
     }
 
-    public abstract void run(Packet packet) throws Exception;
+    public abstract void run(byte[] packet) throws Exception;
 
     public abstract void run(Runnable task);
 

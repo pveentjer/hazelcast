@@ -49,6 +49,11 @@ public class MockConnection implements Connection {
         this.nodeEngine = nodeEngine;
     }
 
+    @Override
+    public int getConnectionId() {
+        throw new UnsupportedOperationException();
+    }
+
     public Address getEndPoint() {
         return remoteEndpoint;
     }
@@ -68,7 +73,7 @@ public class MockConnection implements Connection {
         Packet newPacket = new Packet();
         newPacket.readFrom(bb);
 
-        nodeEngine.getPacketDispatcher().dispatch(newPacket);
+        //nodeEngine.getPacketDispatcher().dispatch(newPacket);
         return true;
     }
 
@@ -83,7 +88,7 @@ public class MockConnection implements Connection {
 
         Packet packet = (Packet) frame;
         Packet newPacket = readFromPacket(packet);
-        nodeEngine.getPacketDispatcher().dispatch(newPacket);
+        //nodeEngine.getPacketDispatcher().dispatch(newPacket);
         return true;
     }
 
