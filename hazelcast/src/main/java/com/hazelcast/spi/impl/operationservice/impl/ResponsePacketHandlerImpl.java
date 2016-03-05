@@ -28,6 +28,7 @@ import com.hazelcast.spi.impl.operationservice.impl.responses.NormalResponse;
 import com.hazelcast.spi.impl.operationservice.impl.responses.Response;
 
 import static com.hazelcast.spi.impl.SpiDataSerializerHook.BACKUP;
+import static com.hazelcast.spi.impl.SpiDataSerializerHook.BACKUP_RESPONSE;
 import static com.hazelcast.spi.impl.SpiDataSerializerHook.CALL_TIMEOUT_RESPONSE;
 import static com.hazelcast.spi.impl.SpiDataSerializerHook.ERROR_RESPONSE;
 import static com.hazelcast.spi.impl.SpiDataSerializerHook.NORMAL_RESPONSE;
@@ -67,7 +68,7 @@ final class ResponsePacketHandlerImpl implements PacketHandler {
                             backupCount(bytes),
                             sender);
                     break;
-                case BACKUP:
+                case BACKUP_RESPONSE:
                     invocationRegistry.notifyBackupComplete(callId(bytes));
                     break;
                 case ERROR_RESPONSE:
