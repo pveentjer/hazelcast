@@ -138,6 +138,10 @@ public abstract class Response implements IdentifiedDataSerializable {
         if (serializerId(bytes) == CONSTANT_TYPE_DATA_SERIALIZABLE && factoryId(bytes) == SpiDataSerializerHook.F_ID) {
             switch (typeId(bytes)) {
                 case NORMAL_RESPONSE:
+                    byte isData = bytes[30];
+                    if (isData == 1) {
+                        return serializationService.bytesToObject(bytes, 39);
+                    }
                     offset = 31;
                     break;
                 case ERROR_RESPONSE:
