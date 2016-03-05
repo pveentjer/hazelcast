@@ -294,11 +294,11 @@ final class InvocationFuture<E> implements InternalCompletableFuture<E> {
             return;
         }
 
-        long currentTimeoutMs = pollTimeoutMs;
-        long waitStart = Clock.currentTimeMillis();
-        while (currentTimeoutMs > 0 && response == null) {
-            LockSupport.park();
-            currentTimeoutMs = pollTimeoutMs - (Clock.currentTimeMillis() - waitStart);
+        long currentTimeoutNs = TimeUnit.MILLISECONDS.toNanos(pollTimeoutMs);
+        long waitStartNs = System.nanoTime();
+        while (currentTimeoutNs > 0 && response == null) {
+            LockSupport.parkNanos(currentTimeoutNs);
+            currentTimeoutNs = pollTimeoutMs - (System.nanoTime() - waitStartNs);
         }
     }
 
