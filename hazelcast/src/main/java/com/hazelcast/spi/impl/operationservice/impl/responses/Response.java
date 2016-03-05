@@ -123,6 +123,10 @@ public abstract class Response implements IdentifiedDataSerializable {
     }
 
     public static Object deserializeValue(SerializationService serializationService, Object data) {
+        if (data instanceof NormalResponse) {
+            data = ((NormalResponse) data).getValue();
+        }
+
         if (!(data instanceof Data)) {
             return data;
         }
@@ -154,5 +158,27 @@ public abstract class Response implements IdentifiedDataSerializable {
         }
 
         return serializationService.bytesToObject(bytes, offset);
+    }
+
+    public static Data getValueAsData(SerializationService serializationService, Data data) {
+        byte[] bytes = data.toByteArray();
+
+        boolean normalResponse = serializerId(bytes) == CONSTANT_TYPE_DATA_SERIALIZABLE
+                && factoryId(bytes) == SpiDataSerializerHook.F_ID
+                && typeId(bytes) == NORMAL_RESPONSE;
+
+        if (!normalResponse) {
+            return data;
+        }
+
+        byte isData = bytes[30];
+        if (isData == 1) {
+            int size = Bits.readIntB(bytes, 31);
+            byte[] valueBytes = new byte[size];
+            System.arraycopy(bytes, 35, valueBytes, 0, valueBytes.length);
+            return new HeapData(valueBytes);
+        }
+
+        return data;
     }
 }

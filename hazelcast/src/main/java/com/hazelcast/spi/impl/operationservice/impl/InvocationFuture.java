@@ -374,10 +374,14 @@ final class InvocationFuture<E> implements InternalCompletableFuture<E> {
         }
 
         Object response = unresolvedResponse;
-        if (invocation.resultDeserialized && response instanceof Data) {
-            response = Response.deserializeValue(operationService.serializationService, (Data) response);
-            if (response == null) {
-                return null;
+        if (unresolvedResponse instanceof Data) {
+            if (invocation.resultDeserialized) {
+                response = Response.deserializeValue(operationService.serializationService, (Data) response);
+                if (response == null) {
+                    return null;
+                }
+            } else {
+                response = Response.getValueAsData(operationService.serializationService, (Data) response);
             }
         }
 

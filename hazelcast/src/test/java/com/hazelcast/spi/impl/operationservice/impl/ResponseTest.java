@@ -3,8 +3,10 @@ package com.hazelcast.spi.impl.operationservice.impl;
 
 import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.internal.serialization.impl.DefaultSerializationServiceBuilder;
+import com.hazelcast.internal.serialization.impl.HeapData;
 import com.hazelcast.internal.serialization.impl.SerializationConstants;
 import com.hazelcast.nio.Packet;
+import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.impl.operationservice.impl.responses.ErrorResponse;
 import com.hazelcast.spi.impl.operationservice.impl.responses.NormalResponse;
 import com.hazelcast.spi.impl.operationservice.impl.responses.Response;
@@ -22,13 +24,14 @@ import static org.junit.Assert.assertEquals;
 
 @RunWith(HazelcastParallelClassRunner.class)
 @Category({QuickTest.class, ParallelTest.class})
-public class ResponseTest extends HazelcastTestSupport{
+public class ResponseTest extends HazelcastTestSupport {
 
     private SerializationService serializationService;
 
     @Before
     public void setup() {
         serializationService = new DefaultSerializationServiceBuilder().build();
+        setLoggingLog4j();
     }
 
     @Test
@@ -84,7 +87,7 @@ public class ResponseTest extends HazelcastTestSupport{
     @Test
     public void deserializeValue_whenErrorResponse() {
         Object value = "foo";
-        ErrorResponse response = new ErrorResponse(new ExpectedRuntimeException(),10,true);
+        ErrorResponse response = new ErrorResponse(new ExpectedRuntimeException(), 10, true);
         Packet packet = new Packet(serializationService.toBytes(response));
 
         Object foundValue = Response.deserializeValue(serializationService, packet);
@@ -98,5 +101,17 @@ public class ResponseTest extends HazelcastTestSupport{
 
         Object foundValue = Response.deserializeValue(serializationService, packet);
         assertEquals(value, foundValue);
+    }
+
+    @Test
+    public void getValueAsData_whenResponse() {
+        Object value = "foo";
+        Data valueData = new HeapData(serializationService.toBytes(value));
+
+        NormalResponse response = new NormalResponse(valueData, 10, 1, true);
+        Data responseData = new HeapData(serializationService.toBytes(response));
+
+        Data foundValueData = Response.getValueAsData(serializationService, responseData);
+        assertEquals(value, serializationService.toObject(foundValueData));
     }
 }
