@@ -82,8 +82,6 @@ public class NormalResponse extends Response {
         super.writeData(out);
         out.writeInt(backupCount);
 
-        BufferObjectDataOutput b = (BufferObjectDataOutput)out;
-
         final boolean isData = value instanceof Data;
         out.writeBoolean(isData);
         if (isData) {
