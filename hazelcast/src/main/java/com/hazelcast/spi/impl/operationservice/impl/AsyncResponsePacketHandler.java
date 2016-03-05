@@ -26,13 +26,14 @@ import com.hazelcast.util.concurrent.BackoffIdleStrategy;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutputMemoryError;
 import static com.hazelcast.nio.Packet.FLAG_OP;
 import static com.hazelcast.nio.Packet.FLAG_RESPONSE;
 import static com.hazelcast.util.Preconditions.checkNotNull;
 import static com.hazelcast.util.Preconditions.checkTrue;
+import static java.util.concurrent.TimeUnit.MICROSECONDS;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 /**
  * The AsyncResponsePacketHandler is a PacketHandler that asynchronously process operation-response packets.
@@ -46,14 +47,14 @@ import static com.hazelcast.util.Preconditions.checkTrue;
  * deal with the response can be rather expensive currently.
  */
 public class AsyncResponsePacketHandler implements PacketHandler {
+    private static final long IDLE_MAX_SPINS = 20;
+    private static final long IDLE_MAX_YIELDS = 50;
+    private static final long IDLE_MIN_PARK_NS = NANOSECONDS.toNanos(1);
+    private static final long IDLE_MAX_PARK_NS = MICROSECONDS.toNanos(100);
 
     private final ResponseThread responseThread;
     private final BlockingQueue<Packet> workQueue;
     private final ILogger logger;
-    public static final long IDLE_MAX_SPINS = 20;
-    public static final long IDLE_MAX_YIELDS = 50;
-    public static final long IDLE_MIN_PARK_NS = TimeUnit.NANOSECONDS.toNanos(1);
-    public static final long IDLE_MAX_PARK_NS = TimeUnit.MICROSECONDS.toNanos(100);
 
     public AsyncResponsePacketHandler(HazelcastThreadGroup threadGroup,
                                       ILogger logger,

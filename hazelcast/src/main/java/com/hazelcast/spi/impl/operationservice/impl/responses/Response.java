@@ -43,6 +43,8 @@ import static com.hazelcast.spi.impl.SpiDataSerializerHook.NORMAL_RESPONSE;
  * </li>
  * </ol>
  */
+//todo: we need to fix the magic numbers
+@SuppressWarnings("checkstyle:magicnumber")
 public abstract class Response implements IdentifiedDataSerializable {
     public static final boolean USE_BIG_ENDIAN = true;
 
@@ -140,6 +142,9 @@ public abstract class Response implements IdentifiedDataSerializable {
                     break;
                 case ERROR_RESPONSE:
                     offset = 26;
+                    break;
+                default:
+                    //no-op
                     break;
             }
         }

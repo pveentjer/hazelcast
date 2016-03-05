@@ -19,15 +19,9 @@ package com.hazelcast.spi.impl.operationservice.impl;
 import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Address;
-import com.hazelcast.nio.Bits;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.spi.impl.PacketHandler;
-import com.hazelcast.spi.impl.SpiDataSerializerHook;
-import com.hazelcast.spi.impl.operationservice.impl.responses.ErrorResponse;
-import com.hazelcast.spi.impl.operationservice.impl.responses.NormalResponse;
-import com.hazelcast.spi.impl.operationservice.impl.responses.Response;
 
-import static com.hazelcast.spi.impl.SpiDataSerializerHook.BACKUP;
 import static com.hazelcast.spi.impl.SpiDataSerializerHook.BACKUP_RESPONSE;
 import static com.hazelcast.spi.impl.SpiDataSerializerHook.CALL_TIMEOUT_RESPONSE;
 import static com.hazelcast.spi.impl.SpiDataSerializerHook.ERROR_RESPONSE;

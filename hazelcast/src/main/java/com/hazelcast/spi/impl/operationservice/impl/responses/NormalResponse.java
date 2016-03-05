@@ -16,7 +16,6 @@
 
 package com.hazelcast.spi.impl.operationservice.impl.responses;
 
-import com.hazelcast.nio.BufferObjectDataOutput;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
