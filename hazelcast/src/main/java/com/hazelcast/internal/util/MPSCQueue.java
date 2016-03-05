@@ -239,7 +239,8 @@ public final class MPSCQueue<E> extends AbstractQueue<E> implements BlockingQueu
 
     @Override
     public boolean isEmpty() {
-        throw new UnsupportedOperationException();
+       return size()==0;
+      //  throw new UnsupportedOperationException();
     }
 
     @Override

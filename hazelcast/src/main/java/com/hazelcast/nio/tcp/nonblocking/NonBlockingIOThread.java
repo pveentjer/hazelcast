@@ -19,6 +19,7 @@ package com.hazelcast.nio.tcp.nonblocking;
 import com.hazelcast.core.HazelcastException;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.metrics.ProbeLevel;
+import com.hazelcast.internal.util.MPSCQueue;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.spi.impl.operationexecutor.OperationHostileThread;
 import com.hazelcast.internal.util.counters.SwCounter;
@@ -48,7 +49,7 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
     int id;
 
     @Probe(name = "taskQueueSize")
-    private final Queue<Runnable> taskQueue = new ConcurrentLinkedQueue<Runnable>();
+    private final Queue<Runnable> taskQueue = new MPSCQueue<Runnable>(null,null);
     @Probe
     private final SwCounter eventCount = newSwCounter();
     @Probe
