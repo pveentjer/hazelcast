@@ -128,6 +128,7 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
     private final IsStillRunningService isStillRunningService;
     private final AsyncResponsePacketHandler responsePacketExecutor;
     private final InvocationMonitor invocationMonitor;
+    private final ResponsePacketHandlerImpl responsePacketHandler;
 
     public OperationServiceImpl(NodeEngineImpl nodeEngine) {
         this.nodeEngine = nodeEngine;
@@ -157,13 +158,14 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
 
         this.operationBackupHandler = new OperationBackupHandler(this);
 
+        responsePacketHandler = new ResponsePacketHandlerImpl(
+                logger,
+                node.getSerializationService(),
+                invocationsRegistry);
         this.responsePacketExecutor = new AsyncResponsePacketHandler(
                 node.getHazelcastThreadGroup(),
                 logger,
-                new ResponsePacketHandlerImpl(
-                        logger,
-                        node.getSerializationService(),
-                        invocationsRegistry));
+                responsePacketHandler);
 
         this.operationExecutor = new ClassicOperationExecutor(
                 groupProperties,
@@ -267,7 +269,7 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
         checkTrue(packet.isFlagSet(Packet.FLAG_OP), "Packet.FLAG_OP should be set!");
 
         if (packet.isFlagSet(Packet.FLAG_RESPONSE)) {
-            responsePacketExecutor.handle(packet);
+            responsePacketHandler.handle(packet);
         } else {
             operationExecutor.execute(packet);
         }
