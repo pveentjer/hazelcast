@@ -1,6 +1,7 @@
 package com.hazelcast.internal.serialization.impl;
 
 import com.hazelcast.internal.serialization.SerializationService;
+import com.hazelcast.nio.serialization.ByteArraySerializer;
 import com.hazelcast.nio.serialization.Serializer;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.annotation.ParallelTest;
@@ -58,18 +59,16 @@ public class ByteArraySerializerStreamSerializerAdapterTest {
 
     @Test
     public void testAdaptorEqualAndHashCode() throws Exception {
-        ByteArraySerializerStreamSerializerAdapter theOther = new ByteArraySerializerStreamSerializerAdapter(serializer);
-        ByteArraySerializerStreamSerializerAdapter theEmptyOne = new ByteArraySerializerStreamSerializerAdapter(null);
+        ByteArraySerializerStreamSerializerAdapter theOne = new ByteArraySerializerStreamSerializerAdapter(serializer);
+        ByteArraySerializerStreamSerializerAdapter theOther = new ByteArraySerializerStreamSerializerAdapter(mock(ByteArraySerializer.class));
 
         assertEquals(adapter, adapter);
-        assertEquals(adapter, theOther);
+        assertEquals(adapter, theOne);
+        assertNotEquals(adapter, theOther);
         assertNotEquals(adapter, null);
         assertNotEquals(adapter, "Not An Adaptor");
-        assertNotEquals(adapter, theEmptyOne);
 
         assertEquals(adapter.hashCode(), serializer.hashCode());
-
-        assertEquals(0, theEmptyOne.hashCode());
     }
 
     @Test

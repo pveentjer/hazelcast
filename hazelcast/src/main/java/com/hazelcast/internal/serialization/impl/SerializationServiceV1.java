@@ -92,7 +92,7 @@ public class SerializationServiceV1 extends AbstractSerializationService {
             portableContext.registerClassDefinition(cd);
         }
 
-        dataSerializerAdapter = new SerializerAdapter(new DataSerializableSerializer(dataSerializableFactories, classLoader));
+        dataSerializableSerializerAdapter = new SerializerAdapter(new DataSerializableSerializer(dataSerializableFactories, classLoader));
         portableSerializer = new PortableSerializer(portableContext, loader.getFactories());
         portableSerializerAdapter = new SerializerAdapter(portableSerializer);
 
@@ -102,6 +102,7 @@ public class SerializationServiceV1 extends AbstractSerializationService {
         registerJavaTypeSerializers();
     }
 
+    @Override
     public PortableReader createPortableReader(Data data) throws IOException {
         if (!data.isPortable()) {
             throw new IllegalArgumentException("Given data is not Portable! -> " + data.getType());
@@ -110,13 +111,14 @@ public class SerializationServiceV1 extends AbstractSerializationService {
         return portableSerializer.createReader(in);
     }
 
+    @Override
     public PortableContext getPortableContext() {
         return portableContext;
     }
 
     private void registerConstantSerializers() {
         registerConstant(null, nullSerializerAdapter);
-        registerConstant(DataSerializable.class, dataSerializerAdapter);
+        registerConstant(DataSerializable.class, dataSerializableSerializerAdapter);
         registerConstant(Portable.class, portableSerializerAdapter);
         //primitives and String
         registerConstant(Byte.class, new ByteSerializer());

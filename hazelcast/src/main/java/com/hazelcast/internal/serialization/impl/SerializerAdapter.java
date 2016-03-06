@@ -33,6 +33,12 @@ final class SerializerAdapter {
     private final int typeId;
     private final Serializer impl;
 
+    public SerializerAdapter(){
+        this.serializer = null;
+        this.typeId = 0;
+        this.impl = null;
+    }
+
     public SerializerAdapter(Serializer serializer) {
         checkNotNull(serializer, "serializer can't be null");
 
@@ -47,6 +53,8 @@ final class SerializerAdapter {
 
         this.typeId = serializer.getTypeId();
     }
+
+
 
     @SuppressWarnings("unchecked")
     public void write(ObjectDataOutput out, Object object) throws IOException {

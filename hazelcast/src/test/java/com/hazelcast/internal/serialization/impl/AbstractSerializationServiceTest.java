@@ -180,7 +180,7 @@ public class AbstractSerializationServiceTest {
     @Test(expected = HazelcastInstanceNotActiveException.class)
     public void testSerializerFor_ServiceInactive() throws Exception {
         abstractSerializationService.destroy();
-        abstractSerializationService.serializerFor(new CustomSerializationTest.Foo());
+        abstractSerializationService.serializerForObject(new CustomSerializationTest.Foo());
     }
 
     private class StringBufferSerializer implements StreamSerializer<StringBuffer> {
