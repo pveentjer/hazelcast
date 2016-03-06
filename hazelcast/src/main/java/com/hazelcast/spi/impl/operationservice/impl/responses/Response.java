@@ -160,7 +160,7 @@ public abstract class Response implements IdentifiedDataSerializable {
         return serializationService.bytesToObject(bytes, offset);
     }
 
-    public static Data getValueAsData(SerializationService serializationService, Data data) {
+    public static Object getValueAsData(SerializationService serializationService, Data data) {
         byte[] bytes = data.toByteArray();
 
         boolean normalResponse = serializerId(bytes) == CONSTANT_TYPE_DATA_SERIALIZABLE
@@ -177,8 +177,8 @@ public abstract class Response implements IdentifiedDataSerializable {
             byte[] valueBytes = new byte[size];
             System.arraycopy(bytes, 35, valueBytes, 0, valueBytes.length);
             return new HeapData(valueBytes);
+        }else{
+            return serializationService.bytesToObject(bytes, 31);
         }
-
-        return data;
     }
 }

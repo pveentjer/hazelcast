@@ -104,14 +104,26 @@ public class ResponseTest extends HazelcastTestSupport {
     }
 
     @Test
-    public void getValueAsData_whenResponse() {
+    public void getValueAsData_whenResponse_andDataValue() {
         Object value = "foo";
         Data valueData = new HeapData(serializationService.toBytes(value));
 
         NormalResponse response = new NormalResponse(valueData, 10, 1, true);
         Data responseData = new HeapData(serializationService.toBytes(response));
 
-        Data foundValueData = Response.getValueAsData(serializationService, responseData);
+        Object foundValueData = Response.getValueAsData(serializationService, responseData);
+        assertInstanceOf(Data.class, foundValueData);
         assertEquals(value, serializationService.toObject(foundValueData));
+    }
+
+    @Test
+    public void getValueAsData_whenResponse_andNonDataValue() {
+        Object value = "foo";
+
+        NormalResponse response = new NormalResponse(value, 10, 1, true);
+        Data responseData = new HeapData(serializationService.toBytes(response));
+
+        Object foundValueData = Response.getValueAsData(serializationService, responseData);
+        assertEquals(value,foundValueData);
     }
 }
