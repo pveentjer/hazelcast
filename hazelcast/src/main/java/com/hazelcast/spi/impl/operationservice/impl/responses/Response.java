@@ -177,7 +177,7 @@ public abstract class Response implements IdentifiedDataSerializable {
             byte[] valueBytes = new byte[size];
             System.arraycopy(bytes, 35, valueBytes, 0, valueBytes.length);
             return new HeapData(valueBytes);
-        }else{
+        } else {
             return serializationService.bytesToObject(bytes, 31);
         }
     }
