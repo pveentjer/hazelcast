@@ -23,7 +23,7 @@ import com.hazelcast.core.IMap;
 import com.hazelcast.instance.GroupProperty;
 import com.hazelcast.instance.HazelcastInstanceManager;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingIOThread;
-import com.hazelcast.nio.tcp.nonblocking.MigratableHandler;
+import com.hazelcast.nio.tcp.nonblocking.SelectionHandler;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingIOThreadingModel;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingSocketReader;
 import com.hazelcast.nio.tcp.TcpIpConnection;
@@ -88,12 +88,12 @@ public class IOBalancerStressTest extends HazelcastTestSupport {
     private void assertBalanced(HazelcastInstance hz) {
         TcpIpConnectionManager connectionManager = (TcpIpConnectionManager) getConnectionManager(hz);
 
-        Map<NonBlockingIOThread, Set<MigratableHandler>> handlersPerSelector = getHandlersPerSelector(connectionManager);
+        Map<NonBlockingIOThread, Set<SelectionHandler>> handlersPerSelector = getHandlersPerSelector(connectionManager);
 
         try {
-            for (Map.Entry<NonBlockingIOThread, Set<MigratableHandler>> entry : handlersPerSelector.entrySet()) {
+            for (Map.Entry<NonBlockingIOThread, Set<SelectionHandler>> entry : handlersPerSelector.entrySet()) {
                 NonBlockingIOThread selector = entry.getKey();
-                Set<MigratableHandler> handlers = entry.getValue();
+                Set<SelectionHandler> handlers = entry.getValue();
                 assertBalanced(selector, handlers);
             }
         } catch (AssertionError e) {
@@ -134,11 +134,11 @@ public class IOBalancerStressTest extends HazelcastTestSupport {
     }
 
 
-    private Map<NonBlockingIOThread, Set<MigratableHandler>> getHandlersPerSelector(TcpIpConnectionManager connectionManager) {
-        Map<NonBlockingIOThread, Set<MigratableHandler>> handlersPerSelector = new HashMap<NonBlockingIOThread, Set<MigratableHandler>>();
+    private Map<NonBlockingIOThread, Set<SelectionHandler>> getHandlersPerSelector(TcpIpConnectionManager connectionManager) {
+        Map<NonBlockingIOThread, Set<SelectionHandler>> handlersPerSelector = new HashMap<NonBlockingIOThread, Set<SelectionHandler>>();
         for (TcpIpConnection connection : connectionManager.getActiveConnections()) {
-            add(handlersPerSelector, (MigratableHandler) connection.getSocketReader());
-            add(handlersPerSelector, (MigratableHandler) connection.getSocketWriter());
+            add(handlersPerSelector, (SelectionHandler) connection.getSocketReader());
+            add(handlersPerSelector, (SelectionHandler) connection.getSocketWriter());
         }
         return handlersPerSelector;
     }
@@ -151,16 +151,16 @@ public class IOBalancerStressTest extends HazelcastTestSupport {
      * @param selector
      * @param handlers
      */
-    public void assertBalanced(NonBlockingIOThread selector, Set<MigratableHandler> handlers) {
+    public void assertBalanced(NonBlockingIOThread selector, Set<SelectionHandler> handlers) {
         assertTrue("no handlers were found for selector:" + selector, handlers.size() > 0);
         assertTrue("too many handlers were found for selector:" + selector, handlers.size() <= 2);
 
-        Iterator<MigratableHandler> iterator = handlers.iterator();
-        MigratableHandler activeHandler = iterator.next();
+        Iterator<SelectionHandler> iterator = handlers.iterator();
+        SelectionHandler activeHandler = iterator.next();
         if (handlers.size() == 2) {
-            MigratableHandler deadHandler = iterator.next();
+            SelectionHandler deadHandler = iterator.next();
             if (activeHandler.getEventCount() < deadHandler.getEventCount()) {
-                MigratableHandler tmp = deadHandler;
+                SelectionHandler tmp = deadHandler;
                 deadHandler = activeHandler;
                 activeHandler = tmp;
             }
@@ -175,10 +175,10 @@ public class IOBalancerStressTest extends HazelcastTestSupport {
                 activeHandler.getEventCount() > 1000);
     }
 
-    private void add(Map<NonBlockingIOThread, Set<MigratableHandler>> handlersPerSelector, MigratableHandler handler) {
-        Set<MigratableHandler> handlers = handlersPerSelector.get(handler.getOwner());
+    private void add(Map<NonBlockingIOThread, Set<SelectionHandler>> handlersPerSelector, SelectionHandler handler) {
+        Set<SelectionHandler> handlers = handlersPerSelector.get(handler.getOwner());
         if (handlers == null) {
-            handlers = new HashSet<MigratableHandler>();
+            handlers = new HashSet<SelectionHandler>();
             handlersPerSelector.put(handler.getOwner(), handlers);
         }
         handlers.add(handler);

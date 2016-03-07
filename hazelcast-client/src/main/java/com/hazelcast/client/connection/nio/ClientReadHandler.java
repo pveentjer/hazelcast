@@ -28,7 +28,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 
 public class ClientReadHandler
-        extends AbstractClientSelectionHandler {
+        extends AbstractClientSelectionHandler implements Runnable{
 
     private final ByteBuffer buffer;
     private final ClientMessageBuilder builder;

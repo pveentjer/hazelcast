@@ -25,7 +25,7 @@ import com.hazelcast.nio.tcp.nonblocking.SelectionHandler;
 
 import java.nio.channels.SelectionKey;
 
-public abstract class AbstractClientSelectionHandler implements SelectionHandler, Runnable {
+public abstract class AbstractClientSelectionHandler implements SelectionHandler {
 
     protected final ILogger logger;
     protected final SocketChannelWrapper socketChannel;
@@ -44,6 +44,22 @@ public abstract class AbstractClientSelectionHandler implements SelectionHandler
     }
 
     protected void shutdown() {
+    }
+
+    @Override
+    public void requestMigration(NonBlockingIOThread newOwner) {
+        //no-op
+    }
+
+    @Override
+    public NonBlockingIOThread getOwner() {
+        return ioThread;
+    }
+
+    @Override
+    public long getEventCount() {
+        // we return 0 since we don't care about rebalancing,
+        return 0;
     }
 
     @Override
@@ -78,7 +94,6 @@ public abstract class AbstractClientSelectionHandler implements SelectionHandler
     }
 
     public void register() {
-        ioThread.addTaskAndWakeup(this);
+        ioThread.addTaskAndWakeup((Runnable)this);
     }
-
 }

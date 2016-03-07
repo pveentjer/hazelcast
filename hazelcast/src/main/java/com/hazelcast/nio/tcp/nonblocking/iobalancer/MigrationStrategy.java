@@ -17,10 +17,10 @@
 package com.hazelcast.nio.tcp.nonblocking.iobalancer;
 
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingIOThread;
-import com.hazelcast.nio.tcp.nonblocking.MigratableHandler;
+import com.hazelcast.nio.tcp.nonblocking.SelectionHandler;
 
 /**
- * Decides if a {@link MigratableHandler handler} migration should be attempted
+ * Decides if a {@link SelectionHandler handler} migration should be attempted
  * and which handler to choose.
  *
  * @see IOBalancer
@@ -28,7 +28,7 @@ import com.hazelcast.nio.tcp.nonblocking.MigratableHandler;
 interface MigrationStrategy {
 
     /**
-     * Looks for imbalance in {@link MigratableHandler handler} to {@link NonBlockingIOThread ioThread}
+     * Looks for imbalance in {@link SelectionHandler handler} to {@link NonBlockingIOThread ioThread}
      * mapping.
      *
      * @param imbalance
@@ -37,10 +37,10 @@ interface MigrationStrategy {
     boolean imbalanceDetected(LoadImbalance imbalance);
 
     /**
-     * Finds a {@link MigratableHandler handler} to migrate
+     * Finds a {@link SelectionHandler handler} to migrate
      *
      * @param imbalance
      * @return Handler to migrate or <code>null</code> if no suitable candidate is found
      */
-    MigratableHandler findHandlerToMigrate(LoadImbalance imbalance);
+    SelectionHandler findHandlerToMigrate(LoadImbalance imbalance);
 }

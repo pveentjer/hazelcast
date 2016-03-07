@@ -17,7 +17,7 @@
 package com.hazelcast.nio.tcp.nonblocking.iobalancer;
 
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingIOThread;
-import com.hazelcast.nio.tcp.nonblocking.MigratableHandler;
+import com.hazelcast.nio.tcp.nonblocking.SelectionHandler;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.annotation.ParallelTest;
@@ -42,16 +42,16 @@ import static org.mockito.Mockito.mock;
 @Category({QuickTest.class, ParallelTest.class})
 public class EventCountBasicMigrationStrategyTest extends HazelcastTestSupport {
 
-    private Map<NonBlockingIOThread, Set<MigratableHandler>> selectorToHandlers;
-    private ItemCounter<MigratableHandler> handlerEventsCounter;
+    private Map<NonBlockingIOThread, Set<SelectionHandler>> selectorToHandlers;
+    private ItemCounter<SelectionHandler> handlerEventsCounter;
     private LoadImbalance imbalance;
 
     private EventCountBasicMigrationStrategy strategy;
 
     @Before
     public void setUp() {
-        selectorToHandlers = new HashMap<NonBlockingIOThread, Set<MigratableHandler>>();
-        handlerEventsCounter = new ItemCounter<MigratableHandler>();
+        selectorToHandlers = new HashMap<NonBlockingIOThread, Set<SelectionHandler>>();
+        handlerEventsCounter = new ItemCounter<SelectionHandler>();
         imbalance = new LoadImbalance(selectorToHandlers, handlerEventsCounter);
         strategy = new EventCountBasicMigrationStrategy();
     }
@@ -99,18 +99,18 @@ public class EventCountBasicMigrationStrategyTest extends HazelcastTestSupport {
         imbalance.destinationSelector = destinationSelector;
 
         imbalance.minimumEvents = 100;
-        MigratableHandler handler1 = mock(MigratableHandler.class);
+        SelectionHandler handler1 = mock(SelectionHandler.class);
         handlerEventsCounter.set(handler1, 100l);
         selectorToHandlers.put(destinationSelector, singleton(handler1));
 
         imbalance.maximumEvents = 300;
-        MigratableHandler handler2 = mock(MigratableHandler.class);
-        MigratableHandler handler3 = mock(MigratableHandler.class);
+        SelectionHandler handler2 = mock(SelectionHandler.class);
+        SelectionHandler handler3 = mock(SelectionHandler.class);
         handlerEventsCounter.set(handler2, 200l);
         handlerEventsCounter.set(handler3, 100l);
         selectorToHandlers.put(sourceSelector, setOf(handler2, handler3));
 
-        MigratableHandler handlerToMigrate = strategy.findHandlerToMigrate(imbalance);
+        SelectionHandler handlerToMigrate = strategy.findHandlerToMigrate(imbalance);
         assertEquals(handler3, handlerToMigrate);
     }
 

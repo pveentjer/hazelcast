@@ -23,7 +23,7 @@ import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
 import com.hazelcast.nio.tcp.TcpIpConnection;
-import com.hazelcast.nio.tcp.nonblocking.MigratableHandler;
+import com.hazelcast.nio.tcp.nonblocking.SelectionHandler;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingIOThread;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingSocketReader;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingSocketWriter;
@@ -183,7 +183,7 @@ public class IOBalancer {
     }
 
     private void tryMigrate(LoadImbalance loadImbalance) {
-        MigratableHandler handler = strategy.findHandlerToMigrate(loadImbalance);
+        SelectionHandler handler = strategy.findHandlerToMigrate(loadImbalance);
         if (handler == null) {
             logger.finest("I/O imbalance is detected, but no suitable migration candidate is found.");
             return;

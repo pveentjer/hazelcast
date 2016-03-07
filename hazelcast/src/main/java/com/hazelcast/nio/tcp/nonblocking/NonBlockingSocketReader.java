@@ -41,7 +41,6 @@ import static com.hazelcast.nio.ConnectionType.MEMBER;
 import static com.hazelcast.nio.IOService.KILO_BYTE;
 import static com.hazelcast.nio.Protocols.CLIENT_BINARY_NEW;
 import static com.hazelcast.nio.Protocols.CLUSTER;
-import static com.hazelcast.util.Clock.currentTimeMillis;
 import static com.hazelcast.util.StringUtil.bytesToString;
 
 /**
@@ -148,7 +147,7 @@ public final class NonBlockingSocketReader extends AbstractHandler implements So
         eventCount.inc();
         // we are going to set the timestamp even if the socketChannel is going to fail reading. In that case
         // the connection is going to be closed anyway.
-        lastReadTime = currentTimeMillis();
+        lastReadTime = System.currentTimeMillis();
 
         if (!connection.isAlive()) {
             logger.finest("We are being asked to read, but connection is not live so we won't");

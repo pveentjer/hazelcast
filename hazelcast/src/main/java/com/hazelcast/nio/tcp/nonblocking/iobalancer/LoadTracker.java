@@ -17,8 +17,9 @@
 package com.hazelcast.nio.tcp.nonblocking.iobalancer;
 
 import com.hazelcast.logging.ILogger;
-import com.hazelcast.nio.tcp.nonblocking.MigratableHandler;
+import com.hazelcast.nio.tcp.nonblocking.SelectionHandler;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingIOThread;
+import com.hazelcast.nio.tcp.nonblocking.SelectionHandler;
 import com.hazelcast.util.ItemCounter;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -34,26 +35,26 @@ import static com.hazelcast.util.StringUtil.LINE_SEPARATOR;
  * Tracks the load of of NonBlockingIOThread(s) and creates a mapping between NonBlockingIOThread -> Handler.
  * <p/>
  * This class is not thread-safe with the exception of
- * {@link #addHandler(MigratableHandler)}   and
- * {@link #removeHandler(MigratableHandler)}
+ * {@link #addHandler(SelectionHandler)}   and
+ * {@link #removeHandler(SelectionHandler)}
  */
 class LoadTracker {
     private final ILogger logger;
 
     //all known IO ioThreads. we assume no. of ioThreads is constant during a lifespan of a member
     private final NonBlockingIOThread[] ioThreads;
-    private final Map<NonBlockingIOThread, Set<MigratableHandler>> selectorToHandlers;
+    private final Map<NonBlockingIOThread, Set<SelectionHandler>> selectorToHandlers;
 
     //no. of events per handler since an instance started
-    private final ItemCounter<MigratableHandler> lastEventCounter = new ItemCounter<MigratableHandler>();
+    private final ItemCounter<SelectionHandler> lastEventCounter = new ItemCounter<SelectionHandler>();
 
     //no. of events per NonBlockingIOThread since last calculation
     private final ItemCounter<NonBlockingIOThread> selectorEvents = new ItemCounter<NonBlockingIOThread>();
     //no. of events per handler since last calculation
-    private final ItemCounter<MigratableHandler> handlerEventsCounter = new ItemCounter<MigratableHandler>();
+    private final ItemCounter<SelectionHandler> handlerEventsCounter = new ItemCounter<SelectionHandler>();
 
     //contains all known handlers
-    private final Set<MigratableHandler> handlers = new HashSet<MigratableHandler>();
+    private final Set<SelectionHandler> handlers = new HashSet<SelectionHandler>();
 
     private final LoadImbalance imbalance;
 
@@ -65,9 +66,9 @@ class LoadTracker {
         this.ioThreads = new NonBlockingIOThread[ioThreads.length];
         System.arraycopy(ioThreads, 0, this.ioThreads, 0, ioThreads.length);
 
-        this.selectorToHandlers = new HashMap<NonBlockingIOThread, Set<MigratableHandler>>();
+        this.selectorToHandlers = new HashMap<NonBlockingIOThread, Set<SelectionHandler>>();
         for (NonBlockingIOThread selector : ioThreads) {
-            selectorToHandlers.put(selector, new HashSet<MigratableHandler>());
+            selectorToHandlers.put(selector, new HashSet<SelectionHandler>());
         }
         this.imbalance = new LoadImbalance(selectorToHandlers, handlerEventsCounter);
     }
@@ -97,17 +98,17 @@ class LoadTracker {
     }
 
     // just for testing
-    Set<MigratableHandler> getHandlers() {
+    Set<SelectionHandler> getHandlers() {
         return handlers;
     }
 
     // just for testing
-    ItemCounter<MigratableHandler> getLastEventCounter() {
+    ItemCounter<SelectionHandler> getLastEventCounter() {
         return lastEventCounter;
     }
 
     // just for testing
-    ItemCounter<MigratableHandler> getHandlerEventsCounter() {
+    ItemCounter<SelectionHandler> getHandlerEventsCounter() {
         return handlerEventsCounter;
     }
 
@@ -135,33 +136,33 @@ class LoadTracker {
         }
     }
 
-    public void notifyHandlerAdded(MigratableHandler handler) {
+    public void notifyHandlerAdded(SelectionHandler handler) {
         AddHandlerTask addHandlerTask = new AddHandlerTask(handler);
         tasks.offer(addHandlerTask);
     }
 
-    public void notifyHandlerRemoved(MigratableHandler handler) {
+    public void notifyHandlerRemoved(SelectionHandler handler) {
         RemoveHandlerTask removeHandlerTask = new RemoveHandlerTask(handler);
         tasks.offer(removeHandlerTask);
     }
 
 
     private void updateNewWorkingImbalance() {
-        for (MigratableHandler handler : handlers) {
+        for (SelectionHandler handler : handlers) {
             updateHandlerState(handler);
         }
     }
 
-    private void updateHandlerState(MigratableHandler handler) {
+    private void updateHandlerState(SelectionHandler handler) {
         long handlerEventCount = getEventCountSinceLastCheck(handler);
         handlerEventsCounter.set(handler, handlerEventCount);
         NonBlockingIOThread owner = handler.getOwner();
         selectorEvents.add(owner, handlerEventCount);
-        Set<MigratableHandler> handlersOwnedBy = selectorToHandlers.get(owner);
+        Set<SelectionHandler> handlersOwnedBy = selectorToHandlers.get(owner);
         handlersOwnedBy.add(handler);
     }
 
-    private long getEventCountSinceLastCheck(MigratableHandler handler) {
+    private long getEventCountSinceLastCheck(SelectionHandler handler) {
         long eventCount = handler.getEventCount();
         Long lastEventCount = lastEventCounter.getAndSet(handler, eventCount);
         return eventCount - lastEventCount;
@@ -170,16 +171,16 @@ class LoadTracker {
     private void clearWorkingImbalance() {
         handlerEventsCounter.reset();
         selectorEvents.reset();
-        for (Set<MigratableHandler> handlerSet : selectorToHandlers.values()) {
+        for (Set<SelectionHandler> handlerSet : selectorToHandlers.values()) {
             handlerSet.clear();
         }
     }
 
-    void addHandler(MigratableHandler handler) {
+    void addHandler(SelectionHandler handler) {
         handlers.add(handler);
     }
 
-    void removeHandler(MigratableHandler handler) {
+    void removeHandler(SelectionHandler handler) {
         handlers.remove(handler);
         handlerEventsCounter.remove(handler);
         lastEventCounter.remove(handler);
@@ -241,10 +242,10 @@ class LoadTracker {
 
     private void appendSelectorInfo(
             NonBlockingIOThread minThread,
-            Map<NonBlockingIOThread, Set<MigratableHandler>> threadHandlers,
+            Map<NonBlockingIOThread, Set<SelectionHandler>> threadHandlers,
             StringBuilder sb) {
-        Set<MigratableHandler> handlerSet = threadHandlers.get(minThread);
-        for (MigratableHandler selectionHandler : handlerSet) {
+        Set<SelectionHandler> handlerSet = threadHandlers.get(minThread);
+        for (SelectionHandler selectionHandler : handlerSet) {
             Long eventCountPerHandler = handlerEventsCounter.get(selectionHandler);
             sb.append(selectionHandler)
                     .append(":  ")
@@ -256,9 +257,9 @@ class LoadTracker {
 
     class RemoveHandlerTask implements Runnable {
 
-        private final MigratableHandler handler;
+        private final SelectionHandler handler;
 
-        public RemoveHandlerTask(MigratableHandler handler) {
+        public RemoveHandlerTask(SelectionHandler handler) {
             this.handler = handler;
         }
 
@@ -275,9 +276,9 @@ class LoadTracker {
 
     class AddHandlerTask implements Runnable {
 
-        private final MigratableHandler handler;
+        private final SelectionHandler handler;
 
-        public AddHandlerTask(MigratableHandler handler) {
+        public AddHandlerTask(SelectionHandler handler) {
             this.handler = handler;
         }
 

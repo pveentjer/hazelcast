@@ -44,7 +44,6 @@ import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
 import static com.hazelcast.nio.IOService.KILO_BYTE;
 import static com.hazelcast.nio.Protocols.CLIENT_BINARY_NEW;
 import static com.hazelcast.nio.Protocols.CLUSTER;
-import static com.hazelcast.util.Clock.currentTimeMillis;
 import static com.hazelcast.util.EmptyStatement.ignore;
 import static com.hazelcast.util.StringUtil.stringToBytes;
 import static java.lang.Math.max;
@@ -52,7 +51,7 @@ import static java.lang.Math.max;
 /**
  * The writing side of the {@link TcpIpConnection}.
  */
-public final class NonBlockingSocketWriter extends AbstractHandler implements Runnable, SocketWriter {
+public final class NonBlockingSocketWriter extends AbstractHandler implements SocketWriter {
 
     private static final long TIMEOUT = 3;
 
@@ -322,7 +321,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     @SuppressWarnings("unchecked")
     public void handle() throws Exception {
         eventCount.inc();
-        lastWriteTime = currentTimeMillis();
+        lastWriteTime = System.currentTimeMillis();
 
         if (shutdown) {
             return;
@@ -413,15 +412,6 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
             // The current frame has been written completely. So lets null it and lets try to write another frame.
             currentFrame = null;
-        }
-    }
-
-    @Override
-    public void run() {
-        try {
-            handle();
-        } catch (Throwable t) {
-            onFailure(t);
         }
     }
 
