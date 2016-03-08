@@ -45,7 +45,6 @@ public abstract class AbstractClientSelectionHandler implements SelectionHandler
         this.logger = loggingService.getLogger(getClass().getName());
     }
 
-
     final void unregisterOp(int operation) throws IOException {
         sk.interestOps(sk.interestOps() & ~operation);
     }
