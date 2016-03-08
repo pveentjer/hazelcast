@@ -23,7 +23,6 @@ import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
 import com.hazelcast.nio.tcp.TcpIpConnection;
-import com.hazelcast.nio.tcp.nonblocking.MigratableHandler;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingIOThread;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingSocketReader;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingSocketWriter;

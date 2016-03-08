@@ -17,10 +17,10 @@
 package com.hazelcast.nio.tcp.nonblocking.iobalancer;
 
 import com.hazelcast.logging.ILogger;
-import com.hazelcast.nio.tcp.nonblocking.MigratableHandler;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingIOThread;
 import com.hazelcast.nio.tcp.nonblocking.SelectionHandler;
 import com.hazelcast.util.ItemCounter;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;

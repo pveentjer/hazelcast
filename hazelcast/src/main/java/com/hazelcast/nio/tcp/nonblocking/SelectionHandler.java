@@ -50,7 +50,7 @@ public interface SelectionHandler {
     void onFailure(Throwable throwable);
 
     /**
-     * Requests the MigratableHandler to move to the new NonBlockingIOThread. This call will not wait for the
+     * Requests the SelectionHandler to move to the new NonBlockingIOThread. This call will not wait for the
      * migration to complete.
      *
      * This method can be called by any thread, and will probably be called by the
@@ -58,7 +58,7 @@ public interface SelectionHandler {
      *
      * Call is ignored when handler is moving to the same NonBlockingIOThread.
      *
-     * @param newOwner the NonBlockingIOThread that is going to own this MigratableHandler
+     * @param newOwner the NonBlockingIOThread that is going to own this SelectionHandler
      */
     void requestMigration(NonBlockingIOThread newOwner);
 
