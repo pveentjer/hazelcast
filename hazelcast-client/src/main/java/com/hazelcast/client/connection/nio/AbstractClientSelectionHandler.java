@@ -46,6 +46,9 @@ public abstract class AbstractClientSelectionHandler implements SelectionHandler
     }
 
     final void unregisterOp(int operation) throws IOException {
+        if (sk == null) {
+            registerOp(operation);//quick hack
+        }
         sk.interestOps(sk.interestOps() & ~operation);
     }
 
@@ -84,9 +87,6 @@ public abstract class AbstractClientSelectionHandler implements SelectionHandler
     }
 
     final void registerOp(final int operation) throws ClosedChannelException {
-        if (!connection.isAlive()) {
-            return;
-        }
         if (sk == null) {
             sk = socketChannel.keyFor(ioThread.getSelector());
         }
