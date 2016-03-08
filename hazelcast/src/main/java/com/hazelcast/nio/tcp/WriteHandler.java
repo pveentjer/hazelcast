@@ -28,10 +28,9 @@ import java.nio.ByteBuffer;
  *
  * For more information about the WriteHandler (and handlers in generally), have a look at the {@link ReadHandler}.
  *
- * @param <F>
  * @see IOThreadingModel
  */
-public interface WriteHandler<F extends OutboundFrame> {
+public interface WriteHandler {
 
     /**
      * A callback to indicate that the Frame should be written to the destination ByteBuffer.
@@ -40,11 +39,12 @@ public interface WriteHandler<F extends OutboundFrame> {
      * for the same Frame multiple times until write returns true. It is up to the Frame to track where
      * it needs to continue.
      *
-     * @param frame the Frame to write
+     * @param src the bytes to write
+     * @param offset the offset in the src byte-array to write from.
      * @param dst            the destination ByteBuffer
-     * @return true if the Frame is completely written
+     * @return the offset of the next write to start from if not everything was written, or 0 if everything was written.
      * @throws Exception if something fails while writing to ByteBuffer. When an exception is thrown, the TcpIpConnection is
      *                   closed. There is no point continuing with a potentially corrupted stream.
      */
-    boolean onWrite(F frame, ByteBuffer dst) throws Exception;
+    int onWrite(byte[] src, int offset, ByteBuffer dst) throws Exception;
 }

@@ -52,6 +52,25 @@ public class MockConnection implements Connection {
         return remoteEndpoint;
     }
 
+    @Override
+    public boolean write(byte[] bytes, boolean urgent) {
+        if (!live) {
+            return false;
+        }
+
+        if (nodeEngine.getNode().getState() == NodeState.SHUT_DOWN) {
+            return false;
+        }
+
+
+        ByteBuffer bb  = ByteBuffer.wrap(bytes);
+        Packet newPacket = new Packet();
+        newPacket.readFrom(bb);
+
+        //nodeEngine.getPacketDispatcher().dispatch(newPacket);
+        return true;
+    }
+
     public boolean write(OutboundFrame frame) {
         if (!live) {
             return false;

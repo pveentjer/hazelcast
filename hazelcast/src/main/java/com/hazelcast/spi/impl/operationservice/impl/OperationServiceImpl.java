@@ -128,6 +128,7 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
     private final AsyncResponsePacketHandler responsePacketExecutor;
     private final InvocationMonitor invocationMonitor;
     private final ResponsePacketHandlerImpl responsePacketHandler;
+    private final PacketBuilder packetBuilder;
 
     public OperationServiceImpl(NodeEngineImpl nodeEngine) {
         this.nodeEngine = nodeEngine;
@@ -146,6 +147,8 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
         int concurrencyLevel = reallyMultiCore ? coreSize * CORE_SIZE_FACTOR : CONCURRENCY_LEVEL;
 
         this.invocationsRegistry = new InvocationRegistry(nodeEngine, logger, backpressureRegulator, concurrencyLevel);
+
+        this.packetBuilder = new PacketBuilder(serializationService);
 
         this.invocationMonitor = new InvocationMonitor(
                 invocationsRegistry,
@@ -389,7 +392,6 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
         return invokeOnPartitions.invoke();
     }
 
-    @Override
     public boolean send(Operation op, Address target) {
         if (target == null) {
             throw new IllegalArgumentException("Target is required!");
@@ -399,21 +401,14 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
             throw new IllegalArgumentException("Target is this node! -> " + target + ", op: " + op);
         }
 
-        byte[] bytes = serializationService.toBytes(op);
-        int partitionId = op.getPartitionId();
-        Packet packet = new Packet(bytes, partitionId);
-        packet.setFlag(Packet.FLAG_OP);
-
-        if (op instanceof UrgentSystemOperation) {
-            packet.setFlag(Packet.FLAG_URGENT);
-        }
+        boolean urgent = op.isUrgent();
+        byte[] packet = packetBuilder.buildOperationPacket(op, urgent);
 
         ConnectionManager connectionManager = node.getConnectionManager();
         Connection connection = connectionManager.getOrConnect(target);
-        return connectionManager.transmit(packet, connection);
+        return connectionManager.transmit(packet, urgent, connection);
     }
 
-    @Override
     public boolean send(Response response, Address target) {
         if (target == null) {
             throw new IllegalArgumentException("Target is required!");
@@ -423,18 +418,11 @@ public final class OperationServiceImpl implements InternalOperationService, Pac
             throw new IllegalArgumentException("Target is this node! -> " + target + ", response: " + response);
         }
 
-        byte[] bytes = serializationService.toBytes(response);
-        Packet packet = new Packet(bytes, -1);
-        packet.setFlag(Packet.FLAG_OP);
-        packet.setFlag(Packet.FLAG_RESPONSE);
-
-        if (response.isUrgent()) {
-            packet.setFlag(Packet.FLAG_URGENT);
-        }
-
+        boolean urgent = response.isUrgent();
+        byte[] packet = packetBuilder.buildResponsePacket(response);
         ConnectionManager connectionManager = node.getConnectionManager();
         Connection connection = connectionManager.getOrConnect(target);
-        return connectionManager.transmit(packet, connection);
+        return connection.write(packet, urgent);
     }
 
     public void onMemberLeft(MemberImpl member) {

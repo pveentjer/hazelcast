@@ -58,10 +58,10 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @SuppressWarnings("checkstyle:visibilitymodifier")
     @Probe(name = "writeQueueSize")
-    public final Queue<OutboundFrame> writeQueue = new ConcurrentLinkedQueue<OutboundFrame>();
+    public final Queue<Object> writeQueue = new ConcurrentLinkedQueue<Object>();
     @SuppressWarnings("checkstyle:visibilitymodifier")
     @Probe(name = "priorityWriteQueueSize")
-    public final Queue<OutboundFrame> urgentWriteQueue = new ConcurrentLinkedQueue<OutboundFrame>();
+    public final Queue<Object> urgentWriteQueue = new ConcurrentLinkedQueue<Object>();
     @Probe(name = "eventCount")
     private final SwCounter eventCount = newSwCounter();
     private final AtomicBoolean scheduled = new AtomicBoolean(false);
@@ -74,7 +74,9 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     private final SwCounter priorityFramesWritten = newSwCounter();
     private final MetricsRegistry metricsRegistry;
 
-    private volatile OutboundFrame currentFrame;
+    private byte[] frame;
+    private int frameOffset;
+
     private WriteHandler writeHandler;
     private volatile long lastWriteTime;
 
@@ -129,11 +131,11 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
         return bytesPending(urgentWriteQueue);
     }
 
-    private long bytesPending(Queue<OutboundFrame> writeQueue) {
+    private long bytesPending(Queue<Object> writeQueue) {
         long bytesPending = 0;
-        for (OutboundFrame frame : writeQueue) {
-            if (frame instanceof Packet) {
-                bytesPending += ((Packet) frame).packetSize();
+        for (Object frame : writeQueue) {
+            if (frame.getClass() == byte[].class) {
+                bytesPending += ((byte[]) frame).length;
             }
         }
         return bytesPending;
@@ -201,19 +203,39 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @Override
     public void offer(OutboundFrame frame) {
-        if (frame.isUrgent()) {
-            urgentWriteQueue.offer(frame);
+        if (frame instanceof Packet) {
+            Packet packet = (Packet) frame;
+
+            byte[] bytes = new byte[((Packet) frame).packetSize()];
+            ByteBuffer bb = ByteBuffer.wrap(bytes);
+            packet.writeTo(bb);
+
+            offer(bytes, frame.isUrgent());
         } else {
-            writeQueue.offer(frame);
+            if (frame.isUrgent()) {
+                urgentWriteQueue.offer(frame);
+            } else {
+                writeQueue.offer(frame);
+            }
+
+            schedule();
+        }
+    }
+
+    public void offer(byte[] bytes, boolean urgent) {
+        if (urgent) {
+            urgentWriteQueue.offer(bytes);
+        } else {
+            writeQueue.offer(bytes);
         }
 
         schedule();
     }
 
-    private OutboundFrame poll() {
+    private byte[] poll() {
         for (; ; ) {
             boolean urgent = true;
-            OutboundFrame frame = urgentWriteQueue.poll();
+            Object frame = urgentWriteQueue.poll();
 
             if (frame == null) {
                 urgent = false;
@@ -224,19 +246,17 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
                 return null;
             }
 
-            if (frame.getClass() == TaskFrame.class) {
-                TaskFrame taskFrame = (TaskFrame) frame;
-                taskFrame.task.run();
-                continue;
+            if (frame.getClass() == byte[].class) {
+                if (urgent) {
+                    priorityFramesWritten.inc();
+                } else {
+                    normalFramesWritten.inc();
+                }
+
+                return (byte[]) frame;
             }
 
-            if (urgent) {
-                priorityFramesWritten.inc();
-            } else {
-                normalFramesWritten.inc();
-            }
-
-            return frame;
+            ((TaskFrame) frame).task.run();
         }
     }
 
@@ -280,7 +300,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
      * This call is only made by the IO thread.
      */
     private void unschedule() throws IOException {
-        if (dirtyOutputBuffer() || currentFrame != null) {
+        if (dirtyOutputBuffer() || frame != null) {
             // Because not all data was written to the socket, we need to register for OP_WRITE so we get
             // notified when the socketChannel is ready for more data.
             registerOp(SelectionKey.OP_WRITE);
@@ -397,22 +417,23 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
             }
 
             // If there currently is not frame sending, lets try to get one.
-            if (currentFrame == null) {
-                currentFrame = poll();
-                if (currentFrame == null) {
+            if (frame == null) {
+                frame = poll();
+                if (frame == null) {
                     // There is no frames to write, we are done.
                     return;
                 }
             }
 
-            // Lets write the currentFrame to the outputBuffer.
-            if (!writeHandler.onWrite(currentFrame, outputBuffer)) {
+            // Lets write the data to the outputBuffer.
+            frameOffset = writeHandler.onWrite(frame, frameOffset, outputBuffer);
+            if (frameOffset > 0) {
                 // We are done for this round because not all data of the current frame fits in the outputBuffer
                 return;
             }
 
             // The current frame has been written completely. So lets null it and lets try to write another frame.
-            currentFrame = null;
+            frame = null;
         }
     }
 

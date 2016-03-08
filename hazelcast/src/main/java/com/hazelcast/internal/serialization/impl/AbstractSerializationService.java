@@ -37,6 +37,7 @@ import com.hazelcast.nio.serialization.Portable;
 import com.hazelcast.nio.serialization.Serializer;
 
 import java.io.Externalizable;
+import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteOrder;
 import java.util.IdentityHashMap;
@@ -98,6 +99,12 @@ public abstract class AbstractSerializationService implements SerializationServi
         this.nullSerializerAdapter = createSerializerAdapter(new ConstantSerializers.NullSerializer(), this);
     }
 
+    @Override
+    public BufferPool getThreadLocalBufferPool() {
+        return bufferPoolThreadLocal.get();
+    }
+
+
     //region Serialization Service
     @Override
     public final Data toData(Object obj) {
@@ -148,6 +155,16 @@ public abstract class AbstractSerializationService implements SerializationServi
     public byte[] toBytes(Object obj) {
         return toBytes(obj, globalPartitioningStrategy);
     }
+
+    @Override
+    public void write(BufferObjectDataOutput out, Object obj) throws IOException {
+        SerializerAdapter serializer = serializerFor(obj);
+        int partitionHash = calculatePartitionHash(obj, globalPartitioningStrategy);
+        out.writeInt(partitionHash, ByteOrder.BIG_ENDIAN);
+        out.writeInt(serializer.getTypeId(), ByteOrder.BIG_ENDIAN);
+        serializer.write(out, obj);
+    }
+
 
     @Override
     public byte[] toBytes(Object obj, PartitioningStrategy strategy) {

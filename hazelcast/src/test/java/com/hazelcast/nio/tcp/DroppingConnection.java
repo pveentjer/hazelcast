@@ -61,6 +61,11 @@ class DroppingConnection implements Connection {
     }
 
     @Override
+    public boolean write(byte[] bytes, boolean urgent) {
+        return true;
+    }
+
+    @Override
     public void setType(ConnectionType type) {
         //NO OP
     }

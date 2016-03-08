@@ -27,10 +27,22 @@ import java.nio.ByteBuffer;
  *
  * @see MemberReadHandler
  */
-public class MemberWriteHandler implements WriteHandler<Packet> {
+public class MemberWriteHandler implements WriteHandler {
 
     @Override
-    public boolean onWrite(Packet packet, ByteBuffer dst) {
-        return packet.writeTo(dst);
+    public int onWrite(byte[] src, int offset, ByteBuffer dst) {
+        int spaceInBuffer = dst.remaining();
+        int bytesPending = src.length - offset;
+
+        if (bytesPending <= spaceInBuffer) {
+            // there is enough space in the buffer, we can write everything
+            dst.put(src, offset, bytesPending);
+            // we return 0 to indicate we are done.
+            return 0;
+        } else {
+            // there is not enough space in the buffer.
+            dst.put(src, offset, spaceInBuffer);
+            return offset + spaceInBuffer;
+        }
     }
 }

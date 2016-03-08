@@ -263,30 +263,35 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
      * @throws Exception
      */
     private void fillOutputBuffer() throws Exception {
-        for (; ; ) {
-            if (outputBuffer != null && !outputBuffer.hasRemaining()) {
-                // The buffer is completely filled, we are done.
-                return;
-            }
+//        for (; ; ) {
+//            if (outputBuffer != null && !outputBuffer.hasRemaining()) {
+//                // The buffer is completely filled, we are done.
+//                return;
+//            }
+//
+//            // If there currently is not frame sending, lets try to get one.
+//            if (currentFrame == null) {
+//                currentFrame = poll();
+//                if (currentFrame == null) {
+//                    // There is no frame to write, we are done.
+//                    return;
+//                }
+//            }
+//
+//            // Lets write the currentFrame to the outputBuffer.
+//            if (!writeHandler.onWrite(currentFrame, outputBuffer)) {
+//                // We are done for this round because not all data of the current frame fits in the outputBuffer
+//                return;
+//            }
+//
+//            // The current frame has been written completely. So lets null it and lets try to write another frame.
+//            currentFrame = null;
+//        }
+    }
 
-            // If there currently is not frame sending, lets try to get one.
-            if (currentFrame == null) {
-                currentFrame = poll();
-                if (currentFrame == null) {
-                    // There is no frame to write, we are done.
-                    return;
-                }
-            }
-
-            // Lets write the currentFrame to the outputBuffer.
-            if (!writeHandler.onWrite(currentFrame, outputBuffer)) {
-                // We are done for this round because not all data of the current frame fits in the outputBuffer
-                return;
-            }
-
-            // The current frame has been written completely. So lets null it and lets try to write another frame.
-            currentFrame = null;
-        }
+    @Override
+    public void offer(byte[] bytes, boolean urgent) {
+        throw new UnsupportedOperationException();
     }
 
     /**

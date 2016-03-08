@@ -16,8 +16,6 @@
 
 package com.hazelcast.nio.tcp;
 
-import com.hazelcast.client.impl.protocol.ClientMessage;
-
 import java.nio.ByteBuffer;
 
 /**
@@ -25,10 +23,10 @@ import java.nio.ByteBuffer;
  *
  * @see NewClientReadHandler
  */
-public class NewClientWriteHandler implements WriteHandler<ClientMessage> {
+public class NewClientWriteHandler implements WriteHandler {
 
     @Override
-    public boolean onWrite(ClientMessage frame, ByteBuffer dst) throws Exception {
-        return frame.writeTo(dst);
+    public int onWrite(byte[] src, int offset, ByteBuffer dst) throws Exception {
+        throw new UnsupportedOperationException();
     }
 }

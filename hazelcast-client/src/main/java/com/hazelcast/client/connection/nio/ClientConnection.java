@@ -115,6 +115,11 @@ public class ClientConnection implements Connection {
         return true;
     }
 
+    @Override
+    public boolean write(byte[] bytes, boolean urgent) {
+        throw new UnsupportedOperationException();
+    }
+
     public void init() throws IOException {
         final ByteBuffer buffer = ByteBuffer.allocate(3);
         buffer.put(stringToBytes(Protocols.CLIENT_BINARY_NEW));
