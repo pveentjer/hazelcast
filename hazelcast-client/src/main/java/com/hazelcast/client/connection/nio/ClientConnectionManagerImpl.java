@@ -292,7 +292,7 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
             }
             socketChannel.configureBlocking(false);
             socket.setSoTimeout(0);
-            clientConnection.getReadHandler().register();
+            clientConnection.getReadHandler().init();
             clientConnection.init();
             return clientConnection;
         } catch (Exception e) {

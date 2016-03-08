@@ -52,7 +52,7 @@ import static java.lang.Math.max;
 /**
  * The writing side of the {@link TcpIpConnection}.
  */
-public final class NonBlockingSocketWriter extends AbstractHandler implements Runnable, SocketWriter {
+public final class NonBlockingSocketWriter extends AbstractHandler implements SocketWriter {
 
     private static final long TIMEOUT = 3;
 
@@ -413,15 +413,6 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
             // The current frame has been written completely. So lets null it and lets try to write another frame.
             currentFrame = null;
-        }
-    }
-
-    @Override
-    public void run() {
-        try {
-            handle();
-        } catch (Throwable t) {
-            onFailure(t);
         }
     }
 

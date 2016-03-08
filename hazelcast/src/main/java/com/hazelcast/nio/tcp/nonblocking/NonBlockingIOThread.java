@@ -19,9 +19,9 @@ package com.hazelcast.nio.tcp.nonblocking;
 import com.hazelcast.core.HazelcastException;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.metrics.ProbeLevel;
+import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.spi.impl.operationexecutor.OperationHostileThread;
-import com.hazelcast.internal.util.counters.SwCounter;
 
 import java.io.IOException;
 import java.nio.channels.CancelledKeyException;
@@ -48,7 +48,7 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
     int id;
 
     @Probe(name = "taskQueueSize")
-    private final Queue<Runnable> taskQueue = new ConcurrentLinkedQueue<Runnable>();
+    private final Queue<Object> taskQueue = new ConcurrentLinkedQueue<Object>();
     @Probe
     private final SwCounter eventCount = newSwCounter();
     @Probe
@@ -158,6 +158,17 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
         }
     }
 
+    public void addTask(SelectionHandler handler) {
+        taskQueue.add(handler);
+    }
+
+    public void addTaskAndWakeup(SelectionHandler task) {
+        taskQueue.add(task);
+        if (!selectNow) {
+            selector.wakeup();
+        }
+    }
+
     @Override
     public final void run() {
         // This outer loop is a bit complex but it takes care of a lot of stuff:
@@ -235,7 +246,7 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
 
     private void processTaskQueue() {
         while (!isInterrupted()) {
-            Runnable task = taskQueue.poll();
+            Object task = taskQueue.poll();
             if (task == null) {
                 return;
             }
@@ -243,22 +254,24 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
         }
     }
 
-    private void executeTask(Runnable task) {
+    private void executeTask(Object task) {
         completedTaskCount.inc();
 
-        NonBlockingIOThread target = getTargetIOThread(task);
-        if (target == this) {
-            task.run();
-        } else {
-            target.addTaskAndWakeup(task);
+        if (task.getClass() == RunnableWrapper.class) {
+            ((RunnableWrapper) task).runnable.run();
+            return;
         }
-    }
 
-    private NonBlockingIOThread getTargetIOThread(Runnable task) {
-        if (task instanceof MigratableHandler) {
-            return ((MigratableHandler) task).getOwner();
+        SelectionHandler handler = (SelectionHandler) task;
+        NonBlockingIOThread owner = handler.getOwner();
+        if (owner == this) {
+            try {
+                handler.handle();
+            } catch (Exception e) {
+                handler.onFailure(e);
+            }
         } else {
-            return this;
+            owner.addTaskAndWakeup(handler);
         }
     }
 
@@ -309,5 +322,13 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
     @Override
     public String toString() {
         return getName();
+    }
+
+    static final class RunnableWrapper {
+        private final Runnable runnable;
+
+        RunnableWrapper(Runnable runnable) {
+            this.runnable = runnable;
+        }
     }
 }

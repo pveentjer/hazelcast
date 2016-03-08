@@ -49,9 +49,17 @@ public class ClientReadHandler
         });
     }
 
-    @Override
-    public void run() {
-        registerOp(SelectionKey.OP_READ);
+    public void init() {
+        ioThread.addTaskAndWakeup(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    registerOp(SelectionKey.OP_READ);
+                } catch (Throwable t) {
+                    onFailure(t);
+                }
+            }
+        });
     }
 
     @Override

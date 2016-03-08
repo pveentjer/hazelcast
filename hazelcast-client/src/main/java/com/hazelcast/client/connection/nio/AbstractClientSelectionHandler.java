@@ -23,15 +23,16 @@ import com.hazelcast.nio.tcp.SocketChannelWrapper;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingIOThread;
 import com.hazelcast.nio.tcp.nonblocking.SelectionHandler;
 
+import java.io.IOException;
 import java.nio.channels.SelectionKey;
 
-public abstract class AbstractClientSelectionHandler implements SelectionHandler, Runnable {
+public abstract class AbstractClientSelectionHandler implements SelectionHandler {
 
     protected final ILogger logger;
     protected final SocketChannelWrapper socketChannel;
     protected final ClientConnection connection;
     protected final ClientConnectionManager connectionManager;
-    private final NonBlockingIOThread ioThread;
+    protected final NonBlockingIOThread ioThread;
     private SelectionKey sk;
 
     public AbstractClientSelectionHandler(final ClientConnection connection, NonBlockingIOThread ioThread,
@@ -43,7 +44,29 @@ public abstract class AbstractClientSelectionHandler implements SelectionHandler
         this.logger = loggingService.getLogger(getClass().getName());
     }
 
+
+    final void unregisterOp(int operation) throws IOException {
+        sk.interestOps(sk.interestOps() & ~operation);
+    }
+
+
     protected void shutdown() {
+    }
+
+    @Override
+    public void requestMigration(NonBlockingIOThread newOwner) {
+        //ignore
+    }
+
+    @Override
+    public NonBlockingIOThread getOwner() {
+        return ioThread;
+    }
+
+    @Override
+    public long getEventCount() {
+        //return 0; we are not going to participae
+        return 0;
     }
 
     @Override
