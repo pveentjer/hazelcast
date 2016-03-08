@@ -27,6 +27,7 @@ import com.hazelcast.nio.tcp.NewClientWriteHandler;
 import com.hazelcast.nio.tcp.SocketWriter;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 import com.hazelcast.nio.tcp.WriteHandler;
+import com.hazelcast.util.Clock;
 
 import java.io.IOException;
 import java.net.SocketException;
