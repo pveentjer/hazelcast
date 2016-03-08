@@ -427,13 +427,14 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
             // Lets write the data to the outputBuffer.
             frameOffset = writeHandler.onWrite(frame, frameOffset, outputBuffer);
-            if (frameOffset > 0) {
+            if (frameOffset >= 0) {
                 // We are done for this round because not all data of the current frame fits in the outputBuffer
                 return;
             }
 
             // The current frame has been written completely. So lets null it and lets try to write another frame.
             frame = null;
+            frameOffset = 0;
         }
     }
 

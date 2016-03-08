@@ -38,7 +38,7 @@ public class MemberWriteHandler implements WriteHandler {
             // there is enough space in the buffer, we can write everything
             dst.put(src, offset, bytesPending);
             // we return 0 to indicate we are done.
-            return 0;
+            return -1;
         } else {
             // there is not enough space in the buffer.
             dst.put(src, offset, spaceInBuffer);
