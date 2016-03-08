@@ -64,7 +64,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     public final Queue<OutboundFrame> urgentWriteQueue = new ConcurrentLinkedQueue<OutboundFrame>();
     @Probe(name = "eventCount")
     private final SwCounter eventCount = newSwCounter();
-    private final AtomicBoolean scheduled = new AtomicBoolean(false);
+    private final AtomicBoolean informSelector = new AtomicBoolean(true);
     private ByteBuffer outputBuffer;
     @Probe(name = "bytesWritten")
     private final SwCounter bytesWritten = newSwCounter();
@@ -83,6 +83,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     // it is accessed by any other thread but only that thread managed to cas the scheduled flag to true.
     // This prevents running into an NonBlockingIOThread that is migrating.
     private NonBlockingIOThread newOwner;
+    private boolean ready;
 
     NonBlockingSocketWriter(TcpIpConnection connection, NonBlockingIOThread ioThread, MetricsRegistry metricsRegistry) {
         super(connection, ioThread, SelectionKey.OP_WRITE);
@@ -139,15 +140,15 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
         return bytesPending;
     }
 
-    @Probe(name = "idleTimeMs", level = DEBUG)
-    private long idleTimeMs() {
-        return max(System.currentTimeMillis() - lastWriteTime, 0);
-    }
-
-    @Probe(name = "isScheduled", level = DEBUG)
-    private long isScheduled() {
-        return scheduled.get() ? 1 : 0;
-    }
+//    @Probe(name = "idleTimeMs", level = DEBUG)
+//    private long idleTimeMs() {
+//        return max(System.currentTimeMillis() - lastWriteTime, 0);
+//    }
+//
+//    @Probe(name = "isScheduled", level = DEBUG)
+//    private long isScheduled() {
+//        return scheduled.get() ? 1 : 0;
+//    }
 
     // accessed from ReadHandler and SocketConnector
     @Override
@@ -207,6 +208,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
             writeQueue.offer(frame);
         }
 
+
         schedule();
     }
 
@@ -249,69 +251,62 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
      * If the WriteHandler already is scheduled, the call is ignored.
      */
     private void schedule() {
-        if (scheduled.get()) {
-            // So this WriteHandler is still scheduled, we don't need to schedule it again
-            return;
+        if (informSelector.compareAndSet(true, false)) {
+            // we don't have to call wake up if this WriteHandler is
+            // already in the task queue.
+            // we can have a counter to check this later on.
+            // for now, wake up regardless.
+            ioThread.addTaskAndWakeup(this);
         }
-
-        if (!scheduled.compareAndSet(false, true)) {
-            // Another thread already has scheduled this WriteHandler, we are done. It
-            // doesn't matter which thread does the scheduling, as long as it happens.
-            return;
-        }
-
-        // We managed to schedule this WriteHandler. This means we need to add a task to
-        // the ioThread and give it a kick so that it processes our frames.
-        ioThread.addTaskAndWakeup(this);
     }
-
-    /**
-     * Tries to unschedule this WriteHandler.
-     * <p/>
-     * It will only be unscheduled if:
-     * - the outputBuffer is empty
-     * - there are no pending frames.
-     * <p/>
-     * If the outputBuffer is dirty then it will register itself for an OP_WRITE since we are interested in knowing
-     * if there is more space in the socket output buffer.
-     * If the outputBuffer is not dirty, then it will unregister itself from an OP_WRITE since it isn't interested
-     * in space in the socket outputBuffer.
-     * <p/>
-     * This call is only made by the IO thread.
-     */
-    private void unschedule() throws IOException {
-        if (dirtyOutputBuffer() || currentFrame != null) {
-            // Because not all data was written to the socket, we need to register for OP_WRITE so we get
-            // notified when the socketChannel is ready for more data.
-            registerOp(SelectionKey.OP_WRITE);
-
-            // If the outputBuffer is not empty, we don't need to unschedule ourselves. This is because the
-            // WriteHandler will be triggered by a nio write event to continue sending data.
-            return;
-        }
-
-        // since everything is written, we are not interested anymore in write-events, so lets unsubscribe
-        unregisterOp(SelectionKey.OP_WRITE);
-        // So the outputBuffer is empty, so we are going to unschedule ourselves.
-        scheduled.set(false);
-
-        if (writeQueue.isEmpty() && urgentWriteQueue.isEmpty()) {
-            // there are no remaining frames, so we are done.
-            return;
-        }
-
-        // So there are frames, but we just unscheduled ourselves. If we don't try to reschedule, then these
-        // Frames are at risk not to be send.
-        if (!scheduled.compareAndSet(false, true)) {
-            //someone else managed to schedule this WriteHandler, so we are done.
-            return;
-        }
-
-        // We managed to reschedule. So lets add ourselves to the ioThread so we are processed again.
-        // We don't need to call wakeup because the current thread is the IO-thread and the selectionQueue will be processed
-        // till it is empty. So it will also pick up tasks that are added while it is processing the selectionQueue.
-        ioThread.addTask(this);
-    }
+//
+//    /**
+//     * Tries to unschedule this WriteHandler.
+//     * <p/>
+//     * It will only be unscheduled if:
+//     * - the outputBuffer is empty
+//     * - there are no pending frames.
+//     * <p/>
+//     * If the outputBuffer is dirty then it will register itself for an OP_WRITE since we are interested in knowing
+//     * if there is more space in the socket output buffer.
+//     * If the outputBuffer is not dirty, then it will unregister itself from an OP_WRITE since it isn't interested
+//     * in space in the socket outputBuffer.
+//     * <p/>
+//     * This call is only made by the IO thread.
+//     */
+//    private void unschedule() throws IOException {
+//        if (dirtyOutputBuffer() || currentFrame != null) {
+//            // Because not all data was written to the socket, we need to register for OP_WRITE so we get
+//            // notified when the socketChannel is ready for more data.
+//            registerOp(SelectionKey.OP_WRITE);
+//
+//            // If the outputBuffer is not empty, we don't need to unschedule ourselves. This is because the
+//            // WriteHandler will be triggered by a nio write event to continue sending data.
+//            return;
+//        }
+//
+//        // since everything is written, we are not interested anymore in write-events, so lets unsubscribe
+//        unregisterOp(SelectionKey.OP_WRITE);
+//        // So the outputBuffer is empty, so we are going to unschedule ourselves.
+//        scheduled.set(false);
+//
+//        if (writeQueue.isEmpty() && urgentWriteQueue.isEmpty()) {
+//            // there are no remaining frames, so we are done.
+//            return;
+//        }
+//
+//        // So there are frames, but we just unscheduled ourselves. If we don't try to reschedule, then these
+//        // Frames are at risk not to be send.
+//        if (!scheduled.compareAndSet(false, true)) {
+//            //someone else managed to schedule this WriteHandler, so we are done.
+//            return;
+//        }
+//
+//        // We managed to reschedule. So lets add ourselves to the ioThread so we are processed again.
+//        // We don't need to call wakeup because the current thread is the IO-thread and the selectionQueue will be processed
+//        // till it is empty. So it will also pick up tasks that are added while it is processing the selectionQueue.
+//        ioThread.addTask(this);
+//    }
 
     @Override
     public long getEventCount() {
@@ -339,11 +334,14 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
             writeOutputBufferToSocket();
         }
 
-        if (newOwner == null) {
-            unschedule();
-        } else {
-            startMigration();
-        }
+        ready = false;
+        registerOp(SelectionKey.OP_WRITE);
+
+//        if (newOwner == null) {
+//            unschedule();
+//        } else {
+//            startMigration();
+//        }
     }
 
     private void startMigration() throws IOException {
@@ -419,7 +417,13 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     @Override
     public void run() {
         try {
-            handle();
+            informSelector.set(true);
+            if (ready) {
+                handle();
+            } else {
+                registerOp(SelectionKey.OP_WRITE);
+            }
+            ready = false;
         } catch (Throwable t) {
             onFailure(t);
         }
