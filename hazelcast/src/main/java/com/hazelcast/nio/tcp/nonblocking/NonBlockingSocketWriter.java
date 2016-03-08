@@ -262,7 +262,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements So
 
         // We managed to schedule this WriteHandler. This means we need to add a task to
         // the ioThread and give it a kick so that it processes our frames.
-        ioThread.addTaskAndWakeup(this);
+        ioThread.addHandlerAndWakeup(this);
     }
 
     /**
@@ -310,7 +310,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements So
         // We managed to reschedule. So lets add ourselves to the ioThread so we are processed again.
         // We don't need to call wakeup because the current thread is the IO-thread and the selectionQueue will be processed
         // till it is empty. So it will also pick up tasks that are added while it is processing the selectionQueue.
-        ioThread.addTask(this);
+        ioThread.addHandler(this);
     }
 
     @Override

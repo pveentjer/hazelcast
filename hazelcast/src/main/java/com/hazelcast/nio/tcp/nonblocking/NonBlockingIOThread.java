@@ -135,16 +135,6 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
     }
 
     /**
-     * Adds a task to this NonBlockingIOThread without notifying the thread.
-     *
-     * @param task the task to add
-     * @throws NullPointerException if task is null
-     */
-    public final void addTask(Runnable task) {
-        taskQueue.add(task);
-    }
-
-    /**
      * Adds a task to be executed by the NonBlockingIOThread and wakes up the selector so that it will
      * eventually pick up the task.
      *
@@ -152,18 +142,20 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
      * @throws NullPointerException if task is null
      */
     public void addTaskAndWakeup(Runnable task) {
-        taskQueue.add(task);
+        taskQueue.add(new RunnableWrapper(task));
+
         if (!selectNow) {
             selector.wakeup();
         }
     }
 
-    public void addTask(SelectionHandler handler) {
+    public void addHandler(SelectionHandler handler) {
         taskQueue.add(handler);
     }
 
-    public void addTaskAndWakeup(SelectionHandler task) {
-        taskQueue.add(task);
+    public void addHandlerAndWakeup(SelectionHandler handler) {
+        taskQueue.add(handler);
+
         if (!selectNow) {
             selector.wakeup();
         }
@@ -271,7 +263,7 @@ public class NonBlockingIOThread extends Thread implements OperationHostileThrea
                 handler.onFailure(e);
             }
         } else {
-            owner.addTaskAndWakeup(handler);
+            owner.addHandlerAndWakeup(handler);
         }
     }
 
