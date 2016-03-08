@@ -27,6 +27,7 @@ import com.hazelcast.nio.tcp.nonblocking.MigratableHandler;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingIOThread;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingSocketReader;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingSocketWriter;
+import com.hazelcast.nio.tcp.nonblocking.SelectionHandler;
 
 import static com.hazelcast.instance.GroupProperty.IO_BALANCER_INTERVAL_SECONDS;
 import static com.hazelcast.instance.GroupProperty.IO_THREAD_COUNT;
@@ -183,7 +184,7 @@ public class IOBalancer {
     }
 
     private void tryMigrate(LoadImbalance loadImbalance) {
-        MigratableHandler handler = strategy.findHandlerToMigrate(loadImbalance);
+        SelectionHandler handler = strategy.findHandlerToMigrate(loadImbalance);
         if (handler == null) {
             logger.finest("I/O imbalance is detected, but no suitable migration candidate is found.");
             return;

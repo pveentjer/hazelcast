@@ -40,11 +40,11 @@ class LoadImbalance {
     //least busy NonBlockingIOThread
     NonBlockingIOThread destinationSelector;
 
-    private final Map<NonBlockingIOThread, Set<MigratableHandler>> selectorToHandlers;
-    private final ItemCounter<MigratableHandler> handlerEventsCounter;
+    private final Map<NonBlockingIOThread, Set<SelectionHandler>> selectorToHandlers;
+    private final ItemCounter<SelectionHandler> handlerEventsCounter;
 
-    LoadImbalance(Map<NonBlockingIOThread, Set<MigratableHandler>> selectorToHandlers,
-                  ItemCounter<MigratableHandler> handlerEventsCounter) {
+    LoadImbalance(Map<NonBlockingIOThread, Set<SelectionHandler>> selectorToHandlers,
+                  ItemCounter<SelectionHandler> handlerEventsCounter) {
         this.selectorToHandlers = selectorToHandlers;
         this.handlerEventsCounter = handlerEventsCounter;
     }
@@ -53,7 +53,7 @@ class LoadImbalance {
      * @param selector
      * @return A set of Handlers owned by the selector
      */
-    Set<MigratableHandler> getHandlersOwnerBy(NonBlockingIOThread selector) {
+    Set<SelectionHandler> getHandlersOwnerBy(NonBlockingIOThread selector) {
         return selectorToHandlers.get(selector);
     }
 
@@ -61,7 +61,7 @@ class LoadImbalance {
      * @param handler
      * @return number of events recorded by the handler
      */
-    long getEventCount(MigratableHandler handler) {
+    long getEventCount(SelectionHandler handler) {
         return handlerEventsCounter.get(handler);
     }
 }

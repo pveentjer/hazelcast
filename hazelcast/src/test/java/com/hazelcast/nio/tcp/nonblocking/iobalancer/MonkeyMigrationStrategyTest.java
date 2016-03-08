@@ -17,7 +17,7 @@
 package com.hazelcast.nio.tcp.nonblocking.iobalancer;
 
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingIOThread;
-import com.hazelcast.nio.tcp.nonblocking.MigratableHandler;
+import com.hazelcast.nio.tcp.nonblocking.SelectionHandler;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.annotation.ParallelTest;
@@ -46,13 +46,13 @@ import static org.mockito.Mockito.mock;
 public class MonkeyMigrationStrategyTest extends HazelcastTestSupport {
     private MigrationStrategy strategy;
 
-    private Map<NonBlockingIOThread, Set<MigratableHandler>> selectorToHandlers;
-    private ItemCounter<MigratableHandler> handlerEventsCounter;
+    private Map<NonBlockingIOThread, Set<SelectionHandler>> selectorToHandlers;
+    private ItemCounter<SelectionHandler> handlerEventsCounter;
     private LoadImbalance imbalance;
 
     @Test
     public void imbalanceDetected_shouldReturnFalseWhenNoHandlerExist() {
-        selectorToHandlers.put(imbalance.sourceSelector, Collections.<MigratableHandler>emptySet());
+        selectorToHandlers.put(imbalance.sourceSelector, Collections.<SelectionHandler>emptySet());
 
         boolean imbalanceDetected = strategy.imbalanceDetected(imbalance);
         assertFalse(imbalanceDetected);
@@ -60,8 +60,8 @@ public class MonkeyMigrationStrategyTest extends HazelcastTestSupport {
 
     @Before
     public void setUp() {
-        selectorToHandlers = new HashMap<NonBlockingIOThread, Set<MigratableHandler>>();
-        handlerEventsCounter = new ItemCounter<MigratableHandler>();
+        selectorToHandlers = new HashMap<NonBlockingIOThread, Set<SelectionHandler>>();
+        handlerEventsCounter = new ItemCounter<SelectionHandler>();
         imbalance = new LoadImbalance(selectorToHandlers, handlerEventsCounter);
         imbalance.sourceSelector = mock(NonBlockingIOThread.class);
 
@@ -70,7 +70,7 @@ public class MonkeyMigrationStrategyTest extends HazelcastTestSupport {
 
     @Test
     public void imbalanceDetected_shouldReturnTrueWhenHandlerExist() {
-        MigratableHandler handler = mock(MigratableHandler.class);
+        SelectionHandler handler = mock(SelectionHandler.class);
 
         selectorToHandlers.put(imbalance.sourceSelector, setOf(handler));
         boolean imbalanceDetected = strategy.imbalanceDetected(imbalance);
@@ -79,10 +79,10 @@ public class MonkeyMigrationStrategyTest extends HazelcastTestSupport {
 
     @Test
     public void findHandlerToMigrate_shouldWorkEvenWithASingleHandlerAvailable() {
-        MigratableHandler handler = mock(MigratableHandler.class);
+        SelectionHandler handler = mock(SelectionHandler.class);
 
         selectorToHandlers.put(imbalance.sourceSelector, setOf(handler));
-        MigratableHandler handlerToMigrate = strategy.findHandlerToMigrate(imbalance);
+        SelectionHandler handlerToMigrate = strategy.findHandlerToMigrate(imbalance);
         assertEquals(handler, handlerToMigrate);
     }
 
@@ -91,18 +91,18 @@ public class MonkeyMigrationStrategyTest extends HazelcastTestSupport {
         int iterationCount = 10000;
         double toleranceFactor = 0.25d;
 
-        MigratableHandler handler1 = mock(MigratableHandler.class);
-        MigratableHandler handler2 = mock(MigratableHandler.class);
+        SelectionHandler handler1 = mock(SelectionHandler.class);
+        SelectionHandler handler2 = mock(SelectionHandler.class);
         selectorToHandlers.put(imbalance.sourceSelector, setOf(handler1, handler2));
 
         assertFairSelection(iterationCount, toleranceFactor, handler1, handler2);
     }
 
-    private void assertFairSelection(int iterationCount, double toleranceFactor, MigratableHandler handler1, MigratableHandler handler2) {
+    private void assertFairSelection(int iterationCount, double toleranceFactor, SelectionHandler handler1, SelectionHandler handler2) {
         int handler1Count = 0;
         int handler2Count = 0;
         for (int i = 0; i < iterationCount; i++) {
-            MigratableHandler candidate = strategy.findHandlerToMigrate(imbalance);
+            SelectionHandler candidate = strategy.findHandlerToMigrate(imbalance);
             if (candidate == handler1) {
                 handler1Count++;
             } else if (candidate == handler2) {

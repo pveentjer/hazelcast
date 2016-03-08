@@ -63,6 +63,10 @@ public class ClientWriteHandler extends AbstractClientSelectionHandler {
         unschedule();
     }
 
+    private ClientMessage poll() {
+        return writeQueue.poll();
+    }
+
     private void writeBuffer() throws IOException {
         while (buffer.hasRemaining() && lastMessage != null) {
             boolean complete = lastMessage.writeTo(buffer);
@@ -165,10 +169,6 @@ public class ClientWriteHandler extends AbstractClientSelectionHandler {
         // We managed to schedule this WriteHandler. This means we need to add a task to
         // the ioThread and give it a kick so that it processes our frames.
         ioThread.addTaskAndWakeup(this);
-    }
-
-    private ClientMessage poll() {
-        return writeQueue.poll();
     }
 
     @Override

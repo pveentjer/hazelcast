@@ -30,7 +30,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.logging.Level;
 
-public abstract class AbstractHandler implements MigratableHandler {
+public abstract class AbstractHandler implements SelectionHandler {
 
     protected final ILogger logger;
     protected final SocketChannelWrapper socketChannel;

@@ -18,7 +18,7 @@ package com.hazelcast.nio.tcp.nonblocking.iobalancer;
 
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.tcp.nonblocking.NonBlockingIOThread;
-import com.hazelcast.nio.tcp.nonblocking.MigratableHandler;
+import com.hazelcast.nio.tcp.nonblocking.SelectionHandler;
 import com.hazelcast.test.HazelcastParallelClassRunner;
 import com.hazelcast.test.annotation.ParallelTest;
 import com.hazelcast.test.annotation.QuickTest;
@@ -55,14 +55,14 @@ public class LoadTrackerTest {
 
     @Test
     public void testUpdateImbalance() throws Exception {
-        MigratableHandler selector1Handler1 = mock(MigratableHandler.class);
+        SelectionHandler selector1Handler1 = mock(SelectionHandler.class);
         when(selector1Handler1.getEventCount()).thenReturn(0l)
                 .thenReturn(100l);
         when(selector1Handler1.getOwner())
                 .thenReturn(selector1);
         loadTracker.addHandler(selector1Handler1);
 
-        MigratableHandler selector2Handler1 = mock(MigratableHandler.class);
+        SelectionHandler selector2Handler1 = mock(SelectionHandler.class);
         when(selector2Handler1.getEventCount())
                 .thenReturn(0l)
                 .thenReturn(200l);
@@ -70,7 +70,7 @@ public class LoadTrackerTest {
                 .thenReturn(selector2);
         loadTracker.addHandler(selector2Handler1);
 
-        MigratableHandler selector2Handler3 = mock(MigratableHandler.class);
+        SelectionHandler selector2Handler3 = mock(SelectionHandler.class);
         when(selector2Handler3.getEventCount())
                 .thenReturn(0l)
                 .thenReturn(100l);
@@ -92,18 +92,18 @@ public class LoadTrackerTest {
     // there is no point in selecting a selector with a single handler as source.
     @Test
     public void testUpdateImbalance_notUsingSingleHandlerSelectorAsSource() throws Exception {
-        MigratableHandler selector1Handler1 = mock(MigratableHandler.class);
+        SelectionHandler selector1Handler1 = mock(SelectionHandler.class);
         // the first selector has a handler with a large number of events
         when(selector1Handler1.getEventCount()).thenReturn(10000l);
         when(selector1Handler1.getOwner()).thenReturn(selector1);
         loadTracker.addHandler(selector1Handler1);
 
-        MigratableHandler selector2Handler = mock(MigratableHandler.class);
+        SelectionHandler selector2Handler = mock(SelectionHandler.class);
         when(selector2Handler.getEventCount()).thenReturn(200l);
         when(selector2Handler.getOwner()).thenReturn(selector2);
         loadTracker.addHandler(selector2Handler);
 
-        MigratableHandler selector2Handler2 = mock(MigratableHandler.class);
+        SelectionHandler selector2Handler2 = mock(SelectionHandler.class);
         when(selector2Handler2.getEventCount()).thenReturn(200l);
         when(selector2Handler2.getOwner()).thenReturn(selector2);
         loadTracker.addHandler(selector2Handler2);
