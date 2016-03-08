@@ -51,27 +51,21 @@ public class ClientWriteHandler extends AbstractClientSelectionHandler {
     @Override
     public void handle() throws Exception {
         lastHandle = Clock.currentTimeMillis();
-        if (!connection.isAlive()) {
-            return;
-        }
 
         if (lastMessage == null) {
-            lastMessage = poll();
+            lastMessage = writeQueue.poll();
         }
 
         writeBuffer();
-        unschedule();
-    }
 
-    private ClientMessage poll() {
-        return writeQueue.poll();
+        unschedule();
     }
 
     private void writeBuffer() throws IOException {
         while (buffer.hasRemaining() && lastMessage != null) {
             boolean complete = lastMessage.writeTo(buffer);
             if (complete) {
-                lastMessage = poll();
+                lastMessage = writeQueue.poll();
             } else {
                 break;
             }

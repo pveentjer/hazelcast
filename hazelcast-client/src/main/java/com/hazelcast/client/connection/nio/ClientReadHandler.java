@@ -54,7 +54,9 @@ public class ClientReadHandler
             @Override
             public void run() {
                 try {
+                    logger.warning("Starting to read");
                     registerOp(SelectionKey.OP_READ);
+                    logger.warning("Successfully reading");
                 } catch (Throwable t) {
                     onFailure(t);
                 }
@@ -65,12 +67,6 @@ public class ClientReadHandler
     @Override
     public void handle() throws Exception {
         lastHandle = Clock.currentTimeMillis();
-        if (!connection.isAlive()) {
-            if (logger.isFinestEnabled()) {
-                logger.finest("We are being asked to read, but connection is not live so we won't");
-            }
-            return;
-        }
 
         int readBytes = socketChannel.read(buffer);
         if (readBytes <= 0) {

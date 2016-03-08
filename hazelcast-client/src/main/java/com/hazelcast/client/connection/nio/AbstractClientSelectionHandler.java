@@ -24,6 +24,7 @@ import com.hazelcast.nio.tcp.nonblocking.NonBlockingIOThread;
 import com.hazelcast.nio.tcp.nonblocking.SelectionHandler;
 
 import java.io.IOException;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 
 public abstract class AbstractClientSelectionHandler implements SelectionHandler {
@@ -48,7 +49,6 @@ public abstract class AbstractClientSelectionHandler implements SelectionHandler
     final void unregisterOp(int operation) throws IOException {
         sk.interestOps(sk.interestOps() & ~operation);
     }
-
 
     protected void shutdown() {
     }
@@ -79,29 +79,20 @@ public abstract class AbstractClientSelectionHandler implements SelectionHandler
                 + connection.getEndPoint() + ", Cause:" + e);
     }
 
-    final void registerOp(final int operation) {
-        try {
-            if (!connection.isAlive()) {
-                return;
+    final void registerOp(final int operation) throws ClosedChannelException {
+        if (!connection.isAlive()) {
+            return;
+        }
+        if (sk == null) {
+            sk = socketChannel.keyFor(ioThread.getSelector());
+        }
+        if (sk == null) {
+            sk = socketChannel.register(ioThread.getSelector(), operation, this);
+        } else {
+            sk.interestOps(sk.interestOps() | operation);
+            if (sk.attachment() != this) {
+                sk.attach(this);
             }
-            if (sk == null) {
-                sk = socketChannel.keyFor(ioThread.getSelector());
-            }
-            if (sk == null) {
-                sk = socketChannel.register(ioThread.getSelector(), operation, this);
-            } else {
-                sk.interestOps(sk.interestOps() | operation);
-                if (sk.attachment() != this) {
-                    sk.attach(this);
-                }
-            }
-        } catch (Throwable e) {
-            onFailure(e);
         }
     }
-
-    public void register() {
-        ioThread.addHandlerAndWakeup(this);
-    }
-
 }
