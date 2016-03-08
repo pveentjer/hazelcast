@@ -34,7 +34,7 @@ public class ClientWriteHandler extends AbstractClientSelectionHandler {
 
     private final Queue<ClientMessage> writeQueue = new ConcurrentLinkedQueue<ClientMessage>();
 
-    private final AtomicBoolean scheduled = new AtomicBoolean(true);
+    private final AtomicBoolean scheduled = new AtomicBoolean(false);
 
     private final ByteBuffer buffer;
 

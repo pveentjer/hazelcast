@@ -50,7 +50,6 @@ public class ClientReadHandler
     }
 
     public void init() {
-        System.out.println("ClientReadHandler initializing");
         ioThread.addTaskAndWakeup(new Runnable() {
             @Override
             public void run() {
