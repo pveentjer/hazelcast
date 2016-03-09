@@ -31,18 +31,19 @@ public class MemberWriteHandler implements WriteHandler {
 
     @Override
     public int onWrite(byte[] src, int offset, ByteBuffer dst) {
-        int spaceInBuffer = dst.remaining();
+        int bufferRemaining = dst.remaining();
         int bytesPending = src.length - offset;
 
-        if (bytesPending <= spaceInBuffer) {
+        if (bytesPending <= bufferRemaining) {
             // there is enough space in the buffer, we can write everything
             dst.put(src, offset, bytesPending);
-            // we return 0 to indicate we are done.
+            // we return -1 to indicate we are done.
             return -1;
         } else {
-            // there is not enough space in the buffer.
-            dst.put(src, offset, spaceInBuffer);
-            return offset + spaceInBuffer;
+            // there is not enough space in the buffer, so lets write as much bytes as we can
+            dst.put(src, offset, bufferRemaining);
+            // and return the new offset so we can continue where we stopped.
+            return offset + bufferRemaining;
         }
     }
 }
