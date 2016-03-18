@@ -50,7 +50,7 @@ import static java.lang.Math.min;
  */
 final class InvocationFuture<E> implements InternalCompletableFuture<E> {
 
-    private final Executor asyncExecutor = Executors.newFixedThreadPool(10);
+    private static final Executor asyncExecutor = Executors.newFixedThreadPool(10);
 
     private static final int MAX_CALL_TIMEOUT_EXTENSION = 60 * 1000;
 
