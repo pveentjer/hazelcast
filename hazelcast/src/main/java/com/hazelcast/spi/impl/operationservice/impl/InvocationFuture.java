@@ -27,6 +27,7 @@ import com.hazelcast.util.ExceptionUtil;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -48,6 +49,8 @@ import static java.lang.Math.min;
  * @param <E>
  */
 final class InvocationFuture<E> implements InternalCompletableFuture<E> {
+
+    private final Executor asyncExecutor = Executors.newFixedThreadPool(10);
 
     private static final int MAX_CALL_TIMEOUT_EXTENSION = 60 * 1000;
 
@@ -108,7 +111,7 @@ final class InvocationFuture<E> implements InternalCompletableFuture<E> {
 
     @Override
     public void andThen(ExecutionCallback<E> callback) {
-        andThen(callback, operationService.asyncExecutor);
+        andThen(callback,asyncExecutor);
     }
 
     private void runAsynchronous(final ExecutionCallback<E> callback, Executor executor) {
