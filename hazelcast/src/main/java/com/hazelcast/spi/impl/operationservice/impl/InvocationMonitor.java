@@ -78,7 +78,7 @@ public class InvocationMonitor {
 
         metricsRegistry.scanAndRegister(this, "operation.invocations");
 
-        monitorThread.start();
+        //monitorThread.start();
     }
 
     private long initSlowInvocationThresholdMs(GroupProperties props) {
