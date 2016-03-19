@@ -23,8 +23,8 @@ import com.hazelcast.logging.LoggingService;
 import com.hazelcast.nio.IOService;
 import com.hazelcast.nio.tcp.IOThreadingModel;
 import com.hazelcast.nio.tcp.SocketReader;
-import com.hazelcast.nio.tcp.TcpIpConnection;
 import com.hazelcast.nio.tcp.SocketWriter;
+import com.hazelcast.nio.tcp.TcpIpConnection;
 import com.hazelcast.nio.tcp.nonblocking.iobalancer.IOBalancer;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
@@ -71,6 +71,27 @@ public class NonBlockingIOThreadingModel implements IOThreadingModel {
         this.logger = loggingService.getLogger(NonBlockingIOThreadingModel.class);
         this.inputThreads = new NonBlockingIOThread[ioService.getInputSelectorThreadCount()];
         this.outputThreads = new NonBlockingIOThread[ioService.getOutputSelectorThreadCount()];
+
+        new Thread() {
+            {
+                setDaemon(true);
+            }
+
+            public void run() {
+                for (; ; ) {
+                    try {
+                        Thread.sleep(10000);
+                    } catch (InterruptedException e) {
+                    }
+
+                    for (NonBlockingIOThread out : outputThreads) {
+                        Exception exception = new Exception();
+                        exception.setStackTrace(out.getStackTrace());
+                        logger.severe(exception);
+                    }
+                }
+            }
+        }.start();
     }
 
     public void setInputSelectNow(boolean enabled) {
