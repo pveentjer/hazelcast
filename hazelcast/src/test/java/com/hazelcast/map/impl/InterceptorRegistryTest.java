@@ -201,7 +201,7 @@ public class InterceptorRegistryTest extends HazelcastTestSupport {
         OperationRunner[] operationRunners = new OperationRunner[]{operationRunner};
 
         return new PartitionOperationThread("threadName", 0, queue, LOGGER, hazelcastThreadGroup,
-                nodeExtension, operationRunners);
+                nodeExtension, operationRunners, null);
     }
 
     private static class TestMapInterceptor implements MapInterceptor {

@@ -19,14 +19,19 @@ package com.hazelcast.spi.impl.operationexecutor.impl;
 import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.instance.NodeExtension;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.nio.Packet;
+import com.hazelcast.spi.Operation;
+import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
+
+import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutputMemoryError;
 
 /**
  * An {@link OperationThread} for non partition specific operations.
  */
 public final class GenericOperationThread extends OperationThread {
 
-    private final OperationRunner operationRunner;
+    final OperationRunner operationRunner;
 
     public GenericOperationThread(String name, int threadId, OperationQueue queue, ILogger logger,
                                   HazelcastThreadGroup threadGroup, NodeExtension nodeExtension,
@@ -36,7 +41,33 @@ public final class GenericOperationThread extends OperationThread {
     }
 
     @Override
-    public OperationRunner getOperationRunner(int partitionId) {
-        return operationRunner;
+    protected void process(Object task) {
+        try {
+            if (task.getClass() == Packet.class) {
+                Packet packet = (Packet) task;
+                operationRunner.run(packet);
+                completedPacketCount.inc();
+            } else if (task instanceof Operation) {
+                Operation operation = (Operation) task;
+                operationRunner.run(operation);
+                completedOperationCount.inc();
+            } else if (task instanceof PartitionSpecificRunnable) {
+                PartitionSpecificRunnable partitionSpecificRunnable = (PartitionSpecificRunnable) task;
+                operationRunner.run(partitionSpecificRunnable);
+                completedPartitionSpecificRunnableCount.inc();
+            } else if (task instanceof Runnable) {
+                Runnable runnable = (Runnable) task;
+                runnable.run();
+                completedRunnableCount.inc();
+            } else {
+                throw new IllegalStateException("Unhandled task type for task:" + task);
+            }
+
+            completedTotalCount.inc();
+        } catch (Throwable t) {
+            errorCount.inc();
+            inspectOutputMemoryError(t);
+            logger.severe("Failed to process packet: " + task + " on " + getName(), t);
+        }
     }
 }

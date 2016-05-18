@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static com.hazelcast.spi.Operation.GENERIC_PARTITION_ID;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.fail;
 
 @RunWith(HazelcastSerialClassRunner.class)
 @Category(QuickTest.class)
@@ -92,6 +93,7 @@ public class OperationExecutorImpl_RunOrExecuteTest extends OperationExecutorImp
 
     @Test
     public void whenGenericOperation_andCallingFromOperationHostileThread() {
+        fail();
         initExecutor();
 
         final AtomicReference<Thread> executingThread = new AtomicReference<Thread>();
@@ -185,6 +187,7 @@ public class OperationExecutorImpl_RunOrExecuteTest extends OperationExecutorImp
 
     @Test
     public void whenPartitionOperation_andCallingFromPartitionOperationThread_andWrongPartition() {
+        fail();
         initExecutor();
 
         final AtomicReference<Thread> executingThread = new AtomicReference<Thread>();
@@ -210,6 +213,8 @@ public class OperationExecutorImpl_RunOrExecuteTest extends OperationExecutorImp
 
     @Test
     public void whenPartitionOperation_andCallingFromOperationHostileThread() {
+        fail();
+
         initExecutor();
 
         final AtomicReference<Thread> executingThread = new AtomicReference<Thread>();

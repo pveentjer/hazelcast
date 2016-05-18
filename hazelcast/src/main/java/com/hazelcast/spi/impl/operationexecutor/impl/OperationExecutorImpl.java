@@ -16,6 +16,9 @@
 
 package com.hazelcast.spi.impl.operationexecutor.impl;
 
+import com.hazelcast.concurrent.atomiclong.operations.AddAndGetOperation;
+import com.hazelcast.concurrent.atomiclong.operations.GetOperation;
+import com.hazelcast.concurrent.atomiclong.operations.SetOperation;
 import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.instance.NodeExtension;
 import com.hazelcast.internal.metrics.MetricsProvider;
@@ -40,9 +43,12 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.MANDATORY;
 import static com.hazelcast.spi.properties.GroupProperty.GENERIC_OPERATION_THREAD_COUNT;
+import static com.hazelcast.spi.properties.GroupProperty.OPERATION_CALLER_RUNS;
 import static com.hazelcast.spi.properties.GroupProperty.PARTITION_COUNT;
 import static com.hazelcast.spi.properties.GroupProperty.PARTITION_OPERATION_THREAD_COUNT;
 import static com.hazelcast.spi.properties.GroupProperty.PRIORITY_GENERIC_OPERATION_THREAD_COUNT;
@@ -68,11 +74,50 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * generic operation threads: these threads are responsible for executing operations that are not
  * specific to a partition. E.g. a heart beat.
  * </li>
- *
  * </ol>
+ *
+ * <h1>Caller runs</h1>
+ * In older versions of Hazelcast a partition specific operation always gets executed by an partition operation-thread.
+ * However this has a significant overhead because the task needs to be offloaded from the userthread to the operation thread
+ * and the response of the operation needs to wakeup the user thread if it is blocking on that result. To reduce this
+ * overhead a userthread is allowed to execute a partition specific operation under the condition that it can acquire the
+ * partition lock.
+ *
+ * <h2>Generic OperationRunner</h2>
+ * If the outer call is a generic call, no OperationRunner is set on a threadlocal because a generic operation-runner is used.
+ * The problem here is that these calls are invisible to the system since generic operation runners aren't sampled,
+ *
+ * <h2>Partition OperationRunner</h2>
+ * The PartitionSpecific operation runner needs to be set on a ThreadLocal of the user thread so that the OperationExecutor
+ * can detect if there is a nested call is happening. So if there is no nested call, a user thread can execute an operation
+ * on any partition (local + unlocked), however when there is a nested call (e.g. a entry processor doing a map.get), then the
+ * nested call is only allowed to access the same partition.
+ *
+ * The reason behind this restriction is that otherwise the system could easily run into a deadlock. Imagine 2 user threads and
+ * the first one does an entry processor an partition A and a nested call on B, and the other user thread doing an entry processor
+ * on partition B and a nested call on A, then you have a deadlock. Because the nested invocations can't every complete. It
+ * doesn't matter if the nested operations get offloaded to the partition thread or not.
+ *
+ * todo:
+ * - probe for number of conflicts
+ * - deadlock prevention for caller runs
+ * - support for nested calls in same partition:
+ * - this should be fixed now. Only the outer call places and removed the OperationRunner on the thread-local
+ * - support for data-structures other than IAtomicLong
+ * - better mechanism for the partition thread to 'idle' when his partition locked by user-thread.
+ * - better mechanism for triggering the optimization.
+ * - instead of using AtomicReference as partitionLock, use an AtomicReferenceArray to prevent false sharing.
  */
 @SuppressWarnings("checkstyle:methodcount")
 public final class OperationExecutorImpl implements OperationExecutor, MetricsProvider {
+
+    public static final ThreadLocal<OperationRunnerReference> PARTITION_OPERATION_RUNNER_THREAD_LOCAL
+            = new ThreadLocal<OperationRunnerReference>() {
+        @Override
+        protected OperationRunnerReference initialValue() {
+            return new OperationRunnerReference();
+        }
+    };
 
     private static final int TERMINATION_TIMEOUT_SECONDS = 3;
 
@@ -93,6 +138,12 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
     private final OperationRunner adHocOperationRunner;
     private final int priorityThreadCount;
 
+    private final AtomicReference<Thread>[] partitionLocks;
+    private final boolean callerRuns;
+
+    @Probe
+    private final AtomicLong conflictCount = new AtomicLong();
+
     public OperationExecutorImpl(HazelcastProperties properties,
                                  LoggingService loggerService,
                                  Address thisAddress,
@@ -102,6 +153,9 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         this.thisAddress = thisAddress;
         this.logger = loggerService.getLogger(OperationExecutorImpl.class);
 
+        this.callerRuns = properties.getBoolean(OPERATION_CALLER_RUNS);
+        this.partitionLocks = newPartitionLocks(properties);
+
         this.adHocOperationRunner = operationRunnerFactory.createAdHocRunner();
 
         this.partitionOperationRunners = initPartitionOperationRunners(properties, operationRunnerFactory);
@@ -110,6 +164,18 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         this.priorityThreadCount = properties.getInteger(PRIORITY_GENERIC_OPERATION_THREAD_COUNT);
         this.genericOperationRunners = initGenericOperationRunners(properties, operationRunnerFactory);
         this.genericThreads = initGenericThreads(threadGroup, nodeExtension);
+    }
+
+    private AtomicReference<Thread>[] newPartitionLocks(HazelcastProperties properties) {
+        if (!callerRuns) {
+            return null;
+        }
+
+        AtomicReference<Thread>[] partitionLocks = new AtomicReference[properties.getInteger(PARTITION_COUNT)];
+        for (int k = 0; k < partitionLocks.length; k++) {
+            partitionLocks[k] = new AtomicReference<Thread>();
+        }
+        return partitionLocks;
     }
 
     private OperationRunner[] initPartitionOperationRunners(HazelcastProperties properties,
@@ -155,7 +221,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
             OperationQueue operationQueue = new DefaultOperationQueue(normalQueue, new ConcurrentLinkedQueue<Object>());
 
             PartitionOperationThread partitionThread = new PartitionOperationThread(threadName, threadId, operationQueue, logger,
-                    threadGroup, nodeExtension, partitionOperationRunners);
+                    threadGroup, nodeExtension, partitionOperationRunners, partitionLocks);
 
             threads[threadId] = partitionThread;
             normalQueue.setConsumerThread(partitionThread);
@@ -224,7 +290,6 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
     public OperationRunner[] getGenericOperationRunners() {
         return genericOperationRunners;
     }
-
 
     @Override
     public void scan(LiveOperations result) {
@@ -384,7 +449,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         }
 
         Thread currentThread = Thread.currentThread();
-        if (!(currentThread instanceof OperationThread)) {
+        if (currentThread.getClass() != GenericOperationThread.class) {
             // if thread is not an operation thread, we return the adHocOperationRunner
             return adHocOperationRunner;
         }
@@ -392,17 +457,79 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         // It is a generic operation and we are running on an operation-thread. So we can just return the operation-runner
         // for that thread. There won't be any partition-conflict since generic operations are allowed to be executed by
         // a partition-specific operation-runner.
-        OperationThread operationThread = (OperationThread) currentThread;
-        return operationThread.currentRunner;
+        return ((GenericOperationThread) currentThread).operationRunner;
     }
 
     @Override
     public void runOrExecute(Operation op) {
-        if (isRunAllowed(op)) {
-            run(op);
-        } else {
-            execute(op);
+        Thread currentThread = Thread.currentThread();
+
+        if (currentThread instanceof OperationHostileThread) {
+            // OperationHostileThreads are not allowed to run any operation
+            throw new IllegalThreadStateException("Can't call runOrExecute from " + currentThread.getName() + " for:" + op);
         }
+
+        OperationRunnerReference ref = PARTITION_OPERATION_RUNNER_THREAD_LOCAL.get();
+        if (ref.runner == null) {
+            runOrExecuteNotNested(op, currentThread, ref);
+        } else {
+            runOrExecuteNested(op, currentThread, ref.runner);
+        }
+    }
+
+    private void runOrExecuteNotNested(Operation op, Thread currentThread, OperationRunnerReference runnerRef) {
+        int partitionId = op.getPartitionId();
+
+        if (partitionId < 0) {
+            // it is a generic call and there is no nesting. So we can run it directly
+            run(op);
+            return;
+        }
+
+        if (callerRuns && isCallerRunsOp(op)) {
+            OperationRunner runner = partitionOperationRunners[partitionId];
+
+            AtomicReference<Thread> partitionLock = partitionLocks[partitionId];
+            if (partitionLock.compareAndSet(null, currentThread)) {
+                // we successfully managed to lock, so we can run the operation.
+                runnerRef.runner = runner;
+                try {
+                    runner.run(op);
+                } finally {
+                    partitionLock.set(null);
+                    runnerRef.runner = null;
+                }
+            } else {
+                // we failed to acquire the lock. So lets offload it.
+                conflictCount.incrementAndGet();
+                partitionThreads[toPartitionThreadIndex(partitionId)].queue.add(op, op.isUrgent());
+            }
+        } else {
+            // caller runs can't be applied.  So lets offload it.
+            partitionThreads[toPartitionThreadIndex(partitionId)].queue.add(op, op.isUrgent());
+        }
+    }
+
+    private void runOrExecuteNested(Operation op, Thread currentThread, OperationRunner runner) {
+        int partitionId = op.getPartitionId();
+
+        if (partitionId < 0) {
+            // a nested generic operation is not allowed from an outer partition operation because it could self deadlock.
+            throw new IllegalThreadStateException("Can't call runOrExecute from " + currentThread.getName() + " for:" + op);
+        }
+
+        if (partitionId != runner.getPartitionId()) {
+            throw new IllegalThreadStateException("Can't call runOrExecute from " + currentThread.getName() + " for:" + op);
+        }
+
+        runner.run(op);
+    }
+
+    // quick hack to only allow it for certain IAtomicLong operations.
+    private boolean isCallerRunsOp(Operation op) {
+        return op.getClass() == GetOperation.class
+                || op.getClass() == SetOperation.class
+                || op.getClass() == AddAndGetOperation.class;
     }
 
     @Override
@@ -422,16 +549,21 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
             return true;
         }
 
-        // we are only allowed to execute partition aware actions on an OperationThread
         if (currentThread.getClass() != PartitionOperationThread.class) {
+//            OperationRunnerReference ref = PARTITION_OPERATION_RUNNER_THREAD_LOCAL.get();
+//            if (ref. == null) {
+//                return true;
+//            }
+//
+//            return operationRunner.getPartitionId() < 0 || operationRunner.getPartitionId() == partitionId;
             return false;
+        } else {
+            PartitionOperationThread partitionThread = (PartitionOperationThread) currentThread;
+
+            // so it's a partition operation thread, now we need to make sure that this operation thread is allowed
+            // to execute operations for this particular partitionId
+            return toPartitionThreadIndex(partitionId) == partitionThread.threadId;
         }
-
-        PartitionOperationThread partitionThread = (PartitionOperationThread) currentThread;
-
-        // so it's a partition operation thread, now we need to make sure that this operation thread is allowed
-        // to execute operations for this particular partitionId
-        return toPartitionThreadIndex(partitionId) == partitionThread.threadId;
     }
 
     @Override
@@ -461,7 +593,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         }
 
         PartitionOperationThread partitionThread = (PartitionOperationThread) currentThread;
-        OperationRunner runner = partitionThread.currentRunner;
+        OperationRunner runner = partitionThread.runnerReference.runner;
         if (runner != null) {
             // non null runner means it's a nested call
             // in this case partitionId of both inner and outer operations have to match
@@ -484,6 +616,8 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         logger.info("Starting " + genericThreads.length + " generic threads ("
                 + priorityThreadCount + " dedicated for priority tasks)");
         startAll(genericThreads);
+
+        logger.info("Caller runs optimization " + (callerRuns ? "enabled" : "disabled"));
     }
 
     private static void startAll(OperationThread[] operationThreads) {
@@ -498,6 +632,8 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         shutdownAll(genericThreads);
         awaitTermination(partitionThreads);
         awaitTermination(genericThreads);
+
+        logger.warning("Conflict count:" + conflictCount);
     }
 
     private static void shutdownAll(OperationThread[] operationThreads) {

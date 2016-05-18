@@ -95,14 +95,18 @@ public class AtomicLongProxy extends AbstractDistributedObject<AtomicLongService
 
     @Override
     public void set(long newValue) {
-        setAsync(newValue).join();
+        setAsync0(true, newValue).join();
     }
 
     @Override
     public InternalCompletableFuture<Void> setAsync(long newValue) {
+        return setAsync0(false, newValue);
+    }
+
+    private InternalCompletableFuture<Void> setAsync0(boolean sync, long newValue) {
         Operation operation = new SetOperation(name, newValue)
                 .setPartitionId(partitionId);
-        return invokeOnPartition(operation);
+        return invokeOnPartition(operation, sync);
     }
 
     @Override
@@ -161,14 +165,19 @@ public class AtomicLongProxy extends AbstractDistributedObject<AtomicLongService
 
     @Override
     public long get() {
-        return getAsync().join();
+        return getAsync0(true).join();
     }
 
     @Override
     public InternalCompletableFuture<Long> getAsync() {
+        return getAsync0(false);
+    }
+
+    private InternalCompletableFuture<Long> getAsync0(boolean sync) {
         Operation operation = new GetOperation(name)
+                .setService(getService())
                 .setPartitionId(partitionId);
-        return invokeOnPartition(operation);
+        return invokeOnPartition(operation, sync);
     }
 
     @Override

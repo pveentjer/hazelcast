@@ -71,6 +71,10 @@ public abstract class AbstractDistributedObject<S extends RemoteService> impleme
         return getNodeEngine().getOperationService().invokeOnPartition(operation);
     }
 
+    protected final <E> InternalCompletableFuture<E> invokeOnPartition(Operation operation, boolean sync) {
+        return getNodeEngine().getOperationService().invokeOnPartition(operation, sync);
+    }
+
     protected final int getPartitionId(Data key) {
         return getNodeEngine().getPartitionService().getPartitionId(key);
     }

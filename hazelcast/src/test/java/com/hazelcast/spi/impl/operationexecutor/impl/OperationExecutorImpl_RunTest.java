@@ -13,7 +13,9 @@ import java.util.concurrent.FutureTask;
 import static com.hazelcast.spi.Operation.GENERIC_PARTITION_ID;
 import static com.hazelcast.spi.properties.GroupProperty.GENERIC_OPERATION_THREAD_COUNT;
 import static com.hazelcast.spi.properties.GroupProperty.PRIORITY_GENERIC_OPERATION_THREAD_COUNT;
+import static java.lang.Boolean.*;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @RunWith(HazelcastSerialClassRunner.class)
 @Category(QuickTest.class)
@@ -104,9 +106,9 @@ public class OperationExecutorImpl_RunTest extends OperationExecutorImpl_Abstrac
             public Boolean call() throws Exception {
                 try {
                     executor.run(genericOperation);
-                    return Boolean.FALSE;
+                    return FALSE;
                 } catch (IllegalThreadStateException e) {
-                    return Boolean.TRUE;
+                    return TRUE;
                 }
             }
         });
@@ -114,7 +116,7 @@ public class OperationExecutorImpl_RunTest extends OperationExecutorImpl_Abstrac
         DummyOperationHostileThread thread = new DummyOperationHostileThread(futureTask);
         thread.start();
 
-        assertEqualsEventually(futureTask, Boolean.TRUE);
+        assertEqualsEventually(futureTask, TRUE);
     }
 
     @Test(expected = IllegalThreadStateException.class)
@@ -128,6 +130,8 @@ public class OperationExecutorImpl_RunTest extends OperationExecutorImpl_Abstrac
 
     @Test
     public void test_whenPartitionOperation_andCallingFromGenericThread() {
+        fail();
+
         initExecutor();
 
         final DummyPartitionOperation partitionOperation = new DummyPartitionOperation();
@@ -137,16 +141,16 @@ public class OperationExecutorImpl_RunTest extends OperationExecutorImpl_Abstrac
             public Object call() {
                 try {
                     executor.run(partitionOperation);
-                    return Boolean.FALSE;
+                    return FALSE;
                 } catch (IllegalThreadStateException e) {
-                    return Boolean.TRUE;
+                    return TRUE;
                 }
             }
         };
 
         executor.execute(task);
 
-        assertEqualsEventually(task, Boolean.TRUE);
+        assertEqualsEventually(task, TRUE);
     }
 
     @Test
@@ -161,16 +165,16 @@ public class OperationExecutorImpl_RunTest extends OperationExecutorImpl_Abstrac
             public Object call() {
                 try {
                     executor.run(partitionOperation);
-                    return Boolean.FALSE;
+                    return FALSE;
                 } catch (IllegalThreadStateException e) {
-                    return Boolean.TRUE;
+                    return TRUE;
                 }
             }
         };
 
         executor.execute(task);
 
-        assertEqualsEventually(task, Boolean.TRUE);
+        assertEqualsEventually(task, TRUE);
     }
 
     @Test
@@ -184,13 +188,13 @@ public class OperationExecutorImpl_RunTest extends OperationExecutorImpl_Abstrac
             @Override
             public Object call() {
                 executor.run(partitionOperation);
-                return Boolean.TRUE;
+                return TRUE;
             }
         };
 
         executor.execute(task);
 
-        assertEqualsEventually(task, Boolean.TRUE);
+        assertEqualsEventually(task, TRUE);
         assertTrueEventually(new AssertTask() {
             @Override
             public void run() throws Exception {
@@ -211,9 +215,9 @@ public class OperationExecutorImpl_RunTest extends OperationExecutorImpl_Abstrac
             public Boolean call() throws Exception {
                 try {
                     executor.run(partitionOperation);
-                    return Boolean.FALSE;
+                    return FALSE;
                 } catch (IllegalThreadStateException e) {
-                    return Boolean.TRUE;
+                    return TRUE;
                 }
             }
         });
@@ -221,6 +225,6 @@ public class OperationExecutorImpl_RunTest extends OperationExecutorImpl_Abstrac
         DummyOperationHostileThread thread = new DummyOperationHostileThread(futureTask);
         thread.start();
 
-        assertEqualsEventually(futureTask, Boolean.TRUE);
+        assertEqualsEventually(futureTask, TRUE);
     }
 }

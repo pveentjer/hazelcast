@@ -154,7 +154,7 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
             count.inc();
         }
 
-        executedOperationsCount.incrementAndGet();
+//        executedOperationsCount.incrementAndGet();
 
         boolean publishCurrentTask = publishCurrentTask();
 
@@ -163,7 +163,9 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
         }
 
         try {
-            checkNodeState(op);
+            if (node.getState() != NodeState.ACTIVE) {
+                checkNodeState(op);
+            }
 
             if (timeout(op)) {
                 return;
@@ -171,7 +173,7 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
 
             ensureNoPartitionProblems(op);
 
-            ensureQuorumPresent(op);
+            //ensureQuorumPresent(op);
 
             op.beforeRun();
 
@@ -272,7 +274,7 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
         return backupAcks;
     }
 
-   private void sendResponse(Operation op, int backupAcks) {
+    private void sendResponse(Operation op, int backupAcks) {
         try {
             Object response = op.getResponse();
             if (backupAcks > 0) {
