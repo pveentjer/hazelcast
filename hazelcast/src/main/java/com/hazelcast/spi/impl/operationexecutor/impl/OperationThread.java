@@ -22,10 +22,6 @@ import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
-import com.hazelcast.nio.Packet;
-import com.hazelcast.spi.Operation;
-import com.hazelcast.spi.impl.PartitionSpecificRunnable;
-import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
 import com.hazelcast.util.executor.HazelcastManagedThread;
 
 import java.util.concurrent.TimeUnit;
@@ -46,28 +42,24 @@ public abstract class OperationThread extends HazelcastManagedThread implements 
 
     final int threadId;
     final OperationQueue queue;
-    // This field wil only be accessed by the thread itself when doing 'self' calls. So no need
-    // for any form of synchronization.
-    OperationRunner currentRunner;
 
-    // All these counters are updated by this OperationThread (so a single writer) and are read by the MetricsRegistry.
     @Probe
-    private final SwCounter completedTotalCount = newSwCounter();
+    protected final SwCounter completedPacketCount = newSwCounter();
     @Probe
-    private final SwCounter completedPacketCount = newSwCounter();
+    protected final SwCounter completedOperationCount = newSwCounter();
     @Probe
-    private final SwCounter completedOperationCount = newSwCounter();
+    protected final SwCounter completedPartitionSpecificRunnableCount = newSwCounter();
     @Probe
-    private final SwCounter completedPartitionSpecificRunnableCount = newSwCounter();
+    protected final SwCounter completedRunnableCount = newSwCounter();
     @Probe
-    private final SwCounter completedRunnableCount = newSwCounter();
-    @Probe
-    private final SwCounter errorCount = newSwCounter();
+    protected final SwCounter errorCount = newSwCounter();
 
-    private final boolean priority;
-    private final NodeExtension nodeExtension;
-    private final ILogger logger;
-    private volatile boolean shutdown;
+    protected final ILogger logger;
+
+    protected final NodeExtension nodeExtension;
+    protected final boolean priority;
+    protected volatile boolean shutdown;
+
     public OperationThread(String name, int threadId, OperationQueue queue, ILogger logger,
                            NodeExtension nodeExtension, boolean priority, ClassLoader configClassLoader) {
         super(name);
@@ -79,26 +71,11 @@ public abstract class OperationThread extends HazelcastManagedThread implements 
         this.priority = priority;
     }
 
-    public int getThreadId() {
-        return threadId;
-    }
-
-    public abstract OperationRunner getOperationRunner(int partitionId);
-
     @Override
     public final void run() {
         nodeExtension.onThreadStart(this);
         try {
-            while (!shutdown) {
-                Object task;
-                try {
-                    task = queue.take(priority);
-                } catch (InterruptedException e) {
-                    continue;
-                }
-
-                process(task);
-            }
+            run0();
         } catch (Throwable t) {
             inspectOutOfMemoryError(t);
             logger.severe(t);
@@ -107,43 +84,55 @@ public abstract class OperationThread extends HazelcastManagedThread implements 
         }
     }
 
-    private void process(Object task) {
-        try {
-            if (task.getClass() == Packet.class) {
-                Packet packet = (Packet) task;
-                currentRunner = getOperationRunner(packet.getPartitionId());
-                currentRunner.run(packet);
-                completedPacketCount.inc();
-            } else if (task instanceof Operation) {
-                Operation operation = (Operation) task;
-                currentRunner = getOperationRunner(operation.getPartitionId());
-                currentRunner.run(operation);
-                completedOperationCount.inc();
-            } else if (task instanceof PartitionSpecificRunnable) {
-                PartitionSpecificRunnable runnable = (PartitionSpecificRunnable) task;
-                currentRunner = getOperationRunner(runnable.getPartitionId());
-                currentRunner.run(runnable);
-                completedPartitionSpecificRunnableCount.inc();
-            } else if (task instanceof Runnable) {
-                Runnable runnable = (Runnable) task;
-                runnable.run();
-                completedRunnableCount.inc();
-            } else {
-                throw new IllegalStateException("Unhandled task type for task:" + task);
-            }
-            completedTotalCount.inc();
-        } catch (Throwable t) {
-            errorCount.inc();
-            inspectOutOfMemoryError(t);
-            logger.severe("Failed to process packet: " + task + " on " + getName(), t);
-        } finally {
-            currentRunner = null;
-        }
+    //    private void process(Object task) {
+//        try {
+//            if (task.getClass() == Packet.class) {
+//                Packet packet = (Packet) task;
+//                currentRunner = getOperationRunner(packet.getPartitionId());
+//                currentRunner.run(packet);
+//                completedPacketCount.inc();
+//            } else if (task instanceof Operation) {
+//                Operation operation = (Operation) task;
+//                currentRunner = getOperationRunner(operation.getPartitionId());
+//                currentRunner.run(operation);
+//                completedOperationCount.inc();
+//            } else if (task instanceof PartitionSpecificRunnable) {
+//                PartitionSpecificRunnable runnable = (PartitionSpecificRunnable) task;
+//                currentRunner = getOperationRunner(runnable.getPartitionId());
+//                currentRunner.run(runnable);
+//                completedPartitionSpecificRunnableCount.inc();
+//            } else if (task instanceof Runnable) {
+//                Runnable runnable = (Runnable) task;
+//                runnable.run();
+//                completedRunnableCount.inc();
+//            } else {
+//                throw new IllegalStateException("Unhandled task type for task:" + task);
+//            }
+//            completedTotalCount.inc();
+//        } catch (Throwable t) {
+//            errorCount.inc();
+//            inspectOutOfMemoryError(t);
+//            logger.severe("Failed to process packet: " + task + " on " + getName(), t);
+//        } finally {
+//            currentRunner = null;
+//        }
+    protected abstract void run0();
+
+    public final int getThreadId() {
+        return threadId;
     }
 
     @Override
     public void provideMetrics(MetricsRegistry registry) {
         registry.scanAndRegister(this, "operation.thread[" + getName() + "]");
+    }
+
+    @Probe
+    private long completedTotalCount() {
+        return completedPacketCount.get()
+                + completedOperationCount.get()
+                + completedPartitionSpecificRunnableCount.get()
+                + completedRunnableCount.get();
     }
 
     public final void shutdown() {

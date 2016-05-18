@@ -38,6 +38,7 @@ import com.hazelcast.nio.Packet;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.quorum.QuorumException;
 import com.hazelcast.quorum.impl.QuorumServiceImpl;
+import com.hazelcast.spi.BackupAwareOperation;
 import com.hazelcast.spi.BlockingOperation;
 import com.hazelcast.spi.Notifier;
 import com.hazelcast.spi.Operation;
@@ -175,7 +176,9 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
         }
 
         try {
-            checkNodeState(op);
+            if (node.getState() != NodeState.ACTIVE) {
+                checkNodeState(op);
+            }
 
             if (timeout(op)) {
                 return;
@@ -183,7 +186,7 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
 
             ensureNoPartitionProblems(op);
 
-            ensureQuorumPresent(op);
+            //ensureQuorumPresent(op);
 
             op.beforeRun();
 
@@ -277,6 +280,19 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
 
         sendResponse(op, backupAcks);
     }
+
+//    private int sendBackup(Operation op) throws Exception {
+//        if (!(op instanceof BackupAwareOperation)) {
+//            return 0;
+//        }
+//
+//        int backupAcks = 0;
+//        BackupAwareOperation backupAwareOp = (BackupAwareOperation) op;
+//        if (backupAwareOp.shouldBackup()) {
+//            backupAcks = operationService.operationBackupHandler.backup(backupAwareOp);
+//        }
+//        return backupAcks;
+//    }
 
     private void sendResponse(Operation op, int backupAcks) {
         try {

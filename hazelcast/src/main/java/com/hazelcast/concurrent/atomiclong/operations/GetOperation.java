@@ -33,6 +33,8 @@ public class GetOperation extends AbstractAtomicLongOperation implements Readonl
 
     @Override
     public void run() throws Exception {
+      //  System.out.println("Thread.currentThread:"+Thread.currentThread());
+
         AtomicLongContainer atomicLongContainer = getLongContainer();
         returnValue = atomicLongContainer.get();
     }

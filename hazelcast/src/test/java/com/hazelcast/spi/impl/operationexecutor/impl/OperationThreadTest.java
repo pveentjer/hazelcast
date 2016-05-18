@@ -157,8 +157,16 @@ public class OperationThreadTest extends OperationExecutorImpl_AbstractTest {
     }
 
     private PartitionOperationThread createNewOperationThread(OperationQueue mockOperationQueue) {
-        ILogger mockLogger = mock(ILogger.class);
-        OperationRunner[] runners = new OperationRunner[0];
-        return new PartitionOperationThread("threadName", 0, mockOperationQueue, mockLogger, nodeExtension, runners, Thread.currentThread().getContextClassLoader());
+//        ILogger mockLogger = mock(ILogger.class);
+//        OperationRunner[] runners = new OperationRunner[0];
+//<<<<<<< f27fac8ab7a58c1a7ef55d64cbeac8edab942ef0
+//        return new PartitionOperationThread("threadName", 0, mockOperationQueue, mockLogger, nodeExtension, runners, Thread.currentThread().getContextClassLoader());
+//=======
+//        PartitionOperationThread thread = new PartitionOperationThread(
+//                "threadName", 0, mockOperationQueue, mockLogger, threadGroup, nodeExtension, runners, null);
+//
+//        return thread;
+//>>>>>>> Initial work on caller runs implementation
+        return null;
     }
 }
