@@ -10,6 +10,11 @@ import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
+/**
+ * The locks for the partitions.
+ *
+ * The locks are stored in an array where padding is applied to prevent false sharing.
+ */
 public class PartitionLocks {
     private static final long IDLE_MAX_SPINS = 20;
     private static final long IDLE_MAX_YIELDS = 50;
