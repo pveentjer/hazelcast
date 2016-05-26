@@ -44,7 +44,6 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.MANDATORY;
 import static com.hazelcast.spi.properties.GroupProperty.GENERIC_OPERATION_THREAD_COUNT;
@@ -107,6 +106,8 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * - better mechanism for the partition thread to 'idle' when his partition locked by user-thread.
  * - better mechanism for triggering the optimization.
  * - instead of using AtomicReference as partitionLock, use an AtomicReferenceArray to prevent false sharing.
+ *
+ * done:
  */
 @SuppressWarnings("checkstyle:methodcount")
 public final class OperationExecutorImpl implements OperationExecutor, MetricsProvider {
@@ -138,7 +139,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
     private final OperationRunner adHocOperationRunner;
     private final int priorityThreadCount;
 
-    private final AtomicReference<Thread>[] partitionLocks;
+    private final PartitionLocks partitionLocks;
     private final boolean callerRuns;
 
     @Probe
@@ -166,16 +167,9 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         this.genericThreads = initGenericThreads(threadGroup, nodeExtension);
     }
 
-    private AtomicReference<Thread>[] newPartitionLocks(HazelcastProperties properties) {
-        if (!callerRuns) {
-            return null;
-        }
-
-        AtomicReference<Thread>[] partitionLocks = new AtomicReference[properties.getInteger(PARTITION_COUNT)];
-        for (int k = 0; k < partitionLocks.length; k++) {
-            partitionLocks[k] = new AtomicReference<Thread>();
-        }
-        return partitionLocks;
+    private PartitionLocks newPartitionLocks(HazelcastProperties properties) {
+        int partitionCount = properties.getInteger(PARTITION_COUNT);
+        return callerRuns ? new PartitionLocks(partitionCount) : null;
     }
 
     private OperationRunner[] initPartitionOperationRunners(HazelcastProperties properties,
@@ -489,14 +483,13 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         if (callerRuns && isCallerRunsOp(op)) {
             OperationRunner runner = partitionOperationRunners[partitionId];
 
-            AtomicReference<Thread> partitionLock = partitionLocks[partitionId];
-            if (partitionLock.compareAndSet(null, currentThread)) {
+            if (partitionLocks.tryLock(partitionId, currentThread)) {
                 // we successfully managed to lock, so we can run the operation.
                 runnerRef.runner = runner;
                 try {
                     runner.run(op);
                 } finally {
-                    partitionLock.set(null);
+                    partitionLocks.unlock(partitionId);
                     runnerRef.runner = null;
                 }
             } else {

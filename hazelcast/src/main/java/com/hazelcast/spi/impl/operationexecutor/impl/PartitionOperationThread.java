@@ -24,34 +24,18 @@ import com.hazelcast.nio.Packet;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
-import com.hazelcast.util.concurrent.BackoffIdleStrategy;
-import com.hazelcast.util.concurrent.IdleStrategy;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-
 import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutputMemoryError;
-import static java.util.concurrent.TimeUnit.MICROSECONDS;
-import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 /**
  * An {@link OperationThread} that executes Operations for a particular partition, e.g. a map.get operation.
  */
 public final class PartitionOperationThread extends OperationThread {
 
-    private static final long IDLE_MAX_SPINS = 20;
-    private static final long IDLE_MAX_YIELDS = 50;
-    private static final long IDLE_MIN_PARK_NS = NANOSECONDS.toNanos(1);
-    private static final long IDLE_MAX_PARK_NS = MICROSECONDS.toNanos(100);
-
-    // Strategy used when the partition is locked.
-    private static final IdleStrategy IDLE_STRATEGY
-            = new BackoffIdleStrategy(IDLE_MAX_SPINS, IDLE_MAX_YIELDS, IDLE_MIN_PARK_NS, IDLE_MAX_PARK_NS);
-
     private final OperationRunner[] runners;
     protected final OperationRunnerReference runnerReference;
-    private final AtomicReference<Thread>[] partitionLocks;
+    private final PartitionLocks partitionLocks;
 
     @SuppressFBWarnings("EI_EXPOSE_REP")
     public PartitionOperationThread(String name,
@@ -61,7 +45,7 @@ public final class PartitionOperationThread extends OperationThread {
                                     HazelcastThreadGroup threadGroup,
                                     NodeExtension nodeExtension,
                                     OperationRunner[] runners,
-                                    AtomicReference<Thread>[] partitionLocks) {
+                                    PartitionLocks partitionLocks) {
         super(name, threadId, queue, logger, threadGroup, nodeExtension, false);
         this.runners = runners;
         this.partitionLocks = partitionLocks;
@@ -119,7 +103,7 @@ public final class PartitionOperationThread extends OperationThread {
         } catch (Throwable t) {
             errorCount.inc();
             inspectOutputMemoryError(t);
-            logger.severe("Failed to process packet: " + task + " on " + getName(), t);
+            logger.severe("Failed to process: " + task + " on " + getName(), t);
         }
     }
 
@@ -128,24 +112,7 @@ public final class PartitionOperationThread extends OperationThread {
             return;
         }
 
-        long iteration = 0;
-        long startMs = System.currentTimeMillis();
-        AtomicReference<Thread> partitionLock = partitionLocks[partitionId];
-        Thread currentThread = Thread.currentThread();
-        for (; ; ) {
-            if (partitionLock.get() == currentThread) {
-                throw new RuntimeException("Reentrant lock acquire detected by: " + currentThread);
-            } else if (partitionLock.compareAndSet(null, currentThread)) {
-                return;
-            }
-
-            iteration++;
-            IDLE_STRATEGY.idle(iteration);
-
-            if (System.currentTimeMillis() > startMs + TimeUnit.SECONDS.toMillis(30)) {
-                throw new RuntimeException("Waiting too long for lock");
-            }
-        }
+        partitionLocks.lock(partitionId, this);
     }
 
     private void unlock(int partitionId) {
@@ -153,7 +120,7 @@ public final class PartitionOperationThread extends OperationThread {
             return;
         }
 
-        partitionLocks[partitionId].set(null);
+        partitionLocks.unlock(partitionId);
     }
 
     @Probe
