@@ -29,7 +29,7 @@ public class Main {
         for (long k = 0; k < iterations; k++) {
             refs[(int)(k%refs.length)].get();
 
-            if (k % 100000 == 0) {
+            if (k % 1000000 == 0) {
                 System.out.println("at:" + k);
             }
         }

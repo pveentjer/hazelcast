@@ -44,10 +44,12 @@ public final class PartitionOperationThread extends OperationThread {
     private static final long IDLE_MAX_YIELDS = 50;
     private static final long IDLE_MIN_PARK_NS = NANOSECONDS.toNanos(1);
     private static final long IDLE_MAX_PARK_NS = MICROSECONDS.toNanos(100);
+
+    // Strategy used when the partition is locked.
     private static final IdleStrategy IDLE_STRATEGY
             = new BackoffIdleStrategy(IDLE_MAX_SPINS, IDLE_MAX_YIELDS, IDLE_MIN_PARK_NS, IDLE_MAX_PARK_NS);
 
-    private final OperationRunner[] partitionOperationRunners;
+    private final OperationRunner[] runners;
     protected final OperationRunnerReference runnerReference;
     private final AtomicReference<Thread>[] partitionLocks;
 
@@ -58,10 +60,10 @@ public final class PartitionOperationThread extends OperationThread {
                                     ILogger logger,
                                     HazelcastThreadGroup threadGroup,
                                     NodeExtension nodeExtension,
-                                    OperationRunner[] partitionOperationRunners,
+                                    OperationRunner[] runners,
                                     AtomicReference<Thread>[] partitionLocks) {
         super(name, threadId, queue, logger, threadGroup, nodeExtension, false);
-        this.partitionOperationRunners = partitionOperationRunners;
+        this.runners = runners;
         this.partitionLocks = partitionLocks;
         this.runnerReference = OperationExecutorImpl.PARTITION_OPERATION_RUNNER_THREAD_LOCAL.get();
     }
@@ -71,29 +73,31 @@ public final class PartitionOperationThread extends OperationThread {
         try {
             if (task.getClass() == Packet.class) {
                 Packet packet = (Packet) task;
-                OperationRunner runner = partitionOperationRunners[packet.getPartitionId()];
+                OperationRunner runner = runners[packet.getPartitionId()];
                 runnerReference.runner = runner;
                 lock(packet.getPartitionId());
                 try {
                     runner.run(packet);
                 } finally {
                     unlock(packet.getPartitionId());
+                    runnerReference.runner = null;
                 }
                 completedPacketCount.inc();
             } else if (task instanceof Operation) {
                 Operation operation = (Operation) task;
-                OperationRunner runner = partitionOperationRunners[operation.getPartitionId()];
+                OperationRunner runner = runners[operation.getPartitionId()];
                 runnerReference.runner = runner;
                 lock(operation.getPartitionId());
                 try {
                     runner.run(operation);
                 } finally {
                     unlock(operation.getPartitionId());
+                    runnerReference.runner = null;
                 }
                 completedOperationCount.inc();
             } else if (task instanceof PartitionSpecificRunnable) {
                 PartitionSpecificRunnable partitionRunnable = (PartitionSpecificRunnable) task;
-                OperationRunner runner = partitionOperationRunners[partitionRunnable.getPartitionId()];
+                OperationRunner runner = runners[partitionRunnable.getPartitionId()];
                 runnerReference.runner = runner;
                 lock(partitionRunnable.getPartitionId());
 
@@ -101,6 +105,7 @@ public final class PartitionOperationThread extends OperationThread {
                     runner.run(partitionRunnable);
                 } finally {
                     unlock(partitionRunnable.getPartitionId());
+                    runnerReference.runner = null;
                 }
                 completedPartitionSpecificRunnableCount.inc();
             } else if (task instanceof Runnable) {
@@ -115,8 +120,6 @@ public final class PartitionOperationThread extends OperationThread {
             errorCount.inc();
             inspectOutputMemoryError(t);
             logger.severe("Failed to process packet: " + task + " on " + getName(), t);
-        } finally {
-            runnerReference.runner = null;
         }
     }
 
