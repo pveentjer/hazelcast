@@ -15,7 +15,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  *
  * The locks are stored in an array where padding is applied to prevent false sharing.
  */
-public class PartitionLocks {
+final class PartitionLocks {
     private static final long IDLE_MAX_SPINS = 20;
     private static final long IDLE_MAX_YIELDS = 50;
     private static final long IDLE_MIN_PARK_NS = NANOSECONDS.toNanos(1);
@@ -27,20 +27,40 @@ public class PartitionLocks {
 
     private final AtomicReferenceArray<Thread> locks;
 
-    public PartitionLocks(int size) {
-        locks = new AtomicReferenceArray<Thread>(size * CACHE_LINE_LENGTH);
+    PartitionLocks(int partitionCount) {
+        this.locks = new AtomicReferenceArray<Thread>(partitionCount * CACHE_LINE_LENGTH);
     }
 
     public void unlock(int partitionId) {
-        locks.set(partitionId * CACHE_LINE_LENGTH, null);
+        locks.set(toIndex(partitionId), null);
     }
 
+    private static int toIndex(int partitionId) {
+        return partitionId * CACHE_LINE_LENGTH;
+    }
+
+    /**
+     * Tries to acquire the lock for the given partition.
+     *
+     * There is no support for reentrant lock acquisition.
+     *
+     * @param partitionId the id of the partition
+     * @param owner       the
+     * @return true if the lock was acquired, false otherwise.
+     */
     public boolean tryLock(int partitionId, Thread owner) {
-        return locks.compareAndSet(partitionId * CACHE_LINE_LENGTH, null, owner);
+        assert owner != null : "owner can't be null";
+        return locks.compareAndSet(toIndex(partitionId), null, owner);
     }
 
+    /**
+     * Returns the Thread that currently owns the lock, or null if the lock is free.
+     *
+     * @param partitionId the id of the partition
+     * @return the current lock owner.
+     */
     public Thread getOwner(int partitionId) {
-        return locks.get(partitionId * CACHE_LINE_LENGTH);
+        return locks.get(toIndex(partitionId));
     }
 
     public void lock(int partitionId, Thread owner) {

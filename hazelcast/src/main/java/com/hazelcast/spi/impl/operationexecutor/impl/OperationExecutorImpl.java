@@ -105,9 +105,9 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * - support for data-structures other than IAtomicLong
  * - better mechanism for the partition thread to 'idle' when his partition locked by user-thread.
  * - better mechanism for triggering the optimization.
- * - instead of using AtomicReference as partitionLock, use an AtomicReferenceArray to prevent false sharing.
  *
  * done:
+ * - instead of using AtomicReference as partitionLock, use an AtomicReferenceArray to prevent false sharing.
  */
 @SuppressWarnings("checkstyle:methodcount")
 public final class OperationExecutorImpl implements OperationExecutor, MetricsProvider {
@@ -430,8 +430,8 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
                     + Thread.currentThread());
         }
 
-        OperationRunner operationRunner = getOperationRunner(operation);
-        operationRunner.run(operation);
+        OperationRunner runner = getOperationRunner(operation);
+        runner.run(operation);
     }
 
     OperationRunner getOperationRunner(Operation operation) {
@@ -463,11 +463,11 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
             throw new IllegalThreadStateException("Can't call runOrExecute from " + currentThread.getName() + " for:" + op);
         }
 
-        OperationRunnerReference ref = PARTITION_OPERATION_RUNNER_THREAD_LOCAL.get();
-        if (ref.runner == null) {
-            runOrExecuteNotNested(op, currentThread, ref);
+        OperationRunnerReference runnerRef = PARTITION_OPERATION_RUNNER_THREAD_LOCAL.get();
+        if (runnerRef.runner == null) {
+            runOrExecuteNotNested(op, currentThread, runnerRef);
         } else {
-            runOrExecuteNested(op, currentThread, ref.runner);
+            runNested(op, currentThread, runnerRef.runner);
         }
     }
 
@@ -503,7 +503,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         }
     }
 
-    private void runOrExecuteNested(Operation op, Thread currentThread, OperationRunner runner) {
+    private void runNested(Operation op, Thread currentThread, OperationRunner runner) {
         int partitionId = op.getPartitionId();
 
         if (partitionId < 0) {
@@ -538,6 +538,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
 
         int partitionId = op.getPartitionId();
         // TODO: do we want to allow non partition specific tasks to be run on a partitionSpecific operation thread?
+        // this could lead to deadlocks. e.g. a map.size call being called from within entry processor
         if (partitionId < 0) {
             return true;
         }
