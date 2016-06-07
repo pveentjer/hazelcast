@@ -49,7 +49,7 @@ final class PartitionLocks {
      * @return true if the lock was acquired, false otherwise.
      */
     public boolean tryLock(int partitionId, Thread owner) {
-        assert owner != null : "owner can't be null";
+        //assert owner != null : "owner can't be null";
         return locks.compareAndSet(toIndex(partitionId), null, owner);
     }
 
