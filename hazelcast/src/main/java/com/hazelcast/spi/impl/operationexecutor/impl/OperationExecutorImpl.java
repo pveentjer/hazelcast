@@ -480,7 +480,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
             return;
         }
 
-        if (callerRuns && isCallerRunsOp(op)) {
+        if (callerRuns) {
             OperationRunner runner = partitionOperationRunners[partitionId];
 
             if (partitionLocks.tryLock(partitionId, currentThread)) {
