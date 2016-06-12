@@ -60,7 +60,6 @@ public class AtomicReferenceProxy<E> extends AbstractDistributedObject<AtomicRef
         return asyncSet(null);
     }
 
-
     // ======================== compareAndSet ===================================
 
     @Override
@@ -116,7 +115,6 @@ public class AtomicReferenceProxy<E> extends AbstractDistributedObject<AtomicRef
                 .setPartitionId(partitionId);
         return invokeOnPartition(operation);
     }
-
 
     // ======================== getAndSet ===================================
 
