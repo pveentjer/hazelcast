@@ -27,6 +27,7 @@ import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutputMemoryError;
+import static com.hazelcast.spi.impl.operationexecutor.impl.OperationExecutorImpl.PARTITION_OPERATION_RUNNER_THREAD_LOCAL;
 
 /**
  * An {@link OperationThread} that executes Operations for a particular partition, e.g. a map.get operation.
@@ -46,65 +47,85 @@ public final class PartitionOperationThread extends OperationThread {
                                     NodeExtension nodeExtension,
                                     OperationRunner[] runners,
                                     PartitionLocks partitionLocks) {
-        super(name, threadId, queue, logger, threadGroup, nodeExtension, false);
+        super(name, threadId, queue, logger, threadGroup, nodeExtension);
         this.runners = runners;
         this.partitionLocks = partitionLocks;
-        this.runnerReference = OperationExecutorImpl.PARTITION_OPERATION_RUNNER_THREAD_LOCAL.get();
+        this.runnerReference = PARTITION_OPERATION_RUNNER_THREAD_LOCAL.get();
     }
 
     @Override
-    protected void process(Object task) {
-        try {
-            if (task.getClass() == Packet.class) {
-                Packet packet = (Packet) task;
-                OperationRunner runner = runners[packet.getPartitionId()];
-                runnerReference.runner = runner;
-                lock(packet.getPartitionId());
-                try {
-                    runner.run(packet);
-                } finally {
-                    unlock(packet.getPartitionId());
-                    runnerReference.runner = null;
-                }
-                completedPacketCount.inc();
-            } else if (task instanceof Operation) {
-                Operation operation = (Operation) task;
-                OperationRunner runner = runners[operation.getPartitionId()];
-                runnerReference.runner = runner;
-                lock(operation.getPartitionId());
-                try {
-                    runner.run(operation);
-                } finally {
-                    unlock(operation.getPartitionId());
-                    runnerReference.runner = null;
-                }
-                completedOperationCount.inc();
-            } else if (task instanceof PartitionSpecificRunnable) {
-                PartitionSpecificRunnable partitionRunnable = (PartitionSpecificRunnable) task;
-                OperationRunner runner = runners[partitionRunnable.getPartitionId()];
-                runnerReference.runner = runner;
-                lock(partitionRunnable.getPartitionId());
-
-                try {
-                    runner.run(partitionRunnable);
-                } finally {
-                    unlock(partitionRunnable.getPartitionId());
-                    runnerReference.runner = null;
-                }
-                completedPartitionSpecificRunnableCount.inc();
-            } else if (task instanceof Runnable) {
-                Runnable runnable = (Runnable) task;
-                runnable.run();
-                completedRunnableCount.inc();
-            } else {
-                throw new IllegalStateException("Unhandled task type for task:" + task);
+    protected void run0() {
+        while (!shutdown) {
+            Object task;
+            try {
+                task = queue.take(false);
+            } catch (InterruptedException e) {
+                continue;
             }
-            completedTotalCount.inc();
-        } catch (Throwable t) {
-            errorCount.inc();
-            inspectOutputMemoryError(t);
-            logger.severe("Failed to process: " + task + " on " + getName(), t);
+
+            try {
+                if (task.getClass() == Packet.class) {
+                    process((Packet) task);
+                } else if (task instanceof Operation) {
+                    process((Operation) task);
+                } else if (task instanceof PartitionSpecificRunnable) {
+                    process((PartitionSpecificRunnable) task);
+                } else if (task instanceof Runnable) {
+                    process((Runnable) task);
+                } else {
+                    throw new IllegalStateException("Unhandled task type for task:" + task);
+                }
+            } catch (Throwable t) {
+                errorCount.inc();
+                inspectOutputMemoryError(t);
+                logger.severe("Failed to process: " + task + " on " + getName(), t);
+            }
         }
+    }
+
+    private void process(Runnable task) {
+        task.run();
+        completedRunnableCount.inc();
+    }
+
+    private void process(PartitionSpecificRunnable runnable) {
+        OperationRunner runner = runners[runnable.getPartitionId()];
+        runnerReference.runner = runner;
+        lock(runnable.getPartitionId());
+
+        try {
+            runner.run(runnable);
+        } finally {
+            unlock(runnable.getPartitionId());
+            runnerReference.runner = null;
+        }
+        completedPartitionSpecificRunnableCount.inc();
+    }
+
+    private void process(Operation operation) {
+        OperationRunner runner = runners[operation.getPartitionId()];
+        runnerReference.runner = runner;
+        lock(operation.getPartitionId());
+        try {
+            runner.run(operation);
+        } finally {
+            unlock(operation.getPartitionId());
+            runnerReference.runner = null;
+        }
+        completedOperationCount.inc();
+    }
+
+    private void process(Packet packet) throws Exception {
+        OperationRunner runner = runners[packet.getPartitionId()];
+        runnerReference.runner = runner;
+        lock(packet.getPartitionId());
+        try {
+            runner.run(packet);
+        } finally {
+            unlock(packet.getPartitionId());
+            runnerReference.runner = null;
+        }
+        completedPacketCount.inc();
     }
 
     private void lock(int partitionId) {

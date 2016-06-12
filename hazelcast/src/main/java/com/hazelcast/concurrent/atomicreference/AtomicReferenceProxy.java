@@ -48,6 +48,119 @@ public class AtomicReferenceProxy<E> extends AbstractDistributedObject<AtomicRef
         this.partitionId = nodeEngine.getPartitionService().getPartitionId(getNameAsPartitionAwareData());
     }
 
+    // ======================== clear ===================================
+
+    @Override
+    public void clear() {
+        asyncClear().join();
+    }
+
+    @Override
+    public InternalCompletableFuture<Void> asyncClear() {
+        return asyncSet(null);
+    }
+
+
+    // ======================== compareAndSet ===================================
+
+    @Override
+    public boolean compareAndSet(E expect, E update) {
+        return asyncCompareAndSet(expect, update).join();
+    }
+
+    @Override
+    public InternalCompletableFuture<Boolean> asyncCompareAndSet(E expect, E update) {
+        Operation operation = new CompareAndSetOperation(name, toData(expect), toData(update))
+                .setPartitionId(partitionId);
+        return invokeOnPartition(operation);
+    }
+
+    // ======================== get ===================================
+
+    @Override
+    public E get() {
+        return asyncGet().join();
+    }
+
+    @Override
+    public InternalCompletableFuture<E> asyncGet() {
+        Operation operation = new GetOperation(name)
+                .setPartitionId(partitionId);
+        return invokeOnPartition(operation);
+    }
+
+    // ======================== contains ===================================
+
+    @Override
+    public boolean contains(E expected) {
+        return asyncContains(expected).join();
+    }
+
+    @Override
+    public InternalCompletableFuture<Boolean> asyncContains(E value) {
+        Operation operation = new ContainsOperation(name, toData(value))
+                .setPartitionId(partitionId);
+        return invokeOnPartition(operation);
+    }
+
+    // ======================== set ===================================
+
+    @Override
+    public void set(E newValue) {
+        asyncSet(newValue).join();
+    }
+
+    @Override
+    public InternalCompletableFuture<Void> asyncSet(E newValue) {
+        Operation operation = new SetOperation(name, toData(newValue))
+                .setPartitionId(partitionId);
+        return invokeOnPartition(operation);
+    }
+
+
+    // ======================== getAndSet ===================================
+
+    @Override
+    public E getAndSet(E newValue) {
+        return asyncGetAndSet(newValue).join();
+    }
+
+    @Override
+    public InternalCompletableFuture<E> asyncGetAndSet(E newValue) {
+        Operation operation = new GetAndSetOperation(name, toData(newValue))
+                .setPartitionId(partitionId);
+        return invokeOnPartition(operation);
+    }
+
+
+    // ======================== setAndGet ===================================
+
+    @Override
+    public E setAndGet(E update) {
+        return asyncSetAndGet(update).join();
+    }
+
+    @Override
+    public InternalCompletableFuture<E> asyncSetAndGet(E update) {
+        Operation operation = new SetAndGetOperation(name, toData(update))
+                .setPartitionId(partitionId);
+        return invokeOnPartition(operation);
+    }
+
+    @Override
+    public boolean isNull() {
+        return asyncIsNull().join();
+    }
+
+    @Override
+    public InternalCompletableFuture<Boolean> asyncIsNull() {
+        Operation operation = new IsNullOperation(name)
+                .setPartitionId(partitionId);
+        return invokeOnPartition(operation);
+    }
+
+    // =================== alter ================================
+
     @Override
     public void alter(IFunction<E, E> function) {
         asyncAlter(function).join();
@@ -100,100 +213,6 @@ public class AtomicReferenceProxy<E> extends AbstractDistributedObject<AtomicRef
         isNotNull(function, "function");
 
         Operation operation = new ApplyOperation(name, toData(function))
-                .setPartitionId(partitionId);
-        return invokeOnPartition(operation);
-    }
-
-    @Override
-    public void clear() {
-        asyncClear().join();
-    }
-
-    @Override
-    public InternalCompletableFuture<Void> asyncClear() {
-        return asyncSet(null);
-    }
-
-    @Override
-    public boolean compareAndSet(E expect, E update) {
-        return asyncCompareAndSet(expect, update).join();
-    }
-
-    @Override
-    public InternalCompletableFuture<Boolean> asyncCompareAndSet(E expect, E update) {
-        Operation operation = new CompareAndSetOperation(name, toData(expect), toData(update))
-                .setPartitionId(partitionId);
-        return invokeOnPartition(operation);
-    }
-
-    @Override
-    public E get() {
-        return asyncGet().join();
-    }
-
-    @Override
-    public InternalCompletableFuture<E> asyncGet() {
-        Operation operation = new GetOperation(name)
-                .setPartitionId(partitionId);
-        return invokeOnPartition(operation);
-    }
-
-    @Override
-    public boolean contains(E expected) {
-        return asyncContains(expected).join();
-    }
-
-    @Override
-    public InternalCompletableFuture<Boolean> asyncContains(E value) {
-        Operation operation = new ContainsOperation(name, toData(value))
-                .setPartitionId(partitionId);
-        return invokeOnPartition(operation);
-    }
-
-    @Override
-    public void set(E newValue) {
-        asyncSet(newValue).join();
-    }
-
-    @Override
-    public InternalCompletableFuture<Void> asyncSet(E newValue) {
-        Operation operation = new SetOperation(name, toData(newValue))
-                .setPartitionId(partitionId);
-        return invokeOnPartition(operation);
-    }
-
-    @Override
-    public E getAndSet(E newValue) {
-        return asyncGetAndSet(newValue).join();
-    }
-
-    @Override
-    public InternalCompletableFuture<E> asyncGetAndSet(E newValue) {
-        Operation operation = new GetAndSetOperation(name, toData(newValue))
-                .setPartitionId(partitionId);
-        return invokeOnPartition(operation);
-    }
-
-    @Override
-    public E setAndGet(E update) {
-        return asyncSetAndGet(update).join();
-    }
-
-    @Override
-    public InternalCompletableFuture<E> asyncSetAndGet(E update) {
-        Operation operation = new SetAndGetOperation(name, toData(update))
-                .setPartitionId(partitionId);
-        return invokeOnPartition(operation);
-    }
-
-    @Override
-    public boolean isNull() {
-        return asyncIsNull().join();
-    }
-
-    @Override
-    public InternalCompletableFuture<Boolean> asyncIsNull() {
-        Operation operation = new IsNullOperation(name)
                 .setPartitionId(partitionId);
         return invokeOnPartition(operation);
     }

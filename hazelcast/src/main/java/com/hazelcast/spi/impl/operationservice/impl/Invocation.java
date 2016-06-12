@@ -36,7 +36,6 @@ import com.hazelcast.spi.ExceptionAction;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationResponseHandler;
-import com.hazelcast.spi.exception.ResponseAlreadySentException;
 import com.hazelcast.spi.exception.RetryableException;
 import com.hazelcast.spi.exception.RetryableIOException;
 import com.hazelcast.spi.exception.TargetNotMemberException;
@@ -78,7 +77,6 @@ import static com.hazelcast.spi.impl.operationutil.Operations.isWanReplicationOp
 import static com.hazelcast.util.ExceptionUtil.rethrow;
 import static com.hazelcast.util.StringUtil.timeToString;
 import static java.lang.Boolean.FALSE;
-import static java.lang.Boolean.TRUE;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.logging.Level.FINEST;
 import static java.util.logging.Level.WARNING;
@@ -275,7 +273,7 @@ public abstract class Invocation implements OperationResponseHandler, Runnable {
         if (isAsync) {
             context.operationExecutor.execute(op);
         } else {
-            context.operationExecutor.runOrExecute(op);
+            context.operationExecutor.runOrElseExecute(op);
         }
     }
 

@@ -25,6 +25,7 @@ import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
 
 import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutputMemoryError;
+import static sun.management.snmp.jvminstr.JvmThreadInstanceEntryImpl.ThreadStateMap.Byte0.runnable;
 
 /**
  * An {@link OperationThread} for non partition specific operations.
@@ -32,42 +33,63 @@ import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutputMem
 public final class GenericOperationThread extends OperationThread {
 
     final OperationRunner operationRunner;
+    private final boolean priority;
 
     public GenericOperationThread(String name, int threadId, OperationQueue queue, ILogger logger,
                                   HazelcastThreadGroup threadGroup, NodeExtension nodeExtension,
                                   OperationRunner operationRunner, boolean priority) {
-        super(name, threadId, queue, logger, threadGroup, nodeExtension, priority);
+        super(name, threadId, queue, logger, threadGroup, nodeExtension);
         this.operationRunner = operationRunner;
+        this.priority = priority;
     }
 
     @Override
-    protected void process(Object task) {
-        try {
-            if (task.getClass() == Packet.class) {
-                Packet packet = (Packet) task;
-                operationRunner.run(packet);
-                completedPacketCount.inc();
-            } else if (task instanceof Operation) {
-                Operation operation = (Operation) task;
-                operationRunner.run(operation);
-                completedOperationCount.inc();
-            } else if (task instanceof PartitionSpecificRunnable) {
-                PartitionSpecificRunnable partitionSpecificRunnable = (PartitionSpecificRunnable) task;
-                operationRunner.run(partitionSpecificRunnable);
-                completedPartitionSpecificRunnableCount.inc();
-            } else if (task instanceof Runnable) {
-                Runnable runnable = (Runnable) task;
-                runnable.run();
-                completedRunnableCount.inc();
-            } else {
-                throw new IllegalStateException("Unhandled task type for task:" + task);
+    protected void run0() {
+        while (!shutdown) {
+            Object task;
+            try {
+                task = queue.take(priority);
+            } catch (InterruptedException e) {
+                continue;
             }
 
-            completedTotalCount.inc();
-        } catch (Throwable t) {
-            errorCount.inc();
-            inspectOutputMemoryError(t);
-            logger.severe("Failed to process packet: " + task + " on " + getName(), t);
+            try {
+                if (task.getClass() == Packet.class) {
+                    process((Packet)task);
+                } else if (task instanceof Operation) {
+                    process((Operation) task);
+                } else if (task instanceof PartitionSpecificRunnable) {
+                    process((PartitionSpecificRunnable)task);
+                } else if (task instanceof Runnable) {
+                    process((Runnable) task);
+                } else {
+                    throw new IllegalStateException("Unhandled task type for task:" + task);
+                }
+            } catch (Throwable t) {
+                errorCount.inc();
+                inspectOutputMemoryError(t);
+                logger.severe("Failed to process: " + task + " on " + getName(), t);
+            }
         }
+    }
+
+    private void process(Runnable task) {
+        task.run();
+        completedRunnableCount.inc();
+    }
+
+    private void process(PartitionSpecificRunnable task) {
+        operationRunner.run(task);
+        completedPartitionSpecificRunnableCount.inc();
+    }
+
+    private void process(Operation operation) {
+        operationRunner.run(operation);
+        completedOperationCount.inc();
+    }
+
+    private void process(Packet packet) throws Exception {
+        operationRunner.run(packet);
+        completedPacketCount.inc();
     }
 }

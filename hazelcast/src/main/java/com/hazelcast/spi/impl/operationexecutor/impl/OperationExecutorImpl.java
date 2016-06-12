@@ -455,23 +455,23 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
     }
 
     @Override
-    public void runOrExecute(Operation op) {
+    public void runOrElseExecute(Operation op) {
         Thread currentThread = Thread.currentThread();
 
         if (currentThread instanceof OperationHostileThread) {
             // OperationHostileThreads are not allowed to run any operation
-            throw new IllegalThreadStateException("Can't call runOrExecute from " + currentThread.getName() + " for:" + op);
+            throw new IllegalThreadStateException("Can't call runOrElseExecute from " + currentThread.getName() + " for:" + op);
         }
 
         OperationRunnerReference runnerRef = PARTITION_OPERATION_RUNNER_THREAD_LOCAL.get();
         if (runnerRef.runner == null) {
-            runOrExecuteNotNested(op, currentThread, runnerRef);
+            runOrElseExecuteNotNested(op, currentThread, runnerRef);
         } else {
             runNested(op, currentThread, runnerRef.runner);
         }
     }
 
-    private void runOrExecuteNotNested(Operation op, Thread currentThread, OperationRunnerReference runnerRef) {
+    private void runOrElseExecuteNotNested(Operation op, Thread currentThread, OperationRunnerReference runnerRef) {
         int partitionId = op.getPartitionId();
 
         if (partitionId < 0) {
@@ -481,8 +481,9 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         }
 
         if (callerRuns) {
-            OperationRunner runner = partitionOperationRunners[partitionId];
+            // caller runs is enabled.
 
+            OperationRunner runner = partitionOperationRunners[partitionId];
             if (partitionLocks.tryLock(partitionId, currentThread)) {
                 // we successfully managed to lock, so we can run the operation.
                 runnerRef.runner = runner;
@@ -508,21 +509,14 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
 
         if (partitionId < 0) {
             // a nested generic operation is not allowed from an outer partition operation because it could self deadlock.
-            throw new IllegalThreadStateException("Can't call runOrExecute from " + currentThread.getName() + " for:" + op);
+            throw new IllegalThreadStateException("Can't call runOrElseExecute from " + currentThread.getName() + " for:" + op);
         }
 
         if (partitionId != runner.getPartitionId()) {
-            throw new IllegalThreadStateException("Can't call runOrExecute from " + currentThread.getName() + " for:" + op);
+            throw new IllegalThreadStateException("Can't call runOrElseExecute from " + currentThread.getName() + " for:" + op);
         }
 
         runner.run(op);
-    }
-
-    // quick hack to only allow it for certain IAtomicLong operations.
-    private boolean isCallerRunsOp(Operation op) {
-        return op.getClass() == GetOperation.class
-                || op.getClass() == SetOperation.class
-                || op.getClass() == AddAndGetOperation.class;
     }
 
     @Override
@@ -566,7 +560,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
 
         Thread currentThread = Thread.currentThread();
 
-        // IO threads are not allowed to run any operation
+        // IO threads are not allowed to make invocation
         if (currentThread instanceof OperationHostileThread) {
             return false;
         }

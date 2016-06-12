@@ -44,9 +44,6 @@ public abstract class OperationThread extends HazelcastManagedThread implements 
     final int threadId;
     final OperationQueue queue;
 
-    // All these counters are updated by this OperationThread (so a single writer) and are read by the MetricsRegistry.
-    @Probe
-    protected final SwCounter completedTotalCount = newSwCounter();
     @Probe
     protected final SwCounter completedPacketCount = newSwCounter();
     @Probe
@@ -60,44 +57,28 @@ public abstract class OperationThread extends HazelcastManagedThread implements 
 
     protected final ILogger logger;
 
-    private final boolean priority;
-    private final NodeExtension nodeExtension;
-    private volatile boolean shutdown;
+    protected final NodeExtension nodeExtension;
+    protected volatile boolean shutdown;
 
     public OperationThread(String name,
                            int threadId,
                            OperationQueue queue,
                            ILogger logger,
                            HazelcastThreadGroup threadGroup,
-                           NodeExtension nodeExtension,
-                           boolean priority) {
+                           NodeExtension nodeExtension) {
         super(threadGroup.getInternalThreadGroup(), name);
         setContextClassLoader(threadGroup.getClassLoader());
         this.queue = queue;
         this.threadId = threadId;
         this.logger = logger;
         this.nodeExtension = nodeExtension;
-        this.priority = priority;
-    }
-
-    public final int getThreadId() {
-        return threadId;
     }
 
     @Override
     public final void run() {
         nodeExtension.onThreadStart(this);
         try {
-            while (!shutdown) {
-                Object task;
-                try {
-                    task = queue.take(priority);
-                } catch (InterruptedException e) {
-                    continue;
-                }
-
-                process(task);
-            }
+            run0();
         } catch (Throwable t) {
             inspectOutOfMemoryError(t);
             logger.severe(t);
@@ -106,11 +87,23 @@ public abstract class OperationThread extends HazelcastManagedThread implements 
         }
     }
 
-    protected abstract void process(Object task);
+    protected abstract void run0();
+
+    public final int getThreadId() {
+        return threadId;
+    }
 
     @Override
     public void provideMetrics(MetricsRegistry metricsRegistry) {
         metricsRegistry.scanAndRegister(this, "operation.thread[" + getName() + "]");
+    }
+
+    @Probe
+    private long completedTotalCount() {
+        return completedPacketCount.get()
+                + completedOperationCount.get()
+                + completedPartitionSpecificRunnableCount.get()
+                + completedRunnableCount.get();
     }
 
     public final void shutdown() {
