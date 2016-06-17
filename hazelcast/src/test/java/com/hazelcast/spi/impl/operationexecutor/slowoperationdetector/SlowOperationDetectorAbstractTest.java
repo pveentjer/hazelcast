@@ -70,7 +70,7 @@ abstract class SlowOperationDetectorAbstractTest extends HazelcastTestSupport {
     }
 
     static void executeOperation(HazelcastInstance instance, Operation operation) {
-        getOperationService(instance).executeOperation(operation);
+        getOperationService(instance).execute(operation);
     }
 
     static void executeEntryProcessor(IMap<String, String> map, EntryProcessor<String, String> entryProcessor) {

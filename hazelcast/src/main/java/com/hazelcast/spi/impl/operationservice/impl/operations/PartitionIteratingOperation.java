@@ -84,7 +84,7 @@ public final class PartitionIteratingOperation extends AbstractOperation impleme
                     .setService(getService())
                     .setCallerUuid(getCallerUuid());
             OperationAccessor.setCallerAddress(operation, getCallerAddress());
-            nodeEngine.getOperationService().executeOperation(operation);
+            nodeEngine.getOperationService().execute(operation);
         }
         return responses;
     }
@@ -113,7 +113,7 @@ public final class PartitionIteratingOperation extends AbstractOperation impleme
                     .setService(getService())
                     .setCallerUuid(getCallerUuid());
             OperationAccessor.setCallerAddress(operation, getCallerAddress());
-            nodeEngine.getOperationService().executeOperation(operation);
+            nodeEngine.getOperationService().execute(operation);
         }
         return responses;
     }

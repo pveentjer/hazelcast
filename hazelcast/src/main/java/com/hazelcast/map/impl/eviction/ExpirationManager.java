@@ -141,7 +141,7 @@ public class ExpirationManager {
                 // mark partition container as has on going expiration operation.
                 container.setHasRunningCleanup(true);
                 OperationService operationService = ExpirationManager.this.nodeEngine.getOperationService();
-                operationService.executeOperation(createExpirationOperation(EXPIRATION_PERCENTAGE,
+                operationService.execute(createExpirationOperation(EXPIRATION_PERCENTAGE,
                         container.getPartitionId()));
             }
         }

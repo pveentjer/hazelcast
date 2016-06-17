@@ -93,7 +93,7 @@ public class WaitNotifyServiceImpl implements WaitNotifyService, LiveOperationsT
     }
 
     private void invalidate(final WaitingOperation waitingOp) throws Exception {
-        nodeEngine.getOperationService().executeOperation(waitingOp);
+        nodeEngine.getOperationService().execute(waitingOp);
     }
 
     // Runs in operation thread, we can assume that

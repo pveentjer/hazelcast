@@ -83,7 +83,7 @@ public interface InternalOperationService extends OperationService {
     /**
      * Returns true if the given operation is allowed to run on the calling thread, false otherwise.
      * If this method returns true, then the operation can be executed using {@link #runOperationOnCallingThread(Operation)}
-     * method, otherwise {@link #executeOperation(Operation)} should be used.
+     * method, otherwise {@link #execute(Operation)} should be used.
      *
      * @param op the operation to check.
      * @return true if the operation is allowed to run on the calling thread, false otherwise.

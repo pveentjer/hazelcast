@@ -25,7 +25,7 @@ import java.util.Map;
  * The OperationService is responsible for executing operations.
  * <p/>
  * A single operation can be executed locally using {@link #runOperationOnCallingThread(Operation)}
- * and {@link #executeOperation(Operation)}. Or it can executed remotely using one of the send methods.
+ * and {@link #execute(Operation)}. Or it can executed remotely using one of the send methods.
  * <p/>
  * It also is possible to execute multiple operation on multiple partitions using one of the invoke methods.
  */
