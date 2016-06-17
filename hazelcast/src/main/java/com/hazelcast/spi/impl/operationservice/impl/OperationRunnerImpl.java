@@ -34,18 +34,8 @@ import com.hazelcast.nio.Address;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.quorum.impl.QuorumServiceImpl;
-import com.hazelcast.spi.BackupAwareOperation;
-import com.hazelcast.spi.BlockingOperation;
-import com.hazelcast.spi.Notifier;
-import com.hazelcast.spi.Operation;
-import com.hazelcast.spi.OperationResponseHandler;
-import com.hazelcast.spi.ReadonlyOperation;
-import com.hazelcast.spi.exception.CallerNotMemberException;
-import com.hazelcast.spi.exception.PartitionMigratingException;
-import com.hazelcast.spi.exception.ResponseAlreadySentException;
-import com.hazelcast.spi.exception.RetryableException;
-import com.hazelcast.spi.exception.RetryableHazelcastException;
-import com.hazelcast.spi.exception.WrongTargetException;
+import com.hazelcast.spi.*;
+import com.hazelcast.spi.exception.*;
 import com.hazelcast.spi.impl.AllowedDuringPassiveState;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
@@ -64,18 +54,16 @@ import static com.hazelcast.spi.Operation.CALL_ID_LOCAL_SKIPPED;
 import static com.hazelcast.spi.OperationAccessor.setCallerAddress;
 import static com.hazelcast.spi.OperationAccessor.setConnection;
 import static com.hazelcast.spi.impl.OperationResponseHandlerFactory.createEmptyResponseHandler;
-import static com.hazelcast.spi.impl.operationutil.Operations.isJoinOperation;
-import static com.hazelcast.spi.impl.operationutil.Operations.isMigrationOperation;
-import static com.hazelcast.spi.impl.operationutil.Operations.isWanReplicationOperation;
+import static com.hazelcast.spi.impl.operationutil.Operations.*;
 import static com.hazelcast.spi.properties.GroupProperty.DISABLE_STALE_READ_ON_PARTITION_MIGRATION;
-import static java.util.logging.Level.FINEST;
-import static java.util.logging.Level.SEVERE;
-import static java.util.logging.Level.WARNING;
+import static java.util.logging.Level.*;
 
 /**
  * Responsible for processing an Operation.
  */
 class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
+
+    public final static long MAX_DURATION_MILLIS = Long.getLong("hazelcast.operation-duration.threshold", 100L);
 
     static final int AD_HOC_PARTITION_ID = -2;
 
@@ -150,6 +138,8 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
 
     @Override
     public void run(Operation op) {
+        long start = System.currentTimeMillis();
+
         if (count != null) {
             count.inc();
         }
@@ -187,6 +177,11 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
         } finally {
             if (publishCurrentTask) {
                 currentTask = null;
+            }
+
+            long durationMillis = System.currentTimeMillis() - start;
+            if (durationMillis >= MAX_DURATION_MILLIS) {
+                logger.warning(op.getClass().getName() + " took " + durationMillis + " ms");
             }
         }
     }
@@ -272,7 +267,7 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
         return backupAcks;
     }
 
-   private void sendResponse(Operation op, int backupAcks) {
+    private void sendResponse(Operation op, int backupAcks) {
         try {
             Object response = op.getResponse();
             if (backupAcks > 0) {
