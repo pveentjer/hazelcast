@@ -35,6 +35,7 @@ import java.util.logging.Level;
 
 import static com.hazelcast.spi.ExceptionAction.RETRY_INVOCATION;
 import static com.hazelcast.spi.ExceptionAction.THROW_EXCEPTION;
+import static com.hazelcast.spi.impl.operationutil.Operations.isJoinOperation;
 import static com.hazelcast.util.EmptyStatement.ignore;
 import static com.hazelcast.util.StringUtil.timeToString;
 
@@ -434,6 +435,31 @@ public abstract class Operation implements DataSerializable {
                 logger.log(level, e.getMessage(), e);
             }
         }
+    }
+
+    public final boolean isCallTimedOut() {
+        // Join operations should not be checked for timeout
+        // because caller is not member of this cluster
+        // and can have a different clock.
+        if (!returnsResponse() || isJoinOperation(this)) {
+            return false;
+        }
+
+        long callTimeout = getCallTimeout();
+        long invocationTime = getInvocationTime();
+        long expireTime = invocationTime + callTimeout;
+
+        if (expireTime <= 0 || expireTime == Long.MAX_VALUE) {
+            return false;
+        }
+
+        ClusterClock clusterClock = nodeEngine.getClusterService().getClusterClock();
+        long now = clusterClock.getClusterTime();
+        if (expireTime < now) {
+            return true;
+        }
+
+        return false;
     }
 
     @Override

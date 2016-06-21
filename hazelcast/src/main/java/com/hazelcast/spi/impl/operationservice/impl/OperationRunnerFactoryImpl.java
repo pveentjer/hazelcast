@@ -16,29 +16,53 @@
 
 package com.hazelcast.spi.impl.operationservice.impl;
 
+import com.hazelcast.logging.ILogger;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunnerFactory;
 
 class OperationRunnerFactoryImpl implements OperationRunnerFactory {
-    private OperationServiceImpl operationService;
+    private final ILogger logger;
+    private final OperationServiceImpl operationService;
 
     OperationRunnerFactoryImpl(OperationServiceImpl operationService) {
         this.operationService = operationService;
+        this.logger = operationService.node.getLogger(OperationRunnerImpl.class);
     }
 
     @Override
     public OperationRunner createAdHocRunner() {
-        return new OperationRunnerImpl(operationService, OperationRunnerImpl.AD_HOC_PARTITION_ID);
+        return new OperationRunnerImpl(
+                OperationRunnerImpl.AD_HOC_PARTITION_ID,
+                logger,
+                operationService.outboundResponseHandler,
+                operationService.operationBackupHandler,
+                operationService.node,
+                operationService.completedOperationsCount,
+                operationService.serializationService);
     }
 
     @Override
     public OperationRunner createPartitionRunner(int partitionId) {
-        return new OperationRunnerImpl(operationService, partitionId);
+        return new OperationRunnerImpl(
+                partitionId,
+                logger,
+                operationService.outboundResponseHandler,
+                operationService.operationBackupHandler,
+                operationService.node,
+                operationService.completedOperationsCount,
+                operationService.serializationService);
     }
 
     @Override
     public OperationRunner createGenericRunner() {
-        return new OperationRunnerImpl(operationService, Operation.GENERIC_PARTITION_ID);
+        return new OperationRunnerImpl(
+                Operation.GENERIC_PARTITION_ID,
+                logger,
+                operationService.outboundResponseHandler,
+                operationService.operationBackupHandler,
+                operationService.node,
+                operationService.completedOperationsCount,
+                operationService.serializationService);
     }
 }

@@ -19,7 +19,6 @@ package com.hazelcast.spi.impl.operationservice.impl;
 import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.instance.MemberImpl;
 import com.hazelcast.instance.Node;
-import com.hazelcast.internal.cluster.ClusterClock;
 import com.hazelcast.internal.management.dto.SlowOperationDTO;
 import com.hazelcast.internal.metrics.MetricsProvider;
 import com.hazelcast.internal.metrics.MetricsRegistry;
@@ -39,7 +38,6 @@ import com.hazelcast.spi.LiveOperations;
 import com.hazelcast.spi.LiveOperationsTracker;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationFactory;
-import com.hazelcast.spi.OperationResponseHandler;
 import com.hazelcast.spi.OperationService;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.PacketHandler;
@@ -68,7 +66,6 @@ import static com.hazelcast.spi.InvocationBuilder.DEFAULT_DESERIALIZE_RESULT;
 import static com.hazelcast.spi.InvocationBuilder.DEFAULT_REPLICA_INDEX;
 import static com.hazelcast.spi.InvocationBuilder.DEFAULT_TRY_COUNT;
 import static com.hazelcast.spi.InvocationBuilder.DEFAULT_TRY_PAUSE_MILLIS;
-import static com.hazelcast.spi.impl.operationutil.Operations.isJoinOperation;
 import static com.hazelcast.spi.properties.GroupProperty.OPERATION_CALL_TIMEOUT_MILLIS;
 import static com.hazelcast.util.Preconditions.checkNotNegative;
 import static com.hazelcast.util.Preconditions.checkNotNull;
@@ -122,11 +119,11 @@ public final class OperationServiceImpl implements InternalOperationService, Met
     final BackpressureRegulator backpressureRegulator;
     final OutboundResponseHandler outboundResponseHandler;
     volatile Invocation.Context invocationContext;
+    final InternalSerializationService serializationService;
 
     private final InvocationMonitor invocationMonitor;
     private final SlowOperationDetector slowOperationDetector;
     private final AsyncInboundResponseHandler asyncInboundResponseHandler;
-    private final InternalSerializationService serializationService;
     private final InboundResponseHandler inboundResponseHandler;
     private final Address thisAddress;
 
@@ -155,7 +152,8 @@ public final class OperationServiceImpl implements InternalOperationService, Met
         this.operationBackupHandler = new OperationBackupHandler(this);
 
         this.inboundResponseHandler = new InboundResponseHandler(
-                node.getLogger(InboundResponseHandler.class), node.getSerializationService(), invocationRegistry, nodeEngine);
+                node.getLogger(InboundResponseHandler.class),
+                node.getSerializationService(), invocationRegistry, nodeEngine);
         this.asyncInboundResponseHandler = new AsyncInboundResponseHandler(
                 node.getHazelcastThreadGroup(), node.getLogger(AsyncInboundResponseHandler.class),
                 inboundResponseHandler, node.getProperties());
@@ -335,28 +333,7 @@ public final class OperationServiceImpl implements InternalOperationService, Met
 
     @Override
     public boolean isCallTimedOut(Operation op) {
-        // Join operations should not be checked for timeout
-        // because caller is not member of this cluster
-        // and can have a different clock.
-        if (!op.returnsResponse() || isJoinOperation(op)) {
-            return false;
-        }
-
-        long callTimeout = op.getCallTimeout();
-        long invocationTime = op.getInvocationTime();
-        long expireTime = invocationTime + callTimeout;
-
-        if (expireTime <= 0 || expireTime == Long.MAX_VALUE) {
-            return false;
-        }
-
-        ClusterClock clusterClock = nodeEngine.getClusterService().getClusterClock();
-        long now = clusterClock.getClusterTime();
-        if (expireTime < now) {
-            return true;
-        }
-
-        return false;
+        return op.isCallTimedOut();
     }
 
     @Override
@@ -405,7 +382,6 @@ public final class OperationServiceImpl implements InternalOperationService, Met
         Connection connection = connectionManager.getOrConnect(target);
         return connectionManager.transmit(packet, connection);
     }
-
 
     public void onMemberLeft(MemberImpl member) {
         invocationMonitor.onMemberLeft(member);

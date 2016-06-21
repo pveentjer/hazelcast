@@ -28,6 +28,7 @@ import com.hazelcast.internal.metrics.MetricsProvider;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.partition.InternalPartition;
+import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.internal.util.counters.Counter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Address;
@@ -80,7 +81,6 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
     static final int AD_HOC_PARTITION_ID = -2;
 
     private final ILogger logger;
-    private final OperationServiceImpl operationService;
     private final Node node;
     private final NodeEngineImpl nodeEngine;
     private final AtomicLong executedOperationsCount;
@@ -90,6 +90,8 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
     private final Address thisAddress;
     private final boolean staleReadOnMigrationEnabled;
     private final OutboundResponseHandler outboundResponseHandler;
+    private final OperationBackupHandler backupHandler;
+    private final InternalSerializationService serializationService;
 
     // This field doesn't need additional synchronization, since a partition-specific OperationRunner
     // will never be called concurrently.
@@ -100,15 +102,22 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
     // when partitionId = -2, it is ad hoc
     // an ad-hoc OperationRunner can only process generic operations, but it can be shared between threads
     // and therefor the {@link OperationRunner#currentTask()} always returns null
-    OperationRunnerImpl(OperationServiceImpl operationService, int partitionId) {
+    OperationRunnerImpl(int partitionId,
+                        ILogger logger,
+                        OutboundResponseHandler outboundResponseHandler,
+                        OperationBackupHandler backupHandler,
+                        Node node,
+                        AtomicLong completedOperationsCount,
+                        InternalSerializationService serializationService) {
         super(partitionId);
-        this.operationService = operationService;
-        this.logger = operationService.node.getLogger(OperationRunnerImpl.class);
-        this.outboundResponseHandler = operationService.outboundResponseHandler;
-        this.node = operationService.node;
+        this.logger = logger;
+        this.backupHandler = backupHandler;
+        this.outboundResponseHandler = outboundResponseHandler;
+        this.serializationService = serializationService;
+        this.node = node;
         this.thisAddress = node.getThisAddress();
-        this.nodeEngine = operationService.nodeEngine;
-        this.executedOperationsCount = operationService.completedOperationsCount;
+        this.nodeEngine = node.nodeEngine;
+        this.executedOperationsCount = completedOperationsCount;
         this.staleReadOnMigrationEnabled = !node.getProperties().getBoolean(DISABLE_STALE_READ_ON_PARTITION_MIGRATION);
 
         if (partitionId >= 0) {
@@ -221,7 +230,7 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
     }
 
     private void ensureQuorumPresent(Operation op) {
-        QuorumServiceImpl quorumService = operationService.nodeEngine.getQuorumService();
+        QuorumServiceImpl quorumService = nodeEngine.getQuorumService();
         quorumService.ensureQuorumPresent(op);
     }
 
@@ -239,7 +248,7 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
     }
 
     private boolean timeout(Operation op) {
-        if (!operationService.isCallTimedOut(op)) {
+        if (!op.isCallTimedOut()) {
             return false;
         }
 
@@ -266,7 +275,7 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
         int backupAcks = 0;
         BackupAwareOperation backupAwareOp = (BackupAwareOperation) op;
         if (backupAwareOp.shouldBackup()) {
-            backupAcks = operationService.operationBackupHandler.backup(backupAwareOp);
+            backupAcks = backupHandler.backup(backupAwareOp);
         }
         return backupAcks;
     }
@@ -289,7 +298,7 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
             if (op instanceof Notifier) {
                 final Notifier notifier = (Notifier) op;
                 if (notifier.shouldNotify()) {
-                    operationService.nodeEngine.getWaitNotifyService().notify(notifier);
+                    nodeEngine.getWaitNotifyService().notify(notifier);
                 }
             }
         } catch (Throwable e) {
@@ -395,7 +404,7 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
             run(op);
         } catch (Throwable throwable) {
             // If exception happens we need to extract the callId from the bytes directly!
-            long callId = extractOperationCallId(packet, node.getSerializationService());
+            long callId = extractOperationCallId(packet, serializationService);
             outboundResponseHandler.send(new ErrorResponse(throwable, callId, packet.isUrgent()), caller);
             logOperationDeserializationException(throwable, callId);
             throw ExceptionUtil.rethrow(throwable);

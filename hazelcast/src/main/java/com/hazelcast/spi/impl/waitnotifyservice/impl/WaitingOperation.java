@@ -77,7 +77,7 @@ class WaitingOperation extends AbstractOperation implements Delayed, PartitionAw
     }
 
     public boolean needsInvalidation() {
-        return isExpired() || isCancelled() || isCallTimedOut();
+        return isExpired() || isCancelled() || handleCallTimeout();
     }
 
     public boolean isExpired() {
@@ -88,7 +88,7 @@ class WaitingOperation extends AbstractOperation implements Delayed, PartitionAw
         return cancelResponse != null;
     }
 
-    public boolean isCallTimedOut() {
+    public boolean handleCallTimeout() {
         final NodeEngineImpl nodeEngine = (NodeEngineImpl) getNodeEngine();
         InternalOperationService operationService = nodeEngine.getOperationService();
         if (operationService.isCallTimedOut(op)) {
