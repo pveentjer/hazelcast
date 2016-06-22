@@ -217,7 +217,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @Override
     public void write(OutboundFrame frame) {
-        long newTail = sequenceArray.getAndDecrement(TAIL_INDEX);
+        long newTail = sequenceArray.getAndIncrement(TAIL_INDEX);
         int index = (int) QuickMath.modPowerOfTwo(newTail, bufferLength) * 8;
         buffer.lazySet(index, frame);
         schedule();
