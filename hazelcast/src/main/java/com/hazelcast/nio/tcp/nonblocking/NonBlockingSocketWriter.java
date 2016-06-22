@@ -340,7 +340,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     @SuppressWarnings("unchecked")
     public void handle() throws Exception {
         eventCount.inc();
-        lastWriteTime = currentTimeMillis();
+        //lastWriteTime = currentTimeMillis();
 
         if (writeHandler == null) {
             logger.log(Level.WARNING, "SocketWriter is not set, creating SocketWriter with CLUSTER protocol!");

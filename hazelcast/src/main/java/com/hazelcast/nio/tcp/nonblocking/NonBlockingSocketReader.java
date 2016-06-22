@@ -135,7 +135,7 @@ public final class NonBlockingSocketReader extends AbstractHandler implements So
         eventCount.inc();
         // we are going to set the timestamp even if the socketChannel is going to fail reading. In that case
         // the connection is going to be closed anyway.
-        lastReadTime = currentTimeMillis();
+        //lastReadTime = currentTimeMillis();
 
         if (readHandler == null) {
             initReadHandler();
