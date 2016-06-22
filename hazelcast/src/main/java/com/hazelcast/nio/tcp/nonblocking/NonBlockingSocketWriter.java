@@ -39,7 +39,7 @@ import java.util.Queue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.logging.Level;
 
@@ -79,8 +79,14 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     private final AtomicReferenceArray<OutboundFrame> buffer = new AtomicReferenceArray<OutboundFrame>(bufferLength * 16);
 
-    private final AtomicLong tailSeq = new AtomicLong();
-    private final AtomicLong headSeq = new AtomicLong();
+    private final AtomicLongArray sequenceArray = new AtomicLongArray(32);
+
+    private final static int HEAD_INDEX = 8;
+    private final static int TAIL_INDEX = 16;
+
+//
+//    private final AtomicLong tailSeq = new AtomicLong();
+//    private final AtomicLong headSeq = new AtomicLong();
 
     @Probe(name = "eventCount")
     private final SwCounter eventCount = newSwCounter();
@@ -211,7 +217,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @Override
     public void write(OutboundFrame frame) {
-        long newTail = tailSeq.getAndIncrement();
+        long newTail = sequenceArray.getAndDecrement(TAIL_INDEX);
         int index = (int) QuickMath.modPowerOfTwo(newTail, bufferLength) * 8;
         buffer.lazySet(index, frame);
         schedule();
@@ -219,8 +225,8 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     private OutboundFrame poll() {
         for (; ; ) {
-            long currentHead = headSeq.get();
-            if (currentHead == tailSeq.get()) {
+            long currentHead = sequenceArray.get(HEAD_INDEX);
+            if (currentHead == sequenceArray.get(TAIL_INDEX)) {
                 return null;
             }
 
@@ -232,7 +238,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
                 frame = buffer.get(index);
                 if (frame != null) {
                     buffer.lazySet(index, null);
-                    headSeq.lazySet(currentHead + 1);
+                    sequenceArray.lazySet(HEAD_INDEX, currentHead + 1);
                     break;
                 }
                 n++;
@@ -307,7 +313,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
         scheduled.set(false);
 
         // todo: thinkin about order
-        if (tailSeq.get() == headSeq.get()) {
+        if (sequenceArray.get(TAIL_INDEX) == sequenceArray.get(HEAD_INDEX)) {
             // there are no remaining frames, so we are done.
             return;
         }
