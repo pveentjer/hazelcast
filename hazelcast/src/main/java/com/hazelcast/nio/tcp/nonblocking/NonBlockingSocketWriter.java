@@ -77,8 +77,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     private final int bufferLength = 4096;
 
-    private final AtomicReferenceArray<OutboundFrame> writeBuffer = new AtomicReferenceArray<OutboundFrame>(
-            bufferLength * 16);
+    private final AtomicReferenceArray<OutboundFrame> buffer = new AtomicReferenceArray<OutboundFrame>(bufferLength * 16);
 
     private final AtomicLong tailSeq = new AtomicLong();
     private final AtomicLong headSeq = new AtomicLong();
@@ -214,7 +213,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     public void write(OutboundFrame frame) {
         long newTail = tailSeq.incrementAndGet();
         int index = (int) QuickMath.modPowerOfTwo(newTail, bufferLength) * 8;
-        writeBuffer.lazySet(index, frame);
+        buffer.lazySet(index, frame);
         schedule();
     }
 
@@ -230,10 +229,10 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
             long n = 0;
             OutboundFrame frame;
             for (; ; ) {
-                frame = writeBuffer.get(index);
+                frame = buffer.get(index);
                 if (frame != null) {
-                    tailSeq.lazySet(currentHead+1);
-                    writeBuffer.lazySet(index, null);
+                    headSeq.lazySet(currentHead + 1);
+                    buffer.lazySet(index, null);
                     break;
                 }
                 n++;
@@ -437,8 +436,8 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
         metricsRegistry.deregister(this);
 
         //writeQueue.clear();
-        for (int k = 0; k < writeBuffer.length(); k++) {
-            writeBuffer.set(k, null);
+        for (int k = 0; k < buffer.length(); k++) {
+            buffer.set(k, null);
         }
 
         CloseTask closeTask = new CloseTask();
