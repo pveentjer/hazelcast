@@ -232,6 +232,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
             for (; ; ) {
                 frame = writeBuffer.get(index);
                 if (frame != null) {
+                    tailSeq.lazySet(currentHead+1);
                     writeBuffer.lazySet(index, null);
                     break;
                 }
