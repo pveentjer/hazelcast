@@ -150,15 +150,15 @@ public class OverloadedConnectionsPlugin extends DiagnosticsPlugin {
     }
 
     private Queue<OutboundFrame> getOutboundQueue(TcpIpConnection connection, boolean priority) {
-        if (connection.getSocketWriter() instanceof NonBlockingSocketWriter) {
-            NonBlockingSocketWriter writer = (NonBlockingSocketWriter) connection.getSocketWriter();
-            return priority ? writer.urgentWriteQueue : writer.writeQueue;
-        } else if (connection.getSocketWriter() instanceof SpinningSocketWriter) {
-            SpinningSocketWriter writer = (SpinningSocketWriter) connection.getSocketWriter();
-            return priority ? writer.urgentWriteQueue : writer.writeQueue;
-        } else {
+//        if (connection.getSocketWriter() instanceof NonBlockingSocketWriter) {
+//            NonBlockingSocketWriter writer = (NonBlockingSocketWriter) connection.getSocketWriter();
+//            return priority ? writer.urgentWriteQueue : writer.writeQueue;
+//        } else if (connection.getSocketWriter() instanceof SpinningSocketWriter) {
+//            SpinningSocketWriter writer = (SpinningSocketWriter) connection.getSocketWriter();
+//            return priority ? writer.urgentWriteQueue : writer.writeQueue;
+//        } else {
             return EMPTY_QUEUE;
-        }
+        //}
     }
 
     private void render(DiagnosticsLogWriter writer, TcpIpConnection connection, boolean priority, int sampleCount) {

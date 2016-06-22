@@ -235,7 +235,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
                     writeBuffer.lazySet(index, null);
                     break;
                 }
-
+                n++;
                 idleStrategy.idle(n);
             }
 
