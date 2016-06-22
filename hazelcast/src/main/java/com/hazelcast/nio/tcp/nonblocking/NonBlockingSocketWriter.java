@@ -27,16 +27,20 @@ import com.hazelcast.nio.tcp.ClientWriteHandler;
 import com.hazelcast.nio.tcp.SocketWriter;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 import com.hazelcast.nio.tcp.WriteHandler;
+import com.hazelcast.util.QuickMath;
+import com.hazelcast.util.concurrent.BackoffIdleStrategy;
+import com.hazelcast.util.concurrent.IdleStrategy;
 
 import java.io.IOException;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.logging.Level;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.DEBUG;
@@ -48,20 +52,37 @@ import static com.hazelcast.util.EmptyStatement.ignore;
 import static com.hazelcast.util.StringUtil.stringToBytes;
 import static java.lang.Math.max;
 import static java.lang.System.currentTimeMillis;
+import static java.util.concurrent.TimeUnit.MICROSECONDS;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 /**
  * The writing side of the {@link TcpIpConnection}.
  */
 public final class NonBlockingSocketWriter extends AbstractHandler implements Runnable, SocketWriter {
+    private static final long IDLE_MAX_SPINS = 20;
+    private static final long IDLE_MAX_YIELDS = 50;
+    private static final long IDLE_MIN_PARK_NS = NANOSECONDS.toNanos(1);
+    private static final long IDLE_MAX_PARK_NS = MICROSECONDS.toNanos(100);
+    private static final IdleStrategy idleStrategy
+            = new BackoffIdleStrategy(IDLE_MAX_SPINS, IDLE_MAX_YIELDS, IDLE_MIN_PARK_NS, IDLE_MAX_PARK_NS);
 
     private static final long TIMEOUT = 3;
 
-    @SuppressWarnings("checkstyle:visibilitymodifier")
-    @Probe(name = "writeQueueSize")
-    public final Queue<OutboundFrame> writeQueue = new ConcurrentLinkedQueue<OutboundFrame>();
-    @SuppressWarnings("checkstyle:visibilitymodifier")
-    @Probe(name = "priorityWriteQueueSize")
-    public final Queue<OutboundFrame> urgentWriteQueue = new ConcurrentLinkedQueue<OutboundFrame>();
+//    @SuppressWarnings("checkstyle:visibilitymodifier")
+//    @Probe(name = "writeQueueSize")
+//    public final Queue<OutboundFrame> writeQueue = new ConcurrentLinkedQueue<OutboundFrame>();
+//    @SuppressWarnings("checkstyle:visibilitymodifier")
+//    @Probe(name = "priorityWriteQueueSize")
+//    public final Queue<OutboundFrame> urgentWriteQueue = new ConcurrentLinkedQueue<OutboundFrame>();
+
+    private final int bufferLength = 4096;
+
+    private final AtomicReferenceArray<OutboundFrame> writeBuffer = new AtomicReferenceArray<OutboundFrame>(
+            bufferLength * 16);
+
+    private final AtomicLong tailSeq = new AtomicLong();
+    private final AtomicLong headSeq = new AtomicLong();
+
     @Probe(name = "eventCount")
     private final SwCounter eventCount = newSwCounter();
     private final AtomicBoolean scheduled = new AtomicBoolean(false);
@@ -93,7 +114,8 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @Override
     public int totalFramesPending() {
-        return writeQueue.size() + urgentWriteQueue.size();
+        //return writeQueue.size() + urgentWriteQueue.size();
+        return 0;
     }
 
     @Override
@@ -108,12 +130,14 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @Probe(name = "writeQueuePendingBytes", level = DEBUG)
     public long bytesPending() {
-        return bytesPending(writeQueue);
+        return 0;
+        //return bytesPending(writeQueue);
     }
 
     @Probe(name = "priorityWriteQueuePendingBytes", level = DEBUG)
     public long priorityBytesPending() {
-        return bytesPending(urgentWriteQueue);
+        return 0;
+        //return bytesPending(urgentWriteQueue);
     }
 
     private long bytesPending(Queue<OutboundFrame> writeQueue) {
@@ -188,27 +212,31 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @Override
     public void write(OutboundFrame frame) {
-        if (frame.isUrgent()) {
-            urgentWriteQueue.offer(frame);
-        } else {
-            writeQueue.offer(frame);
-        }
-
+        long newTail = tailSeq.incrementAndGet();
+        int index = (int) QuickMath.modPowerOfTwo(newTail, bufferLength) * 8;
+        writeBuffer.lazySet(index, frame);
         schedule();
     }
 
     private OutboundFrame poll() {
         for (; ; ) {
-            boolean urgent = true;
-            OutboundFrame frame = urgentWriteQueue.poll();
-
-            if (frame == null) {
-                urgent = false;
-                frame = writeQueue.poll();
+            long currentHead = headSeq.get();
+            if (currentHead == tailSeq.get()) {
+                return null;
             }
 
-            if (frame == null) {
-                return null;
+            int index = (int) QuickMath.modPowerOfTwo(currentHead, bufferLength) * 8;
+
+            long n = 0;
+            OutboundFrame frame;
+            for (; ; ) {
+                frame = writeBuffer.get(index);
+                if (frame != null) {
+                    writeBuffer.lazySet(index, null);
+                    break;
+                }
+
+                idleStrategy.idle(n);
             }
 
             if (frame.getClass() == TaskFrame.class) {
@@ -217,11 +245,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
                 continue;
             }
 
-            if (urgent) {
-                priorityFramesWritten.inc();
-            } else {
-                normalFramesWritten.inc();
-            }
+            normalFramesWritten.inc();
 
             return frame;
         }
@@ -282,7 +306,8 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
         // So the outputBuffer is empty, so we are going to unschedule ourselves.
         scheduled.set(false);
 
-        if (writeQueue.isEmpty() && urgentWriteQueue.isEmpty()) {
+        // todo: thinkin about order
+        if (tailSeq.get() == headSeq.get()) {
             // there are no remaining frames, so we are done.
             return;
         }
@@ -409,8 +434,11 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     @Override
     public void close() {
         metricsRegistry.deregister(this);
-        writeQueue.clear();
-        urgentWriteQueue.clear();
+
+        //writeQueue.clear();
+        for (int k = 0; k < writeBuffer.length(); k++) {
+            writeBuffer.set(k, null);
+        }
 
         CloseTask closeTask = new CloseTask();
         write(new TaskFrame(closeTask));
@@ -450,7 +478,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     /**
      * Triggers the migration when executed by setting the SocketWriter.newOwner field. When the handle method completes, it
      * checks if this field if set, if so, the migration starts.
-     *
+     * <p>
      * If the current ioThread is the same as 'theNewOwner' then the call is ignored.
      */
     private final class StartMigrationTask implements Runnable {
