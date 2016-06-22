@@ -154,7 +154,7 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
             count.inc();
         }
 
-        executedOperationsCount.incrementAndGet();
+        //executedOperationsCount.incrementAndGet();
 
         boolean publishCurrentTask = publishCurrentTask();
 
