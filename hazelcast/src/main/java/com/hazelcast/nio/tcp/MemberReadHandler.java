@@ -16,7 +16,6 @@
 
 package com.hazelcast.nio.tcp;
 
-import com.hazelcast.internal.util.Ringbuffer;
 import com.hazelcast.internal.util.counters.Counter;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.spi.impl.operationservice.impl.AsyncResponseHandler;
@@ -25,11 +24,7 @@ import com.hazelcast.spi.impl.packetdispatcher.impl.PacketDispatcherImpl;
 
 import java.nio.ByteBuffer;
 
-import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutOfMemoryError;
-import static com.hazelcast.nio.Packet.FLAG_BIND;
-import static com.hazelcast.nio.Packet.FLAG_EVENT;
 import static com.hazelcast.nio.Packet.FLAG_OP;
-import static com.hazelcast.nio.Packet.FLAG_OP_CONTROL;
 import static com.hazelcast.nio.Packet.FLAG_RESPONSE;
 
 /**
@@ -68,25 +63,29 @@ public class MemberReadHandler implements ReadHandler {
             if (packet == null) {
                 packet = new Packet();
             }
-            boolean complete = packet.readFrom(src);
-            if (complete) {
-                if (packet.isFlagSet(Packet.FLAG_URGENT)) {
-                    priorityPacketsRead.inc();
-                } else {
-                    normalPacketsRead.inc();
-                }
 
-                packet.setConn(connection);
-                if (packet.isFlagSet(FLAG_OP) && packet.isFlagSet(FLAG_RESPONSE)) {
-                    responsePackets[responsePacketIndex] = packet;
-                    responsePacketIndex++;
-                } else {
-                    packetDispatcher.dispatch(packet);
-                }
-                packet = null;
-            } else {
-                break;
+            boolean complete = packet.readFrom(src);
+
+            if (!complete) {
+                return;
             }
+
+            if (packet.isFlagSet(Packet.FLAG_URGENT)) {
+                priorityPacketsRead.inc();
+            } else {
+                normalPacketsRead.inc();
+            }
+
+            packet.setConn(connection);
+
+            if (packet.isFlagSet(FLAG_OP) && packet.isFlagSet(FLAG_RESPONSE)) {
+                responsePackets[responsePacketIndex] = packet;
+                responsePacketIndex++;
+            } else {
+                packetDispatcher.dispatch(packet);
+            }
+
+            packet = null;
         }
 
         if (responsePacketIndex > 0) {

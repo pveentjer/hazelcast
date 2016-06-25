@@ -59,7 +59,7 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
     }
 
     public boolean offer(E[] items) {
-        long tail = sequenceArray.getAndAdd(TAIL_INDEX, items.length);
+        long seq = sequenceArray.getAndAdd(TAIL_INDEX, items.length);
         for (int k = 0; k < items.length; k++) {
             E item = items[k];
             if (item == null) {
@@ -67,10 +67,8 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
             }
 
             items[k] = null;
-            int index = index(tail);
-
-            buffer.lazySet(index, item);
-            tail ++;
+            buffer.lazySet(index(seq), item);
+            seq ++;
         }
 
         return true;
