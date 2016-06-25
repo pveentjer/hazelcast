@@ -59,7 +59,7 @@ public class MemberReadHandler implements ReadHandler {
 
     @Override
     public void onRead(ByteBuffer src) throws Exception {
-        int responseIndex = 0;
+        int responsesLength = 0;
 
         while (src.hasRemaining()) {
             if (packet == null) {
@@ -81,8 +81,8 @@ public class MemberReadHandler implements ReadHandler {
             packet.setConn(connection);
 
             if (packetsRead > 100 && packet.isFlagSet(FLAG_OP) && packet.isFlagSet(FLAG_RESPONSE)) {
-                responses[responseIndex] = packet;
-                responseIndex++;
+                responses[responsesLength] = packet;
+                responsesLength++;
             } else {
                 packetDispatcher.dispatch(packet);
             }
@@ -90,8 +90,8 @@ public class MemberReadHandler implements ReadHandler {
             packet = null;
         }
 
-        if (responseIndex > 0) {
-            asyncResponseHandler.handle(responses);
+        if (responsesLength > 0) {
+            asyncResponseHandler.handle(responses, responsesLength);
         }
     }
 

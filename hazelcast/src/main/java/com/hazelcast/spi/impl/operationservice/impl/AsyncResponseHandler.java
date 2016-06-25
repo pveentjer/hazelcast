@@ -88,12 +88,12 @@ public class AsyncResponseHandler implements PacketHandler, MetricsProvider {
     }
 
 
-    public void handle(Packet[] packet) {
+    public void handle(Packet[] packets, int length) {
 //        checkNotNull(packet, "packet can't be null");
 //        checkTrue(packet.isFlagSet(FLAG_OP), "FLAG_OP should be set");
 //        checkTrue(packet.isFlagSet(FLAG_RESPONSE), "FLAG_RESPONSE should be set");
 
-        queue.offer(packet);
+        queue.offerAll(packets, length);
     }
 
     @Override
