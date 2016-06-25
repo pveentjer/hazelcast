@@ -70,14 +70,14 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
             int index = index(tail);
 
             buffer.lazySet(index, item);
-            tail += 16;
+            tail ++;
         }
 
         return true;
     }
 
     private int index(long seq) {
-        return (int) modPowerOfTwo(seq, bufferLength) * 16;
+        return (int) modPowerOfTwo(seq, bufferLength) * PADDING;
     }
 
     @Override
