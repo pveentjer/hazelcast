@@ -68,9 +68,14 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
     @Override
     public E take() throws InterruptedException {
         long iteration = 0;
+
         for (; ; ) {
             long currentHead = sequenceArray.get(HEAD_INDEX);
             if (currentHead == sequenceArray.get(TAIL_INDEX)) {
+                if(Thread.interrupted()){
+                    throw new InterruptedException();
+                }
+
                 iteration++;
                 idleStrategy.idle(iteration);
                 continue;
