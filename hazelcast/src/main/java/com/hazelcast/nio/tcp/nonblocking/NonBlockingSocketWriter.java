@@ -18,6 +18,7 @@ package com.hazelcast.nio.tcp.nonblocking;
 
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
+import com.hazelcast.internal.util.Ringbuffer;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.nio.IOUtil;
 import com.hazelcast.nio.OutboundFrame;
@@ -27,7 +28,6 @@ import com.hazelcast.nio.tcp.ClientWriteHandler;
 import com.hazelcast.nio.tcp.SocketWriter;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 import com.hazelcast.nio.tcp.WriteHandler;
-import com.hazelcast.util.QuickMath;
 import com.hazelcast.util.concurrent.BackoffIdleStrategy;
 import com.hazelcast.util.concurrent.IdleStrategy;
 
@@ -39,8 +39,6 @@ import java.util.Queue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLongArray;
-import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.logging.Level;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.DEBUG;
@@ -59,34 +57,11 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
  * The writing side of the {@link TcpIpConnection}.
  */
 public final class NonBlockingSocketWriter extends AbstractHandler implements Runnable, SocketWriter {
-    private static final long IDLE_MAX_SPINS = 20;
-    private static final long IDLE_MAX_YIELDS = 50;
-    private static final long IDLE_MIN_PARK_NS = NANOSECONDS.toNanos(1);
-    private static final long IDLE_MAX_PARK_NS = MICROSECONDS.toNanos(100);
-    private static final IdleStrategy idleStrategy
-            = new BackoffIdleStrategy(IDLE_MAX_SPINS, IDLE_MAX_YIELDS, IDLE_MIN_PARK_NS, IDLE_MAX_PARK_NS);
 
     private static final long TIMEOUT = 3;
 
-//    @SuppressWarnings("checkstyle:visibilitymodifier")
-//    @Probe(name = "writeQueueSize")
-//    public final Queue<OutboundFrame> writeQueue = new ConcurrentLinkedQueue<OutboundFrame>();
-//    @SuppressWarnings("checkstyle:visibilitymodifier")
-//    @Probe(name = "priorityWriteQueueSize")
-//    public final Queue<OutboundFrame> urgentWriteQueue = new ConcurrentLinkedQueue<OutboundFrame>();
 
-    private final int bufferLength = 4096;
-
-    private final AtomicReferenceArray<OutboundFrame> buffer = new AtomicReferenceArray<OutboundFrame>(bufferLength * 16);
-
-    private final AtomicLongArray sequenceArray = new AtomicLongArray(32);
-
-    private final static int HEAD_INDEX = 8;
-    private final static int TAIL_INDEX = 16;
-
-//
-//    private final AtomicLong tailSeq = new AtomicLong();
-//    private final AtomicLong headSeq = new AtomicLong();
+    private final Ringbuffer<OutboundFrame> buffer = new Ringbuffer<OutboundFrame>(4096);
 
     @Probe(name = "eventCount")
     private final SwCounter eventCount = newSwCounter();
@@ -217,32 +192,15 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
 
     @Override
     public void write(OutboundFrame frame) {
-        long newTail = sequenceArray.getAndIncrement(TAIL_INDEX);
-        int index = (int) QuickMath.modPowerOfTwo(newTail, bufferLength) * 16;
-        buffer.lazySet(index, frame);
+        buffer.add(frame);
         schedule();
     }
 
     private OutboundFrame poll() {
         for (; ; ) {
-            long currentHead = sequenceArray.get(HEAD_INDEX);
-            if (currentHead == sequenceArray.get(TAIL_INDEX)) {
+            OutboundFrame frame = buffer.poll();
+            if (frame == null) {
                 return null;
-            }
-
-            int index = (int) QuickMath.modPowerOfTwo(currentHead, bufferLength) * 16;
-
-            long n = 0;
-            OutboundFrame frame;
-            for (; ; ) {
-                frame = buffer.get(index);
-                if (frame != null) {
-                    buffer.lazySet(index, null);
-                    sequenceArray.lazySet(HEAD_INDEX, currentHead + 1);
-                    break;
-                }
-                n++;
-                idleStrategy.idle(n);
             }
 
             if (frame.getClass() == TaskFrame.class) {
@@ -313,7 +271,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
         scheduled.set(false);
 
         // todo: thinkin about order
-        if (sequenceArray.get(TAIL_INDEX) == sequenceArray.get(HEAD_INDEX)) {
+        if (buffer.isEmpty()) {
             // there are no remaining frames, so we are done.
             return;
         }
@@ -441,10 +399,7 @@ public final class NonBlockingSocketWriter extends AbstractHandler implements Ru
     public void close() {
         metricsRegistry.deregister(this);
 
-        //writeQueue.clear();
-        for (int k = 0; k < buffer.length(); k++) {
-            buffer.set(k, null);
-        }
+        buffer.clear();
 
         CloseTask closeTask = new CloseTask();
         write(new TaskFrame(closeTask));

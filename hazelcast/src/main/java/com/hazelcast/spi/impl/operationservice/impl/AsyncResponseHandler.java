@@ -20,7 +20,7 @@ import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.internal.metrics.MetricsProvider;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
-import com.hazelcast.internal.util.collection.MPSCQueue;
+import com.hazelcast.internal.util.Ringbuffer;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.spi.impl.PacketHandler;
@@ -30,8 +30,6 @@ import com.hazelcast.spi.properties.HazelcastProperty;
 import com.hazelcast.util.concurrent.BackoffIdleStrategy;
 import com.hazelcast.util.concurrent.BusySpinIdleStrategy;
 import com.hazelcast.util.concurrent.IdleStrategy;
-
-import java.util.concurrent.BlockingQueue;
 
 import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutOfMemoryError;
 import static com.hazelcast.internal.metrics.ProbeLevel.MANDATORY;
@@ -45,11 +43,11 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 /**
  * The AsyncResponsePacketHandler is a PacketHandler that asynchronously process operation-response packets.
- *
+ * <p>
  * So when a response is received from a remote system, it is put in the responseQueue of the ResponseThread.
  * Then the ResponseThread takes it from this responseQueue and calls the {@link PacketHandler} for the
  * actual processing.
- *
+ * <p>
  * The reason that the IO thread doesn't immediately deals with the response is that deserializing the
  * {@link com.hazelcast.spi.impl.operationservice.impl.responses.Response} and let the invocation-future
  * deal with the response can be rather expensive currently.
@@ -119,7 +117,7 @@ public class AsyncResponseHandler implements PacketHandler, MetricsProvider {
      */
     final class ResponseThread extends Thread implements OperationHostileThread {
 
-        private final BlockingQueue<Packet> responseQueue;
+        private final Ringbuffer<Packet> responseQueue;
         private final PacketHandler responsePacketHandler;
         private volatile boolean shutdown;
 
@@ -129,7 +127,7 @@ public class AsyncResponseHandler implements PacketHandler, MetricsProvider {
             super(threadGroup.getInternalThreadGroup(), threadGroup.getThreadNamePrefix("response"));
             setContextClassLoader(threadGroup.getClassLoader());
             this.responsePacketHandler = responsePacketHandler;
-            this.responseQueue = new MPSCQueue<Packet>(this, getIdleStrategy(properties, IDLE_STRATEGY));
+            this.responseQueue = new Ringbuffer<Packet>(this, 16384, getIdleStrategy(properties, IDLE_STRATEGY));
         }
 
         @Override
