@@ -78,7 +78,7 @@ public class MemberReadHandler implements ReadHandler {
 
             packet.setConn(connection);
 
-            if (packet.isFlagSet(FLAG_OP) && packet.isFlagSet(FLAG_RESPONSE)) {
+            if (priorityPacketsRead.get() > 0 && packet.isFlagSet(FLAG_OP) && packet.isFlagSet(FLAG_RESPONSE)) {
                 responses[responseIndex] = packet;
                 responseIndex++;
             } else {
