@@ -29,7 +29,7 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
     private final static int TAIL_INDEX = 16;
     public static final int PADDING = 16;
 
-    private final AtomicReferenceArray<E> buffer;
+    private final AtomicReferenceArray<E> array;
     private final AtomicLongArray sequenceArray = new AtomicLongArray(32);
     private final int bufferLength;
     private final IdleStrategy idleStrategy;
@@ -41,7 +41,7 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
 
     public Ringbuffer(Thread consumerThread, int bufferLength, IdleStrategy idleStrategy) {
         this.bufferLength = QuickMath.nextPowerOfTwo(bufferLength);
-        this.buffer = new AtomicReferenceArray<E>(bufferLength * PADDING);
+        this.array = new AtomicReferenceArray<E>(bufferLength * PADDING);
         this.idleStrategy = idleStrategy;
         this.consumerThread = consumerThread;
     }
@@ -54,7 +54,7 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
     public boolean offer(E item) {
         long newTail = sequenceArray.incrementAndGet(TAIL_INDEX) - 1;
         int index = index(newTail);
-        buffer.lazySet(index, item);
+        array.lazySet(index, item);
         return true;
     }
 
@@ -67,8 +67,8 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
             }
 
             items[k] = null;
-            buffer.lazySet(index(seq), item);
-            seq ++;
+            array.lazySet(index(seq), item);
+            seq++;
         }
 
         return true;
@@ -114,9 +114,9 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
         long n = 0;
         E item;
         for (; ; ) {
-            item = buffer.get(index);
+            item = array.get(index);
             if (item != null) {
-                buffer.lazySet(index, null);
+                array.lazySet(index, null);
                 sequenceArray.lazySet(HEAD_INDEX, currentHead + 1);
                 break;
             }
@@ -129,8 +129,8 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
 
     @Override
     public void clear() {
-        for (int k = 0; k < buffer.length(); k++) {
-            buffer.set(k, null);
+        for (int k = 0; k < array.length(); k++) {
+            array.set(k, null);
         }
     }
 

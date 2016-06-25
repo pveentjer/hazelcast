@@ -45,7 +45,7 @@ public class MemberReadHandler implements ReadHandler {
     private final PacketDispatcherImpl packetDispatcher;
     private final Counter normalPacketsRead;
     private final Counter priorityPacketsRead;
-    private final Packet[] responsePackets = new Packet[1024];
+    private final Packet[] responses = new Packet[1024];
 
     public MemberReadHandler(TcpIpConnection connection, PacketDispatcher packetDispatcher) {
         this.connection = connection;
@@ -58,7 +58,7 @@ public class MemberReadHandler implements ReadHandler {
 
     @Override
     public void onRead(ByteBuffer src) throws Exception {
-        int responsePacketIndex = 0;
+        int responseIndex = 0;
 
         while (src.hasRemaining()) {
             if (packet == null) {
@@ -78,9 +78,9 @@ public class MemberReadHandler implements ReadHandler {
 
             packet.setConn(connection);
 
-            if (false && packet.isFlagSet(FLAG_OP) && packet.isFlagSet(FLAG_RESPONSE)) {
-                responsePackets[responsePacketIndex] = packet;
-                responsePacketIndex++;
+            if (packet.isFlagSet(FLAG_OP) && packet.isFlagSet(FLAG_RESPONSE)) {
+                responses[responseIndex] = packet;
+                responseIndex++;
             } else {
                 packetDispatcher.dispatch(packet);
             }
@@ -88,8 +88,8 @@ public class MemberReadHandler implements ReadHandler {
             packet = null;
         }
 
-        if (responsePacketIndex > 0) {
-            asyncResponseHandler.handle(responsePackets);
+        if (responseIndex > 0) {
+            asyncResponseHandler.handle(responses);
         }
     }
 
