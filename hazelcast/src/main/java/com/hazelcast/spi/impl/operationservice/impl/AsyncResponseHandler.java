@@ -21,6 +21,7 @@ import com.hazelcast.internal.metrics.MetricsProvider;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.util.Ringbuffer;
+import com.hazelcast.internal.util.collection.MPSCQueue;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.spi.impl.PacketHandler;
@@ -30,6 +31,8 @@ import com.hazelcast.spi.properties.HazelcastProperty;
 import com.hazelcast.util.concurrent.BackoffIdleStrategy;
 import com.hazelcast.util.concurrent.BusySpinIdleStrategy;
 import com.hazelcast.util.concurrent.IdleStrategy;
+
+import java.util.concurrent.BlockingQueue;
 
 import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutOfMemoryError;
 import static com.hazelcast.internal.metrics.ProbeLevel.MANDATORY;
@@ -117,7 +120,7 @@ public class AsyncResponseHandler implements PacketHandler, MetricsProvider {
      */
     final class ResponseThread extends Thread implements OperationHostileThread {
 
-        private final Ringbuffer<Packet> responseQueue;
+        private final BlockingQueue<Packet> responseQueue;
         private final PacketHandler responsePacketHandler;
         private volatile boolean shutdown;
 
@@ -127,7 +130,8 @@ public class AsyncResponseHandler implements PacketHandler, MetricsProvider {
             super(threadGroup.getInternalThreadGroup(), threadGroup.getThreadNamePrefix("response"));
             setContextClassLoader(threadGroup.getClassLoader());
             this.responsePacketHandler = responsePacketHandler;
-            this.responseQueue = new Ringbuffer<Packet>(this, 16384, getIdleStrategy(properties, IDLE_STRATEGY));
+            //this.responseQueue = new Ringbuffer<Packet>(this, 16384, getIdleStrategy(properties, IDLE_STRATEGY));
+            this.responseQueue = new MPSCQueue<Packet>(this, getIdleStrategy(properties, IDLE_STRATEGY));
         }
 
         @Override
