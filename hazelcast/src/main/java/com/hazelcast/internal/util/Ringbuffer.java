@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
+import static com.hazelcast.util.QuickMath.modPowerOfTwo;
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
@@ -20,6 +21,7 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
     private static final long IDLE_MAX_YIELDS = 50;
     private static final long IDLE_MIN_PARK_NS = NANOSECONDS.toNanos(1);
     private static final long IDLE_MAX_PARK_NS = MICROSECONDS.toNanos(100);
+
     private static final IdleStrategy WAIT_FOR_COMMIT_IDLE_STRATEGY
             = new BackoffIdleStrategy(IDLE_MAX_SPINS, IDLE_MAX_YIELDS, IDLE_MIN_PARK_NS, IDLE_MAX_PARK_NS);
 
@@ -49,10 +51,14 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
 
     @Override
     public boolean offer(E item) {
-        long newTail = sequenceArray.getAndIncrement(TAIL_INDEX);
-        int index = (int) QuickMath.modPowerOfTwo(newTail, bufferLength) * 16;
+        long newTail = sequenceArray.incrementAndGet(TAIL_INDEX)-1;
+        int index = index(newTail);
         buffer.lazySet(index, item);
         return true;
+    }
+
+    private int index(long seq) {
+        return (int) modPowerOfTwo(seq, bufferLength) * 16;
     }
 
     @Override
@@ -72,7 +78,7 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
         for (; ; ) {
             long currentHead = sequenceArray.get(HEAD_INDEX);
             if (currentHead == sequenceArray.get(TAIL_INDEX)) {
-                if(Thread.interrupted()){
+                if (Thread.interrupted()) {
                     throw new InterruptedException();
                 }
 
@@ -86,7 +92,7 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
     }
 
     private E removeItem(long currentHead) {
-        int index = (int) QuickMath.modPowerOfTwo(currentHead, bufferLength) * 16;
+        int index = index(currentHead);
 
         long n = 0;
         E item;
