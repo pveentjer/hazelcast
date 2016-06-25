@@ -27,6 +27,7 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
 
     private final static int HEAD_INDEX = 8;
     private final static int TAIL_INDEX = 16;
+    public static final int PADDING = 16;
 
     private final AtomicReferenceArray<E> buffer;
     private final AtomicLongArray sequenceArray = new AtomicLongArray(32);
@@ -40,7 +41,7 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
 
     public Ringbuffer(Thread consumerThread, int bufferLength, IdleStrategy idleStrategy) {
         this.bufferLength = QuickMath.nextPowerOfTwo(bufferLength);
-        this.buffer = new AtomicReferenceArray<E>(bufferLength * 16);
+        this.buffer = new AtomicReferenceArray<E>(bufferLength * PADDING);
         this.idleStrategy = idleStrategy;
         this.consumerThread = consumerThread;
     }
@@ -51,9 +52,25 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
 
     @Override
     public boolean offer(E item) {
-        long newTail = sequenceArray.incrementAndGet(TAIL_INDEX)-1;
+        long newTail = sequenceArray.incrementAndGet(TAIL_INDEX) - 1;
         int index = index(newTail);
         buffer.lazySet(index, item);
+        return true;
+    }
+
+    public boolean offer(E[] items) {
+        long tail = sequenceArray.getAndAdd(TAIL_INDEX, items.length);
+        for (E item : items) {
+            int index = index(tail);
+
+            if (item == null) {
+                break;
+            }
+
+            buffer.lazySet(index, item);
+            tail += 16;
+        }
+
         return true;
     }
 

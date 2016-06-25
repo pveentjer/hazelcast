@@ -34,11 +34,11 @@ import static com.hazelcast.nio.Packet.FLAG_RESPONSE;
 public final class PacketDispatcherImpl implements PacketDispatcher {
 
     private final ILogger logger;
-    private final PacketHandler eventService;
-    private final PacketHandler operationExecutor;
-    private final PacketHandler connectionManager;
-    private final PacketHandler responseHandler;
-    private final PacketHandler invocationMonitor;
+    public final PacketHandler eventService;
+    public final PacketHandler operationExecutor;
+    public final PacketHandler connectionManager;
+    public final PacketHandler responseHandler;
+    public final PacketHandler invocationMonitor;
 
     public PacketDispatcherImpl(ILogger logger,
                                 PacketHandler operationExecutor,

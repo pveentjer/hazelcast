@@ -16,15 +16,25 @@
 
 package com.hazelcast.nio.tcp;
 
+import com.hazelcast.internal.util.Ringbuffer;
 import com.hazelcast.internal.util.counters.Counter;
 import com.hazelcast.nio.Packet;
+import com.hazelcast.spi.impl.operationservice.impl.AsyncResponseHandler;
 import com.hazelcast.spi.impl.packetdispatcher.PacketDispatcher;
+import com.hazelcast.spi.impl.packetdispatcher.impl.PacketDispatcherImpl;
 
 import java.nio.ByteBuffer;
 
+import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutOfMemoryError;
+import static com.hazelcast.nio.Packet.FLAG_BIND;
+import static com.hazelcast.nio.Packet.FLAG_EVENT;
+import static com.hazelcast.nio.Packet.FLAG_OP;
+import static com.hazelcast.nio.Packet.FLAG_OP_CONTROL;
+import static com.hazelcast.nio.Packet.FLAG_RESPONSE;
+
 /**
  * The {@link ReadHandler} for member to member communication.
- *
+ * <p>
  * It reads as many packets from the src ByteBuffer as possible, and each of the Packets is send to the {@link PacketDispatcher}.
  *
  * @see PacketDispatcher
@@ -33,45 +43,54 @@ import java.nio.ByteBuffer;
 public class MemberReadHandler implements ReadHandler {
 
     protected final TcpIpConnection connection;
+    private final AsyncResponseHandler asyncResponseHandler;
     protected Packet packet;
 
-    private final PacketDispatcher packetDispatcher;
+    private final PacketDispatcherImpl packetDispatcher;
     private final Counter normalPacketsRead;
     private final Counter priorityPacketsRead;
+    private final Packet[] responsePackets = new Packet[1024];
 
     public MemberReadHandler(TcpIpConnection connection, PacketDispatcher packetDispatcher) {
         this.connection = connection;
-        this.packetDispatcher = packetDispatcher;
+        this.packetDispatcher = (PacketDispatcherImpl) packetDispatcher;
         SocketReader socketReader = connection.getSocketReader();
         this.normalPacketsRead = socketReader.getNormalFramesReadCounter();
         this.priorityPacketsRead = socketReader.getPriorityFramesReadCounter();
+        this.asyncResponseHandler = (AsyncResponseHandler) ((PacketDispatcherImpl) packetDispatcher).responseHandler;
     }
 
     @Override
     public void onRead(ByteBuffer src) throws Exception {
+        int responsePacketIndex = 0;
+
         while (src.hasRemaining()) {
             if (packet == null) {
                 packet = new Packet();
             }
             boolean complete = packet.readFrom(src);
             if (complete) {
-                handlePacket(packet);
+                if (packet.isFlagSet(Packet.FLAG_URGENT)) {
+                    priorityPacketsRead.inc();
+                } else {
+                    normalPacketsRead.inc();
+                }
+
+                packet.setConn(connection);
+                if (packet.isFlagSet(FLAG_OP) && packet.isFlagSet(FLAG_RESPONSE)) {
+                    responsePackets[responsePacketIndex] = packet;
+                    responsePacketIndex++;
+                } else {
+                    packetDispatcher.dispatch(packet);
+                }
                 packet = null;
             } else {
                 break;
             }
         }
-    }
 
-    protected void handlePacket(Packet packet) {
-        if (packet.isFlagSet(Packet.FLAG_URGENT)) {
-            priorityPacketsRead.inc();
-        } else {
-            normalPacketsRead.inc();
+        if (responsePacketIndex > 0) {
+            asyncResponseHandler.handle(responsePackets);
         }
-
-        packet.setConn(connection);
-
-        packetDispatcher.dispatch(packet);
     }
 }

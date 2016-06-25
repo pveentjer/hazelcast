@@ -21,7 +21,6 @@ import com.hazelcast.internal.metrics.MetricsProvider;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.util.Ringbuffer;
-import com.hazelcast.internal.util.collection.MPSCQueue;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.spi.impl.PacketHandler;
@@ -31,8 +30,6 @@ import com.hazelcast.spi.properties.HazelcastProperty;
 import com.hazelcast.util.concurrent.BackoffIdleStrategy;
 import com.hazelcast.util.concurrent.BusySpinIdleStrategy;
 import com.hazelcast.util.concurrent.IdleStrategy;
-
-import java.util.concurrent.BlockingQueue;
 
 import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutOfMemoryError;
 import static com.hazelcast.internal.metrics.ProbeLevel.MANDATORY;
@@ -67,11 +64,13 @@ public class AsyncResponseHandler implements PacketHandler, MetricsProvider {
 
     final ResponseThread responseThread;
     private final ILogger logger;
+    public final Ringbuffer<Packet> queue;
 
     AsyncResponseHandler(HazelcastThreadGroup threadGroup, ILogger logger, PacketHandler responsePacketHandler,
                          HazelcastProperties properties) {
         this.logger = logger;
         this.responseThread = new ResponseThread(threadGroup, responsePacketHandler, properties);
+        this.queue = responseThread.responseQueue;
     }
 
     @Probe(name = "responseQueueSize", level = MANDATORY)
@@ -86,6 +85,15 @@ public class AsyncResponseHandler implements PacketHandler, MetricsProvider {
         checkTrue(packet.isFlagSet(FLAG_RESPONSE), "FLAG_RESPONSE should be set");
 
         responseThread.responseQueue.add(packet);
+    }
+
+
+    public void handle(Packet[] packet) {
+//        checkNotNull(packet, "packet can't be null");
+//        checkTrue(packet.isFlagSet(FLAG_OP), "FLAG_OP should be set");
+//        checkTrue(packet.isFlagSet(FLAG_RESPONSE), "FLAG_RESPONSE should be set");
+
+        queue.offer(packet);
     }
 
     @Override
@@ -120,7 +128,7 @@ public class AsyncResponseHandler implements PacketHandler, MetricsProvider {
      */
     final class ResponseThread extends Thread implements OperationHostileThread {
 
-        private final BlockingQueue<Packet> responseQueue;
+        private final Ringbuffer<Packet> responseQueue;
         private final PacketHandler responsePacketHandler;
         private volatile boolean shutdown;
 
