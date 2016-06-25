@@ -130,8 +130,8 @@ public class AsyncResponseHandler implements PacketHandler, MetricsProvider {
             super(threadGroup.getInternalThreadGroup(), threadGroup.getThreadNamePrefix("response"));
             setContextClassLoader(threadGroup.getClassLoader());
             this.responsePacketHandler = responsePacketHandler;
-            //this.responseQueue = new Ringbuffer<Packet>(this, 16384, getIdleStrategy(properties, IDLE_STRATEGY));
-            this.responseQueue = new MPSCQueue<Packet>(this, getIdleStrategy(properties, IDLE_STRATEGY));
+            this.responseQueue = new Ringbuffer<Packet>(this, 16384, getIdleStrategy(properties, IDLE_STRATEGY));
+            //this.responseQueue = new MPSCQueue<Packet>(this, getIdleStrategy(properties, IDLE_STRATEGY));
         }
 
         @Override
