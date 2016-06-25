@@ -46,6 +46,7 @@ public class MemberReadHandler implements ReadHandler {
     private final Counter normalPacketsRead;
     private final Counter priorityPacketsRead;
     private final Packet[] responses = new Packet[1024];
+    private int packetsRead;
 
     public MemberReadHandler(TcpIpConnection connection, PacketDispatcher packetDispatcher) {
         this.connection = connection;
@@ -70,6 +71,7 @@ public class MemberReadHandler implements ReadHandler {
                 return;
             }
 
+            packetsRead++;
             if (packet.isFlagSet(FLAG_URGENT)) {
                 priorityPacketsRead.inc();
             } else {
@@ -78,7 +80,7 @@ public class MemberReadHandler implements ReadHandler {
 
             packet.setConn(connection);
 
-            if (priorityPacketsRead.get() > 0 && packet.isFlagSet(FLAG_OP) && packet.isFlagSet(FLAG_RESPONSE)) {
+            if (packetsRead > 100 && packet.isFlagSet(FLAG_OP) && packet.isFlagSet(FLAG_RESPONSE)) {
                 responses[responseIndex] = packet;
                 responseIndex++;
             } else {
