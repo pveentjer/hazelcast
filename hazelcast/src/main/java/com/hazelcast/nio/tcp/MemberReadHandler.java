@@ -26,6 +26,7 @@ import java.nio.ByteBuffer;
 
 import static com.hazelcast.nio.Packet.FLAG_OP;
 import static com.hazelcast.nio.Packet.FLAG_RESPONSE;
+import static com.hazelcast.nio.Packet.FLAG_URGENT;
 
 /**
  * The {@link ReadHandler} for member to member communication.
@@ -65,12 +66,11 @@ public class MemberReadHandler implements ReadHandler {
             }
 
             boolean complete = packet.readFrom(src);
-
             if (!complete) {
                 return;
             }
 
-            if (packet.isFlagSet(Packet.FLAG_URGENT)) {
+            if (packet.isFlagSet(FLAG_URGENT)) {
                 priorityPacketsRead.inc();
             } else {
                 normalPacketsRead.inc();
@@ -78,7 +78,7 @@ public class MemberReadHandler implements ReadHandler {
 
             packet.setConn(connection);
 
-            if (packet.isFlagSet(FLAG_OP) && packet.isFlagSet(FLAG_RESPONSE)) {
+            if (false && packet.isFlagSet(FLAG_OP) && packet.isFlagSet(FLAG_RESPONSE)) {
                 responsePackets[responsePacketIndex] = packet;
                 responsePacketIndex++;
             } else {
@@ -92,4 +92,30 @@ public class MemberReadHandler implements ReadHandler {
             asyncResponseHandler.handle(responsePackets);
         }
     }
+
+//
+//    @Override
+//    public void onRead(ByteBuffer src) throws Exception {
+//        while (src.hasRemaining()) {
+//            if (packet == null) {
+//                packet = new Packet();
+//            }
+//            boolean complete = packet.readFrom(src);
+//            if (!complete) {
+//                break;
+//            }
+//
+//            if (packet.isFlagSet(FLAG_URGENT)) {
+//                priorityPacketsRead.inc();
+//            } else {
+//                normalPacketsRead.inc();
+//            }
+//
+//            packet.setConn(connection);
+//
+//            packetDispatcher.dispatch(packet);
+//
+//            packet = null;
+//        }
+//    }
 }
