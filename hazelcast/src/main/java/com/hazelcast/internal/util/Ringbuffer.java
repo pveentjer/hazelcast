@@ -63,7 +63,7 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
         for (int itemsIndex = 0; itemsIndex < length; itemsIndex++) {
             E item = items[itemsIndex];
             items[itemsIndex] = null;
-            array.lazySet(index(seq), item);
+            array.set(index(seq), item);
             seq++;
         }
 
