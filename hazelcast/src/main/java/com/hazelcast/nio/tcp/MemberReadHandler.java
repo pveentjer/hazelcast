@@ -25,7 +25,6 @@ import com.hazelcast.spi.impl.packetdispatcher.impl.PacketDispatcherImpl;
 import java.nio.ByteBuffer;
 
 import static com.hazelcast.nio.Packet.FLAG_OP;
-import static com.hazelcast.nio.Packet.FLAG_RESPONSE;
 import static com.hazelcast.nio.Packet.FLAG_URGENT;
 
 /**
@@ -79,7 +78,7 @@ public class MemberReadHandler implements ReadHandler {
                 normalPacketsRead.inc();
             }
 
-            if (packetsRead > 100 && packet.isFlagSet(FLAG_OP) && packet.isFlagSet(FLAG_RESPONSE)) {
+            if (packetsRead > 100 && packet.isFlagSet(FLAG_OP)) {
                 responses[responsesLength] = packet;
                 responsesLength++;
             } else {

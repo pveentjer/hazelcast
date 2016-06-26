@@ -34,6 +34,7 @@ import com.hazelcast.util.concurrent.IdleStrategy;
 import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutOfMemoryError;
 import static com.hazelcast.internal.metrics.ProbeLevel.MANDATORY;
 import static com.hazelcast.nio.Packet.FLAG_OP;
+import static com.hazelcast.nio.Packet.FLAG_OP_CONTROL;
 import static com.hazelcast.nio.Packet.FLAG_RESPONSE;
 import static com.hazelcast.util.EmptyStatement.ignore;
 import static com.hazelcast.util.Preconditions.checkNotNull;
@@ -65,11 +66,21 @@ public class AsyncResponseHandler implements PacketHandler, MetricsProvider {
     final ResponseThread responseThread;
     private final ILogger logger;
     public final Ringbuffer<Packet> queue;
+    private final PacketHandler operationExecutor;
+    private final PacketHandler responseHandler;
+    private final PacketHandler invocationMonitor;
 
-    AsyncResponseHandler(HazelcastThreadGroup threadGroup, ILogger logger, PacketHandler responsePacketHandler,
+    AsyncResponseHandler(HazelcastThreadGroup threadGroup,
+                         ILogger logger,
+                         PacketHandler responseHandler,
+                         PacketHandler operationExecutor,
+                         PacketHandler invocationMonitor,
                          HazelcastProperties properties) {
+        this.operationExecutor = operationExecutor;
+        this.responseHandler = responseHandler;
+        this.invocationMonitor = invocationMonitor;
         this.logger = logger;
-        this.responseThread = new ResponseThread(threadGroup, responsePacketHandler, properties);
+        this.responseThread = new ResponseThread(threadGroup, properties);
         this.queue = responseThread.responseQueue;
     }
 
@@ -129,15 +140,12 @@ public class AsyncResponseHandler implements PacketHandler, MetricsProvider {
     final class ResponseThread extends Thread implements OperationHostileThread {
 
         private final Ringbuffer<Packet> responseQueue;
-        private final PacketHandler responsePacketHandler;
         private volatile boolean shutdown;
 
         private ResponseThread(HazelcastThreadGroup threadGroup,
-                               PacketHandler responsePacketHandler,
                                HazelcastProperties properties) {
             super(threadGroup.getInternalThreadGroup(), threadGroup.getThreadNamePrefix("response"));
             setContextClassLoader(threadGroup.getClassLoader());
-            this.responsePacketHandler = responsePacketHandler;
             this.responseQueue = new Ringbuffer<Packet>(this, 16384, getIdleStrategy(properties, IDLE_STRATEGY));
             //this.responseQueue = new MPSCQueue<Packet>(this, getIdleStrategy(properties, IDLE_STRATEGY));
         }
@@ -157,12 +165,33 @@ public class AsyncResponseHandler implements PacketHandler, MetricsProvider {
         private void doRun() throws InterruptedException {
             while (!shutdown) {
                 Packet response = responseQueue.take();
+
+
                 try {
-                    responsePacketHandler.handle(response);
+                    dispatch(response);
                 } catch (Throwable e) {
                     inspectOutOfMemoryError(e);
                     logger.severe("Failed to process response: " + response + " on:" + getName(), e);
                 }
+            }
+        }
+
+        public void dispatch(Packet packet) {
+            try {
+                if (packet.isFlagSet(FLAG_OP)) {
+                    if (packet.isFlagSet(FLAG_RESPONSE)) {
+                        responseHandler.handle(packet);
+                    } else if (packet.isFlagSet(FLAG_OP_CONTROL)) {
+                        invocationMonitor.handle(packet);
+                    } else {
+                        operationExecutor.handle(packet);
+                    }
+                } else {
+                    logger.severe("Unknown packet type! Header: " + packet.getFlags());
+                }
+            } catch (Throwable t) {
+                inspectOutOfMemoryError(t);
+                logger.severe("Failed to process:" + packet, t);
             }
         }
 

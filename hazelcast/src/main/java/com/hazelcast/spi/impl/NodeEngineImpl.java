@@ -128,6 +128,7 @@ public class NodeEngineImpl implements NodeEngine {
         this.waitNotifyService = new WaitNotifyServiceImpl(this);
         this.transactionManagerService = new TransactionManagerServiceImpl(this);
         this.wanReplicationService = node.getNodeExtension().createService(WanReplicationService.class);
+
         this.packetDispatcher = new PacketDispatcherImpl(
                 logger,
                 operationService.getOperationExecutor(),
