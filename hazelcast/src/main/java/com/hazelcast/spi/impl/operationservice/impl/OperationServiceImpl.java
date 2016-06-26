@@ -165,8 +165,8 @@ public final class OperationServiceImpl implements InternalOperationService, Met
                 node.getHazelcastThreadGroup(),
                 node.getLogger(AsyncResponseHandler.class),
                 responseHandler,
-                invocationMonitor,
                 operationExecutor,
+                invocationMonitor,
                 node.getProperties());
 
         this.slowOperationDetector = new SlowOperationDetector(node.loggingService,
