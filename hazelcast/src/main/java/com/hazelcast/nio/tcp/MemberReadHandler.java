@@ -64,11 +64,12 @@ public class MemberReadHandler implements ReadHandler {
         while (src.hasRemaining()) {
             if (packet == null) {
                 packet = new Packet();
+                packet.setConn(connection);
             }
 
             boolean complete = packet.readFrom(src);
             if (!complete) {
-                return;
+                break;
             }
 
             packetsRead++;
@@ -77,8 +78,6 @@ public class MemberReadHandler implements ReadHandler {
             } else {
                 normalPacketsRead.inc();
             }
-
-            packet.setConn(connection);
 
             if (packetsRead > 100 && packet.isFlagSet(FLAG_OP) && packet.isFlagSet(FLAG_RESPONSE)) {
                 responses[responsesLength] = packet;

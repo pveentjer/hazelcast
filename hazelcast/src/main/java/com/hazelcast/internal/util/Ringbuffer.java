@@ -30,7 +30,7 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
     public static final int PADDING = 16;
 
     private final AtomicReferenceArray<E> array;
-    private final AtomicLongArray sequenceArray = new AtomicLongArray(32);
+    private final AtomicLongArray sequences = new AtomicLongArray(32);
     private final int bufferLength;
     private final IdleStrategy idleStrategy;
     private Thread consumerThread;
@@ -52,17 +52,17 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
 
     @Override
     public boolean offer(E item) {
-        long newTail = sequenceArray.incrementAndGet(TAIL_INDEX) - 1;
-        int index = index(newTail);
-        array.lazySet(index, item);
+        long newTail = sequences.getAndIncrement(TAIL_INDEX);
+        array.lazySet(index(newTail), item);
         return true;
     }
 
-    public boolean offerAll(E[] items, int length) {
-        long seq = sequenceArray.getAndAdd(TAIL_INDEX, length);
-        for (int itemsIndex = 0; itemsIndex < length; itemsIndex++) {
+    public boolean offerAll(E[] items, int itemsLength) {
+        long seq = sequences.getAndAdd(TAIL_INDEX, itemsLength); // seq contains the first sequence to write to.
+
+        for (int itemsIndex = 0; itemsIndex < itemsLength; itemsIndex++) {
             E item = items[itemsIndex];
-            items[itemsIndex] = null;
+            items[itemsIndex] = null; // we need to null to prevent retaining memory
             array.set(index(seq), item);
             seq++;
         }
@@ -76,12 +76,13 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
 
     @Override
     public E poll() {
-        long currentHead = sequenceArray.get(HEAD_INDEX);
-        if (currentHead == sequenceArray.get(TAIL_INDEX)) {
+        long head = sequences.get(HEAD_INDEX);
+
+        if (head == sequences.get(TAIL_INDEX)) {
             return null;
         }
 
-        return removeItem(currentHead);
+        return removeItem(head);
     }
 
     @Override
@@ -89,8 +90,8 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
         long iteration = 0;
 
         for (; ; ) {
-            long currentHead = sequenceArray.get(HEAD_INDEX);
-            if (currentHead == sequenceArray.get(TAIL_INDEX)) {
+            long head = sequences.get(HEAD_INDEX);
+            if (head == sequences.get(TAIL_INDEX)) {
                 if (Thread.interrupted()) {
                     throw new InterruptedException();
                 }
@@ -100,7 +101,7 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
                 continue;
             }
 
-            return removeItem(currentHead);
+            return removeItem(head);
         }
     }
 
@@ -113,7 +114,7 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
             item = array.get(index);
             if (item != null) {
                 array.lazySet(index, null);
-                sequenceArray.lazySet(HEAD_INDEX, currentHead + 1);
+                sequences.lazySet(HEAD_INDEX, currentHead + 1);
                 break;
             }
             n++;
@@ -132,7 +133,7 @@ public class Ringbuffer<E> extends AbstractQueue<E> implements BlockingQueue<E> 
 
     @Override
     public int size() {
-        return (int) (sequenceArray.get(TAIL_INDEX) - sequenceArray.get(HEAD_INDEX));
+        return (int) (sequences.get(TAIL_INDEX) - sequences.get(HEAD_INDEX));
     }
 
     @Override
