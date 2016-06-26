@@ -44,7 +44,7 @@ public class MemberReadHandler implements ReadHandler {
     private final PacketDispatcherImpl packetDispatcher;
     private final Counter normalPacketsRead;
     private final Counter priorityPacketsRead;
-    private final Packet[] responses = new Packet[Integer.getInteger("batchlength",10)];
+    private final Packet[] responses = new Packet[Integer.getInteger("batchlength", 10)];
     private int packetsRead;
 
     public MemberReadHandler(TcpIpConnection connection, PacketDispatcher packetDispatcher) {
@@ -80,11 +80,10 @@ public class MemberReadHandler implements ReadHandler {
 
             if (packetsRead > 100 && packet.isFlagSet(FLAG_OP)) {
                 responses[responsesLength] = packet;
+                responsesLength++;
                 if (responsesLength == responses.length) {
-                    asyncResponseHandler.handle(responses, responsesLength+1);
+                    asyncResponseHandler.handle(responses, responsesLength);
                     responsesLength = 0;
-                } else {
-                    responsesLength++;
                 }
             } else {
                 packetDispatcher.dispatch(packet);
