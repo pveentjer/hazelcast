@@ -166,7 +166,6 @@ public class AsyncResponseHandler implements PacketHandler, MetricsProvider {
             while (!shutdown) {
                 Packet response = responseQueue.take();
 
-
                 try {
                     dispatch(response);
                 } catch (Throwable e) {
@@ -178,16 +177,12 @@ public class AsyncResponseHandler implements PacketHandler, MetricsProvider {
 
         public void dispatch(Packet packet) {
             try {
-                if (packet.isFlagSet(FLAG_OP)) {
-                    if (packet.isFlagSet(FLAG_RESPONSE)) {
-                        responseHandler.handle(packet);
-                    } else if (packet.isFlagSet(FLAG_OP_CONTROL)) {
-                        invocationMonitor.handle(packet);
-                    } else {
-                        operationExecutor.handle(packet);
-                    }
+                if (packet.isFlagSet(FLAG_RESPONSE)) {
+                    responseHandler.handle(packet);
+                } else if (packet.isFlagSet(FLAG_OP_CONTROL)) {
+                    invocationMonitor.handle(packet);
                 } else {
-                    logger.severe("Unknown packet type! Header: " + packet.getFlags());
+                    operationExecutor.handle(packet);
                 }
             } catch (Throwable t) {
                 inspectOutOfMemoryError(t);
