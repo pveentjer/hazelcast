@@ -17,7 +17,6 @@ import com.hazelcast.test.HazelcastTestSupport;
 import com.hazelcast.test.annotation.ParallelTest;
 import com.hazelcast.test.annotation.QuickTest;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
@@ -42,7 +41,7 @@ public class AsyncResponseHandlerTest extends HazelcastTestSupport {
         ILogger logger = Logger.getLogger(getClass());
         HazelcastThreadGroup threadGroup = new HazelcastThreadGroup("test", logger, getClass().getClassLoader());
         responsePacketHandler = mock(PacketHandler.class);
-        asyncHandler = new AsyncResponseHandler(threadGroup, logger, responsePacketHandler, new HazelcastProperties(new Config()));
+        asyncHandler = new AsyncResponseHandler(threadGroup, logger, responsePacketHandler, null, null, new HazelcastProperties(new Config()));
         asyncHandler.start();
         serializationService = new DefaultSerializationServiceBuilder().build();
     }
@@ -50,7 +49,7 @@ public class AsyncResponseHandlerTest extends HazelcastTestSupport {
     @Test
     public void whenNoProblemPacket() throws Exception {
         final Packet packet = new Packet(serializationService.toBytes(new NormalResponse("foo", 1, 0, false)))
-                .setFlag(FLAG_OP|FLAG_RESPONSE);
+                .setFlag(FLAG_OP | FLAG_RESPONSE);
         asyncHandler.handle(packet);
 
         assertTrueEventually(new AssertTask() {
@@ -90,7 +89,7 @@ public class AsyncResponseHandlerTest extends HazelcastTestSupport {
         assertJoinable(asyncHandler.responseThread);
 
         final Packet packet = new Packet(serializationService.toBytes(new NormalResponse("foo", 1, 0, false)))
-                .setAllFlags(FLAG_OP|FLAG_RESPONSE);
+                .setAllFlags(FLAG_OP | FLAG_RESPONSE);
 
         asyncHandler.handle(packet);
 
