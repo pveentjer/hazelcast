@@ -91,10 +91,10 @@ public class MemberReadHandler implements ReadHandler {
         if (responsesLength > 0) {
             asyncResponseHandler.handle(responses, responsesLength);
 
-            if (packetsRead > 10100) {
-                packetsRead = 101;
-                System.out.println("responses.length:" + responsesLength);
-            }
+//            if (packetsRead > 10100) {
+//                packetsRead = 101;
+//                System.out.println("responses.length:" + responsesLength);
+//            }
         }
     }
 
