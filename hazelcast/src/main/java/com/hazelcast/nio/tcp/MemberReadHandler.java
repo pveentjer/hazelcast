@@ -81,7 +81,7 @@ public class MemberReadHandler implements ReadHandler {
             if (packetsRead > 100 && packet.isFlagSet(FLAG_OP)) {
                 responses[responsesLength] = packet;
                 if (responsesLength == responses.length) {
-                    asyncResponseHandler.handle(responses, responsesLength);
+                    asyncResponseHandler.handle(responses, responsesLength+1);
                     responsesLength = 0;
                 } else {
                     responsesLength++;
