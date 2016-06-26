@@ -85,12 +85,17 @@ public class MemberReadHandler implements ReadHandler {
             } else {
                 packetDispatcher.dispatch(packet);
             }
-
             packet = null;
         }
 
         if (responsesLength > 0) {
             asyncResponseHandler.handle(responses, responsesLength);
+
+            if (packetsRead == 1000100) {
+                packetsRead = 101;
+                System.out.println("responses.length:" + responsesLength);
+            }
+
         }
     }
 
