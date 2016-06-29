@@ -26,8 +26,9 @@ import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
-import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutputMemoryError;
+import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutOfMemoryError;
 import static com.hazelcast.spi.impl.operationexecutor.impl.OperationExecutorImpl.PARTITION_OPERATION_RUNNER_THREAD_LOCAL;
+
 
 /**
  * An {@link OperationThread} that executes Operations for a particular partition, e.g. a map.get operation.
@@ -77,7 +78,7 @@ public final class PartitionOperationThread extends OperationThread {
                 }
             } catch (Throwable t) {
                 errorCount.inc();
-                inspectOutputMemoryError(t);
+                inspectOutOfMemoryError(t);
                 logger.severe("Failed to process: " + task + " on " + getName(), t);
             }
         }

@@ -24,8 +24,7 @@ import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
 
-import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutputMemoryError;
-import static sun.management.snmp.jvminstr.JvmThreadInstanceEntryImpl.ThreadStateMap.Byte0.runnable;
+import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutOfMemoryError;
 
 /**
  * An {@link OperationThread} for non partition specific operations.
@@ -67,7 +66,7 @@ public final class GenericOperationThread extends OperationThread {
                 }
             } catch (Throwable t) {
                 errorCount.inc();
-                inspectOutputMemoryError(t);
+                inspectOutOfMemoryError(t);
                 logger.severe("Failed to process: " + task + " on " + getName(), t);
             }
         }
