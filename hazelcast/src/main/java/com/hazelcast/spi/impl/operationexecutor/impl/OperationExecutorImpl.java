@@ -485,7 +485,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
 
             OperationRunner runner = partitionOperationRunners[partitionId];
             if (partitionLocks.tryLock(partitionId, currentThread)) {
-                // we successfully managed to lock, so we can run the operation.
+                // we successfully managed to lock the partition, so we can run the operation.
                 runnerRef.runner = runner;
                 try {
                     runner.run(op);
@@ -495,11 +495,11 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
                 }
             } else {
                 // we failed to acquire the lock. So lets offload it.
-                conflictCount.incrementAndGet();
+                conflictCount.incrementAndGet(); //todo: this counter is contended.
                 partitionThreads[toPartitionThreadIndex(partitionId)].queue.add(op, op.isUrgent());
             }
         } else {
-            // caller runs can't be applied.  So lets offload it.
+            // caller runs is disabled.  So lets offload it.
             partitionThreads[toPartitionThreadIndex(partitionId)].queue.add(op, op.isUrgent());
         }
     }

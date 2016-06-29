@@ -28,6 +28,7 @@ final class PartitionLocks {
     private final AtomicReferenceArray<Thread> locks;
 
     PartitionLocks(int partitionCount) {
+        //todo: first item could end up with false sharing.
         this.locks = new AtomicReferenceArray<Thread>(partitionCount * CACHE_LINE_LENGTH);
     }
 
@@ -68,7 +69,7 @@ final class PartitionLocks {
         long startMs = System.currentTimeMillis();
         for (; ; ) {
             if (getOwner(partitionId) == owner) {
-                throw new RuntimeException("Reentrant lock acquire detected by: " + owner);
+                throw new RuntimeException("Reentrant lock acquire detected by: " + owner);//todo: better exception
             } else if (tryLock(partitionId, owner)) {
                 return;
             }
