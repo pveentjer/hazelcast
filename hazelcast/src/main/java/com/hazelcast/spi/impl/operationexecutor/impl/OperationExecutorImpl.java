@@ -481,8 +481,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         }
 
         if (callerRuns) {
-            // caller runs is enabled.
-
+            // caller runs is enabled, so we are going to try to acquire the partition-lock.
             OperationRunner runner = partitionOperationRunners[partitionId];
             if (partitionLocks.tryLock(partitionId, currentThread)) {
                 // we successfully managed to lock the partition, so we can run the operation.
