@@ -83,6 +83,10 @@ import static com.hazelcast.client.spi.properties.ClientProperty.HEARTBEAT_TIMEO
  */
 public class ClientConnectionManagerImpl implements ClientConnectionManager {
 
+    public final static int inputThreadCount = Integer.getInteger("hazelcast.client.io.inputThreadCount", 1);
+
+    public final static int outputThreadCount = Integer.getInteger("hazelcast.client.io.outputThreadCount", 1);
+
     protected final AtomicInteger connectionIdGen = new AtomicInteger();
 
     protected volatile boolean alive;
@@ -101,8 +105,8 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
     private final HazelcastClientInstanceImpl client;
     private final SocketInterceptor socketInterceptor;
     private final SocketOptions socketOptions;
-    private NonBlockingIOThread inputThread;
-    private NonBlockingIOThread outputThread;
+    private NonBlockingIOThread[] inputThreads;
+    private NonBlockingIOThread[] outputThreads;
     private final SocketChannelWrapperFactory socketChannelWrapperFactory;
 
     private final ClientExecutionServiceImpl executionService;
@@ -148,19 +152,27 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
     }
 
     protected void initializeSelectors(HazelcastClientInstanceImpl client) {
-        inputThread = new NonBlockingIOThread(
-                client.getThreadGroup(),
-                client.getName() + ".thread-in",
-                loggingService.getLogger(NonBlockingIOThread.class),
-                outOfMemoryHandler);
-        client.getMetricsRegistry().scanAndRegister(inputThread, "tcp." + inputThread.getName());
+        inputThreads = new NonBlockingIOThread[inputThreadCount];
+        for (int k = 0; k < inputThreads.length; k++) {
+            NonBlockingIOThread inputThread = new NonBlockingIOThread(
+                    client.getThreadGroup(),
+                    client.getName() + ".thread-in-" + k,
+                    loggingService.getLogger(NonBlockingIOThread.class),
+                    outOfMemoryHandler);
+            client.getMetricsRegistry().scanAndRegister(inputThread, "tcp." + inputThread.getName());
+            inputThreads[k] = inputThread;
+        }
 
-        outputThread = new ClientNonBlockingOutputThread(
-                client.getThreadGroup(),
-                client.getName() + ".thread-out",
-                loggingService.getLogger(ClientNonBlockingOutputThread.class),
-                outOfMemoryHandler);
-        client.getMetricsRegistry().scanAndRegister(outputThread, "tcp." + outputThread.getName());
+        outputThreads = new NonBlockingIOThread[outputThreadCount];
+        for (int k = 0; k < outputThreads.length; k++) {
+            NonBlockingIOThread outputThread = new ClientNonBlockingOutputThread(
+                    client.getThreadGroup(),
+                    client.getName() + ".thread-out-" + k,
+                    loggingService.getLogger(ClientNonBlockingOutputThread.class),
+                    outOfMemoryHandler);
+            outputThreads[k] = outputThread;
+            client.getMetricsRegistry().scanAndRegister(outputThread, "tcp." + outputThread.getName());
+        }
     }
 
     private SocketInterceptor initSocketInterceptor(SocketInterceptorConfig sic) {
@@ -188,8 +200,12 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
     }
 
     protected void startSelectors() {
-        inputThread.start();
-        outputThread.start();
+        for (NonBlockingIOThread t : inputThreads) {
+            t.start();
+        }
+        for (NonBlockingIOThread t : outputThreads) {
+            t.start();
+        }
     }
 
     @Override
@@ -207,8 +223,12 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
     }
 
     protected void shutdownSelectors() {
-        inputThread.shutdown();
-        outputThread.shutdown();
+        for (NonBlockingIOThread t : inputThreads) {
+            t.shutdown();
+        }
+        for (NonBlockingIOThread t : outputThreads) {
+            t.shutdown();
+        }
     }
 
     public ClientConnection getConnection(Address target) {
@@ -345,8 +365,12 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
             socketChannel.socket().connect(inetSocketAddress, connectionTimeout);
             SocketChannelWrapper socketChannelWrapper =
                     socketChannelWrapperFactory.wrapSocketChannel(socketChannel, true);
+            int connectionId = connectionIdGen.incrementAndGet();
+
+            NonBlockingIOThread inputThread = inputThreads[connectionId % inputThreads.length];
+            NonBlockingIOThread outputThread = outputThreads[connectionId % outputThreads.length];
             final ClientConnection clientConnection = new ClientConnection(client, inputThread,
-                    outputThread, connectionIdGen.incrementAndGet(), socketChannelWrapper);
+                    outputThread, connectionId, socketChannelWrapper);
             socketChannel.configureBlocking(true);
             if (socketInterceptor != null) {
                 socketInterceptor.onConnect(socket);
