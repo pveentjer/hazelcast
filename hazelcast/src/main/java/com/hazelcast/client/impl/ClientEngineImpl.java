@@ -57,8 +57,11 @@ import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationService;
 import com.hazelcast.spi.PostJoinAwareService;
 import com.hazelcast.spi.ProxyService;
+import com.hazelcast.spi.UrgentSystemOperation;
 import com.hazelcast.spi.impl.NodeEngineImpl;
+import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationservice.InternalOperationService;
+import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 import com.hazelcast.spi.partition.IPartitionService;
 import com.hazelcast.spi.properties.GroupProperty;
 import com.hazelcast.spi.serialization.SerializationService;
@@ -164,10 +167,33 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         int partitionId = clientMessage.getPartitionId();
         final MessageTask messageTask = messageTaskFactory.create(clientMessage, connection);
         if (partitionId < 0) {
-            executor.execute(messageTask);
+            if(clientMessage.isUrgent()){
+                InternalOperationService operationService = nodeEngine.getOperationService();
+                operationService.execute(new PriorityPartitionSpecificRunnable(messageTask));
+            }else{
+                executor.execute(messageTask);
+            }
         } else {
             InternalOperationService operationService = nodeEngine.getOperationService();
             operationService.execute(messageTask);
+        }
+    }
+
+    private class PriorityPartitionSpecificRunnable implements PartitionSpecificRunnable, UrgentSystemOperation{
+        private final MessageTask task;
+
+        public PriorityPartitionSpecificRunnable(MessageTask task) {
+            this.task = task;
+        }
+
+        @Override
+        public int getPartitionId() {
+            return task.getPartitionId();
+        }
+
+        @Override
+        public void run() {
+            task.run();
         }
     }
 
