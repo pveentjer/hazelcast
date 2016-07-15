@@ -29,6 +29,7 @@ import com.hazelcast.client.impl.protocol.ClientExceptionFactory;
 import com.hazelcast.client.impl.protocol.ClientMessage;
 import com.hazelcast.client.impl.protocol.MessageTaskFactory;
 import com.hazelcast.client.impl.protocol.task.MessageTask;
+import com.hazelcast.client.impl.protocol.task.PingMessageTask;
 import com.hazelcast.config.Config;
 import com.hazelcast.core.Client;
 import com.hazelcast.core.ClientListener;
@@ -61,7 +62,6 @@ import com.hazelcast.spi.UrgentSystemOperation;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationservice.InternalOperationService;
-import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 import com.hazelcast.spi.partition.IPartitionService;
 import com.hazelcast.spi.properties.GroupProperty;
 import com.hazelcast.spi.serialization.SerializationService;
@@ -167,10 +167,10 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         int partitionId = clientMessage.getPartitionId();
         final MessageTask messageTask = messageTaskFactory.create(clientMessage, connection);
         if (partitionId < 0) {
-            if(clientMessage.isUrgent()){
+            if (messageTask instanceof PingMessageTask) {
                 InternalOperationService operationService = nodeEngine.getOperationService();
                 operationService.execute(new PriorityPartitionSpecificRunnable(messageTask));
-            }else{
+            } else {
                 executor.execute(messageTask);
             }
         } else {
@@ -179,7 +179,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         }
     }
 
-    private class PriorityPartitionSpecificRunnable implements PartitionSpecificRunnable, UrgentSystemOperation{
+    private class PriorityPartitionSpecificRunnable implements PartitionSpecificRunnable, UrgentSystemOperation {
         private final MessageTask task;
 
         public PriorityPartitionSpecificRunnable(MessageTask task) {
