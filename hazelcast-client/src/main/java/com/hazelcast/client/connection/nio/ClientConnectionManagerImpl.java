@@ -398,11 +398,15 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
 
         @Override
         public void run() {
+            logger.warning("Starting heartbeat");
+
             if (!alive) {
                 return;
             }
             final long now = Clock.currentTimeMillis();
             for (ClientConnection connection : connections.values()) {
+                logger.info("Checking connection:" + connection);
+
                 if (now - connection.lastReadTimeMillis() > heartBeatTimeout) {
                     if (connection.isHeartBeating()) {
                         logger.warning("Heartbeat failed to connection : " + connection);
@@ -411,6 +415,7 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
                     }
                 }
                 if (now - connection.lastReadTimeMillis() > heartBeatInterval) {
+                    logger.info("Sending heartbeat request");
                     ClientMessage request = ClientPingCodec.encodeRequest();
                     ClientInvocation clientInvocation = new ClientInvocation(client, request, connection);
                     clientInvocation.setBypassHeartbeatCheck(true);
