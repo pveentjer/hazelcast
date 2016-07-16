@@ -170,7 +170,8 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         if (partitionId < 0) {
             if (messageTask instanceof PingMessageTask) {
                 ((PingMessageTask) messageTask).connection = connection;
-                operationService.execute(new PriorityPartitionSpecificRunnable(messageTask));
+                messageTask.run();
+                //operationService.execute(new PriorityPartitionSpecificRunnable(messageTask));
             } else {
                 executor.execute(messageTask);
             }
