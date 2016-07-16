@@ -125,6 +125,29 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         ClientHeartbeatMonitor heartBeatMonitor = new ClientHeartbeatMonitor(
                 endpointManager, this, nodeEngine.getExecutionService(), node.getProperties());
         heartBeatMonitor.start();
+
+        new Thread() {
+            public void run() {
+                try {
+                    while (isAlive()) {
+                        Thread.sleep(1000);
+
+                        executor.execute(new Runnable() {
+                            private final long startMillis = System.currentTimeMillis();
+
+                            @Override
+                            public void run() {
+                                long durationMillis = System.currentTimeMillis() - startMillis;
+                                if (durationMillis > 5000) {
+                                    logger.severe("Client executor delay:"+durationMillis+" ms");
+                                }
+                            }
+                        });
+                    }
+                } catch (InterruptedException e) {
+                }
+            }
+        }.start();
     }
 
     private ClientExceptionFactory initClientExceptionFactory() {
