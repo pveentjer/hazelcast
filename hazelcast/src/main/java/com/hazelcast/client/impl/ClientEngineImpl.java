@@ -513,6 +513,12 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
             @Override
             public void run() {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    return;
+                }
+
                 startMillis = System.currentTimeMillis();
                 executor.execute(this);
             }
