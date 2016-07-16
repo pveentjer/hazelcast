@@ -126,28 +126,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
                 endpointManager, this, nodeEngine.getExecutionService(), node.getProperties());
         heartBeatMonitor.start();
 
-        new Thread() {
-            public void run() {
-                try {
-                    while (isAlive()) {
-                        Thread.sleep(1000);
-
-                        executor.execute(new Runnable() {
-                            private final long startMillis = System.currentTimeMillis();
-
-                            @Override
-                            public void run() {
-                                long durationMillis = System.currentTimeMillis() - startMillis;
-                                if (durationMillis > 5000) {
-                                    logger.severe("Client executor delay:"+durationMillis+" ms");
-                                }
-                            }
-                        });
-                    }
-                } catch (InterruptedException e) {
-                }
-            }
-        }.start();
+        new MyThread().start();
     }
 
     private ClientExceptionFactory initClientExceptionFactory() {
@@ -509,5 +488,34 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         resultMap.put(ClientType.OTHER, numberOfOtherClients);
 
         return resultMap;
+    }
+
+    private class MyThread extends Thread {
+        public void run() {
+            MyRunnable command = new MyRunnable();
+            executor.execute(command);
+
+            try {
+                while (isAlive()) {
+                    Thread.sleep(1000);
+
+                    long delayMillis = System.currentTimeMillis() - command.startMillis;
+                    if (delayMillis > 5000) {
+                        logger.severe("Delay in client task: " + delayMillis + " ms");
+                    }
+                }
+            } catch (InterruptedException e) {
+            }
+        }
+
+        private class MyRunnable implements Runnable {
+            private volatile long startMillis = System.currentTimeMillis();
+
+            @Override
+            public void run() {
+                startMillis = System.currentTimeMillis();
+                executor.execute(this);
+            }
+        }
     }
 }
