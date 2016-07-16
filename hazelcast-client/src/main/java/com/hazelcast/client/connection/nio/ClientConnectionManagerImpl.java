@@ -410,7 +410,7 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
                 if (now - connection.lastReadTimeMillis() > heartBeatTimeout) {
                     // the connection has failed.
                     fireHeartBeatStopped(connection);
-                    return;
+                    continue;
                 }
 
                 logger.info("Sending heartbeat request");
