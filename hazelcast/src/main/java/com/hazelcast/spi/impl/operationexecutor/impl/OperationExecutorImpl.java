@@ -68,7 +68,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * generic operation threads: these threads are responsible for executing operations that are not
  * specific to a partition. E.g. a heart beat.
  * </li>
- *
+ * <p>
  * </ol>
  */
 @SuppressWarnings("checkstyle:methodcount")
@@ -90,7 +90,9 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
     private final OperationRunner[] genericOperationRunners;
 
     private final Address thisAddress;
-    private final OperationRunner adHocOperationRunner;
+
+    private final OperationRunner[] adHocOperationRunners;
+    private final ConcurrentLinkedQueue<OperationRunner> adHocOperationRunnerQueue = new ConcurrentLinkedQueue<OperationRunner>();
     private final int priorityThreadCount;
 
     public OperationExecutorImpl(HazelcastProperties properties,
@@ -102,14 +104,19 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         this.thisAddress = thisAddress;
         this.logger = loggerService.getLogger(OperationExecutorImpl.class);
 
-        this.adHocOperationRunner = operationRunnerFactory.createAdHocRunner();
-
         this.partitionOperationRunners = initPartitionOperationRunners(properties, operationRunnerFactory);
         this.partitionThreads = initPartitionThreads(properties, threadGroup, nodeExtension);
 
         this.priorityThreadCount = properties.getInteger(PRIORITY_GENERIC_OPERATION_THREAD_COUNT);
         this.genericOperationRunners = initGenericOperationRunners(properties, operationRunnerFactory);
         this.genericThreads = initGenericThreads(threadGroup, nodeExtension);
+
+        this.adHocOperationRunners = new OperationRunner[5000];
+        for (int k = 0; k < adHocOperationRunners.length; k++) {
+            OperationRunner genericRunner = operationRunnerFactory.createGenericRunner();
+            adHocOperationRunners[k] = genericRunner;
+            adHocOperationRunnerQueue.add(genericRunner);
+        }
     }
 
     private OperationRunner[] initPartitionOperationRunners(HazelcastProperties properties,
@@ -208,7 +215,6 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
 
         metricsRegistry.collectMetrics((Object[]) genericThreads);
         metricsRegistry.collectMetrics((Object[]) partitionThreads);
-        metricsRegistry.collectMetrics(adHocOperationRunner);
         metricsRegistry.collectMetrics((Object[]) genericOperationRunners);
         metricsRegistry.collectMetrics((Object[]) partitionOperationRunners);
     }
@@ -230,6 +236,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
     public void scan(LiveOperations result) {
         scan(partitionOperationRunners, result);
         scan(genericOperationRunners, result);
+        scan(adHocOperationRunners, result);
     }
 
     private void scan(OperationRunner[] runners, LiveOperations result) {
@@ -371,29 +378,54 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
                     + Thread.currentThread());
         }
 
-        OperationRunner operationRunner = getOperationRunner(operation);
-        operationRunner.run(operation);
-    }
-
-    OperationRunner getOperationRunner(Operation operation) {
-        checkNotNull(operation, "operation can't be null");
 
         if (operation.getPartitionId() >= 0) {
             // retrieving an OperationRunner for a partition specific operation is easy; we can just use the partition id.
-            return partitionOperationRunners[operation.getPartitionId()];
+            OperationRunner runner = partitionOperationRunners[operation.getPartitionId()];
+            runner.run(operation);
+            return;
         }
 
         Thread currentThread = Thread.currentThread();
         if (!(currentThread instanceof OperationThread)) {
             // if thread is not an operation thread, we return the adHocOperationRunner
-            return adHocOperationRunner;
+            OperationRunner runner = adHocOperationRunnerQueue.poll()
+            try {
+                runner.run(operation);
+            } finally {
+                adHocOperationRunnerQueue.add(runner);
+            }
+            return;
         }
 
         // It is a generic operation and we are running on an operation-thread. So we can just return the operation-runner
         // for that thread. There won't be any partition-conflict since generic operations are allowed to be executed by
         // a partition-specific operation-runner.
         OperationThread operationThread = (OperationThread) currentThread;
-        return operationThread.currentRunner;
+        OperationRunner runner = operationThread.currentRunner;
+        runner.run(operation);
+    }
+
+    OperationRunner getOperationRunner(Operation operation) {
+//        checkNotNull(operation, "operation can't be null");
+//
+//        if (operation.getPartitionId() >= 0) {
+//            // retrieving an OperationRunner for a partition specific operation is easy; we can just use the partition id.
+//            return partitionOperationRunners[operation.getPartitionId()];
+//        }
+//
+//        Thread currentThread = Thread.currentThread();
+//        if (!(currentThread instanceof OperationThread)) {
+//            // if thread is not an operation thread, we return the adHocOperationRunner
+//            return adHocOperationRunner;
+//        }
+//
+//        // It is a generic operation and we are running on an operation-thread. So we can just return the operation-runner
+//        // for that thread. There won't be any partition-conflict since generic operations are allowed to be executed by
+//        // a partition-specific operation-runner.
+//        OperationThread operationThread = (OperationThread) currentThread;
+//        return operationThread.currentRunner;
+        throw new RuntimeException();
     }
 
     @Override

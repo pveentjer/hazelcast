@@ -28,7 +28,6 @@ import com.hazelcast.client.impl.operations.PostJoinClientOperation;
 import com.hazelcast.client.impl.protocol.ClientExceptionFactory;
 import com.hazelcast.client.impl.protocol.ClientMessage;
 import com.hazelcast.client.impl.protocol.MessageTaskFactory;
-import com.hazelcast.client.impl.protocol.task.AbstractTransactionalMessageTask;
 import com.hazelcast.client.impl.protocol.task.MessageTask;
 import com.hazelcast.client.impl.protocol.task.PingMessageTask;
 import com.hazelcast.config.Config;
@@ -169,13 +168,11 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         int partitionId = clientMessage.getPartitionId();
         final MessageTask messageTask = messageTaskFactory.create(clientMessage, connection);
         if (partitionId < 0) {
-            if (messageTask instanceof AbstractTransactionalMessageTask) {
-                executor.execute(messageTask);
-            } else if (messageTask instanceof PingMessageTask) {
+            if (messageTask instanceof PingMessageTask) {
                 ((PingMessageTask) messageTask).connection = connection;
                 operationService.execute(new PriorityPartitionSpecificRunnable(messageTask));
             } else {
-                operationService.execute(messageTask);
+                executor.execute(messageTask);
             }
         } else {
             operationService.execute(messageTask);
