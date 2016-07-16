@@ -272,7 +272,7 @@ public class ClientConnection implements Connection {
     }
 
     public long getLastHeartbeatMillis() {
-        return lastHeartbeatMillis;
+        return lastReadTimeMillis();
     }
 
     public boolean isAuthenticatedAsOwner() {

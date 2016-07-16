@@ -407,7 +407,7 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
             for (ClientConnection connection : connections.values()) {
                 logger.info("Checking connection:" + connection);
 
-                if (now - connection.lastReadTimeMillis() > heartBeatTimeout) {
+                if (now - connection.getLastHeartbeatMillis() > heartBeatTimeout) {
                     // the connection has failed.
                     fireHeartBeatStopped(connection);
                     continue;
