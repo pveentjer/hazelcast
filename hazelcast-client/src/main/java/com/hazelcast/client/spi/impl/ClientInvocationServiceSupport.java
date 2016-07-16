@@ -135,18 +135,18 @@ abstract class ClientInvocationServiceSupport implements ClientInvocationService
     }
 
     private boolean isAllowedToSendRequest(ClientConnection connection, ClientInvocation invocation) {
-        if (!connection.isHeartBeating()) {
-            if (invocation.shouldBypassHeartbeatCheck()) {
-                //ping and removeAllListeners should be send even though heart is not beating
-                return true;
-            }
-
-            if (invocationLogger.isFinestEnabled()) {
-                invocationLogger.warning("Connection is not heart-beating, won't write client message -> "
-                        + invocation.getClientMessage());
-            }
-            return false;
-        }
+//        if (!connection.isHeartBeating()) {
+//            if (invocation.shouldBypassHeartbeatCheck()) {
+//                //ping and removeAllListeners should be send even though heart is not beating
+//                return true;
+//            }
+//
+//            if (invocationLogger.isFinestEnabled()) {
+//                invocationLogger.warning("Connection is not heart-beating, won't write client message -> "
+//                        + invocation.getClientMessage());
+//            }
+//            return false;
+//        }
         return true;
     }
 
@@ -200,7 +200,7 @@ abstract class ClientInvocationServiceSupport implements ClientInvocationService
                 if (connection == null) {
                     continue;
                 }
-                if (connection.isHeartBeating()) {
+                if (connection.isAlive()) {
                     continue;
                 }
 
