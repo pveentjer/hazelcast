@@ -408,11 +408,9 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
                 logger.info("Checking connection:" + connection);
 
                 if (now - connection.lastReadTimeMillis() > heartBeatTimeout) {
-                    if (connection.isHeartBeating()) {
-                        logger.warning("Heartbeat failed to connection : " + connection);
-                        connection.heartBeatingFailed();
-                        fireHeartBeatStopped(connection);
-                    }
+                    // the connection has failed.
+                    fireHeartBeatStopped(connection);
+                    return;
                 }
 
                 logger.info("Sending heartbeat request");
@@ -420,16 +418,6 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
                 ClientInvocation clientInvocation = new ClientInvocation(client, request, connection);
                 clientInvocation.setBypassHeartbeatCheck(true);
                 clientInvocation.invokeUrgent();
-
-                if (now - connection.lastReadTimeMillis() > heartBeatInterval) {
-
-                } else {
-                    if (!connection.isHeartBeating()) {
-                        logger.warning("Heartbeat is back to healthy for connection : " + connection);
-                        connection.heartBeatingSucceed();
-                        fireHeartBeatStarted(connection);
-                    }
-                }
             }
         }
 
@@ -444,7 +432,6 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
                 heartbeatListener.heartBeatStopped(connection);
             }
         }
-
     }
 
     @Override

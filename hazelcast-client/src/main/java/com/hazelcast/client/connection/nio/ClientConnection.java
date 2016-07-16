@@ -65,7 +65,6 @@ public class ClientConnection implements Connection {
     private final HazelcastClientInstanceImpl client;
 
     private volatile Address remoteEndpoint;
-    private volatile boolean heartBeating = true;
     // the time in millis the last heartbeat was received. 0 indicates that no heartbeat has ever been received.
     private volatile long lastHeartbeatMillis;
     private boolean isAuthenticatedAsOwner;
@@ -268,22 +267,12 @@ public class ClientConnection implements Connection {
         return closeReason;
     }
 
-    @SuppressFBWarnings(value = "VO_VOLATILE_INCREMENT", justification = "incremented in single thread")
-    void heartBeatingFailed() {
-        heartBeating = false;
-    }
-
     void heartBeatingSucceed() {
-        heartBeating = true;
         lastHeartbeatMillis = System.currentTimeMillis();
     }
 
     public long getLastHeartbeatMillis() {
         return lastHeartbeatMillis;
-    }
-
-    public boolean isHeartBeating() {
-        return live.get() && heartBeating;
     }
 
     public boolean isAuthenticatedAsOwner() {
