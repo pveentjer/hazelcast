@@ -172,6 +172,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
             if(messageTask instanceof MapValuesMessageTask){
                 operationService.execute(messageTask);
             } else if (messageTask instanceof PingMessageTask) {
+                ((PingMessageTask)messageTask).connection = connection;
                 operationService.execute(new PriorityPartitionSpecificRunnable(messageTask));
             } else {
                 executor.execute(messageTask);
