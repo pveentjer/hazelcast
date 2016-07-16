@@ -389,7 +389,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         Thread currentThread = Thread.currentThread();
         if (!(currentThread instanceof OperationThread)) {
             // if thread is not an operation thread, we return the adHocOperationRunner
-            OperationRunner runner = adHocOperationRunnerQueue.poll()
+            OperationRunner runner = adHocOperationRunnerQueue.poll();
             try {
                 runner.run(operation);
             } finally {
