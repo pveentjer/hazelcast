@@ -414,12 +414,15 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
                         fireHeartBeatStopped(connection);
                     }
                 }
+
+                logger.info("Sending heartbeat request");
+                ClientMessage request = ClientPingCodec.encodeRequest();
+                ClientInvocation clientInvocation = new ClientInvocation(client, request, connection);
+                clientInvocation.setBypassHeartbeatCheck(true);
+                clientInvocation.invokeUrgent();
+
                 if (now - connection.lastReadTimeMillis() > heartBeatInterval) {
-                    logger.info("Sending heartbeat request");
-                    ClientMessage request = ClientPingCodec.encodeRequest();
-                    ClientInvocation clientInvocation = new ClientInvocation(client, request, connection);
-                    clientInvocation.setBypassHeartbeatCheck(true);
-                    clientInvocation.invokeUrgent();
+
                 } else {
                     if (!connection.isHeartBeating()) {
                         logger.warning("Heartbeat is back to healthy for connection : " + connection);
