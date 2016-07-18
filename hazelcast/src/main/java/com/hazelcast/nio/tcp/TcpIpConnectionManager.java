@@ -28,6 +28,7 @@ import com.hazelcast.nio.Address;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.ConnectionListener;
 import com.hazelcast.nio.ConnectionManager;
+import com.hazelcast.nio.ConnectionType;
 import com.hazelcast.nio.IOService;
 import com.hazelcast.nio.MemberSocketInterceptor;
 import com.hazelcast.nio.Packet;
@@ -154,6 +155,37 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         this.socketChannelWrapperFactory = ioService.getSocketChannelWrapperFactory();
         this.metricsRegistry = metricsRegistry;
         metricsRegistry.scanAndRegister(this, "tcp.connection");
+
+        new Thread() {
+            {
+                setDaemon(true);
+            }
+
+            public void run() {
+                try {
+                    while (!isAlive()) {
+                        Thread.sleep(1000);
+
+                        for (Connection c : connectionsMap.values()) {
+                            if (!(c instanceof TcpIpConnection)) {
+                                continue;
+                            }
+
+                            TcpIpConnection connection = (TcpIpConnection) c;
+                            if (!ConnectionType.JAVA_CLIENT.equals(connection.getType())) {
+                                continue;
+                            }
+
+                            long idleTime = System.currentTimeMillis() - connection.lastReadTimeMillis();
+                            if (idleTime > 10000) {
+                                logger.warning(connection + " is idle for" + idleTime);
+                            }
+                        }
+                    }
+                } catch (InterruptedException e) {
+                }
+            }
+        }.start();
     }
 
     public IOService getIoService() {
