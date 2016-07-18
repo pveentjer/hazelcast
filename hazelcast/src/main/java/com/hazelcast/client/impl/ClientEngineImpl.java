@@ -190,7 +190,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
             if (isUrgent(messageTask) && PRIORITY_SCHEDULING) {
                 operationService.execute(new PriorityRunnable(messageTask));
             } else {
-                executor.execute(EXECUTOR_TRACKING ? messageTask);
+                executor.execute(messageTask);
             }
         } else {
             operationService.execute(messageTask);
@@ -667,6 +667,15 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
             }
         }
 
+        public void sort(List<Map.Entry<Class, Long>> entries) {
+            Collections.sort(entries, new Comparator<Map.Entry<Class, Long>>() {
+                @Override
+                public int compare(Map.Entry<Class, Long> o1, Map.Entry<Class, Long> o2) {
+                    return o1.getValue().compareTo(o2.getValue());
+                }
+            });
+        }
+
         private class SimpleMapEntry<K, V> implements Map.Entry<K, V> {
 
             private final K key;
@@ -691,15 +700,6 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
             public V setValue(V value) {
                 throw new UnsupportedOperationException();
             }
-        }
-
-        public void sort(List<Map.Entry<Class, Long>> entries) {
-            Collections.sort(entries, new Comparator<Map.Entry<Class, Long>>() {
-                @Override
-                public int compare(Map.Entry<Class, Long> o1, Map.Entry<Class, Long> o2) {
-                    return o1.getValue().compareTo(o2.getValue());
-                }
-            });
         }
 
         private class MyRunnable implements Runnable {
