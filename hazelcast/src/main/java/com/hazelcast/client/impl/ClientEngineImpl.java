@@ -186,7 +186,13 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         int partitionId = clientMessage.getPartitionId();
         MessageTask messageTask = messageTaskFactory.create(clientMessage, connection);
         if (partitionId < 0) {
+            if (messageTask instanceof PingMessageTask) {
+                logger.severe("Received ping from " + connection.getEndPoint());
+            }
+
             messageTask = EXECUTOR_TRACKING ? new TrackingMessageTask(messageTask) : messageTask;
+
+
             if (isUrgent(messageTask) && PRIORITY_SCHEDULING) {
                 operationService.execute(new PriorityRunnable(messageTask));
             } else {
@@ -718,7 +724,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
                 executor.execute(this);
             }
 
-            public void logProblems(){
+            public void logProblems() {
                 long delayMillis = System.currentTimeMillis() - startMillis;
                 if (delayMillis > 5000) {
                     logger.warning("Delay in client executor: " + delayMillis + " ms");
@@ -746,7 +752,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
                 return -1;
             }
 
-            public void logProblems(){
+            public void logProblems() {
                 long delayMillis = System.currentTimeMillis() - startMillis;
                 if (delayMillis > 5000) {
                     logger.warning("Delay in generic priority executor: " + delayMillis + " ms");
