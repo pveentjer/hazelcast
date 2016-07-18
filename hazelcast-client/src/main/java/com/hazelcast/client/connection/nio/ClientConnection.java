@@ -278,7 +278,7 @@ public class ClientConnection implements Connection {
     }
 
     public long getLastHeartbeatMillis() {
-        return lastReadTimeMillis();
+        return lastHeartbeatMillis;
     }
 
     public boolean isHeartBeating() {
