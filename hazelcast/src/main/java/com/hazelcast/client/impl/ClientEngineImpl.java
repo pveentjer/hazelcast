@@ -90,7 +90,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import static com.hazelcast.spi.ExecutionService.CLIENT_EXECUTOR;
 import static com.hazelcast.spi.impl.OperationResponseHandlerFactory.createEmptyResponseHandler;
 import static com.hazelcast.spi.properties.GroupProperty.CLIENT_ENGINE_THREAD_COUNT;
-import static org.yecht.LevelStatus.map;
 
 /**
  * Class that requests, listeners from client handled in node side.
@@ -185,12 +184,13 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
     public void handleClientMessage(ClientMessage clientMessage, Connection connection) {
         InternalOperationService operationService = nodeEngine.getOperationService();
         int partitionId = clientMessage.getPartitionId();
-        final MessageTask messageTask = messageTaskFactory.create(clientMessage, connection);
+        MessageTask messageTask = messageTaskFactory.create(clientMessage, connection);
         if (partitionId < 0) {
+            messageTask = EXECUTOR_TRACKING ? new TrackingMessageTask(messageTask) : messageTask;
             if (isUrgent(messageTask) && PRIORITY_SCHEDULING) {
                 operationService.execute(new PriorityRunnable(messageTask));
             } else {
-                executor.execute(EXECUTOR_TRACKING ? new TrackingMessageTask(messageTask) : messageTask);
+                executor.execute(EXECUTOR_TRACKING ? messageTask);
             }
         } else {
             operationService.execute(messageTask);
@@ -591,13 +591,16 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         }
 
         public void printOperations() {
-            printTopInvocations();
-            printTopExecutionTime();
-            printTopMaxExecutionTime();
-            printTopAverageExecutionTime();
+            StringBuffer sb = new StringBuffer();
+            printTopInvocations(sb);
+            printTopExecutionTime(sb);
+            printTopMaxExecutionTime(sb);
+            printTopAverageExecutionTime(sb);
+
+            logger.info(sb.toString());
         }
 
-        private void printTopInvocations() {
+        private void printTopInvocations(StringBuffer sb) {
             List<Map.Entry<Class, Long>> mostCalled = new ArrayList<Map.Entry<Class, Long>>();
 
             for (Map.Entry<Class, MessageTaskStatistics> entry : taskStatistics.entrySet()) {
@@ -606,16 +609,15 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
             sort(mostCalled);
 
-            StringBuffer sb = new StringBuffer("Top invocations:\n");
+            sb.append("Top invocations:\n");
             for (int k = 0; k < mostCalled.size() && k < 10; k++) {
                 Map.Entry<Class, Long> entry = mostCalled.get(k);
                 sb.append("\t").append(entry.getKey().getName()).append("=").append(entry.getValue()).append("\n");
             }
-            logger.info(sb.toString());
+
         }
 
-
-        private void printTopExecutionTime() {
+        private void printTopExecutionTime(StringBuffer sb) {
             List<Map.Entry<Class, Long>> executionTimes = new ArrayList<Map.Entry<Class, Long>>();
 
             for (Map.Entry<Class, MessageTaskStatistics> entry : taskStatistics.entrySet()) {
@@ -624,15 +626,14 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
             sort(executionTimes);
 
-            StringBuffer sb = new StringBuffer("Top execution time (ms):\n");
+            sb.append("Top execution time (ms):\n");
             for (int k = 0; k < executionTimes.size() && k < 10; k++) {
                 Map.Entry<Class, Long> entry = executionTimes.get(k);
                 sb.append("\t").append(entry.getKey().getName()).append("=").append(entry.getValue()).append("\n");
             }
-            logger.info(sb.toString());
         }
 
-        private void printTopMaxExecutionTime() {
+        private void printTopMaxExecutionTime(StringBuffer sb) {
             List<Map.Entry<Class, Long>> maxExecutionTimes = new ArrayList<Map.Entry<Class, Long>>();
 
             for (Map.Entry<Class, MessageTaskStatistics> entry : taskStatistics.entrySet()) {
@@ -641,15 +642,14 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
             sort(maxExecutionTimes);
 
-            StringBuffer sb = new StringBuffer("Top max time (ms):\n");
+            sb.append(new StringBuffer("Top max time (ms):\n");
             for (int k = 0; k < maxExecutionTimes.size() && k < 10; k++) {
                 Map.Entry<Class, Long> entry = maxExecutionTimes.get(k);
                 sb.append("\t").append(entry.getKey().getName()).append("=").append(entry.getValue()).append("\n");
             }
-            logger.info(sb.toString());
         }
 
-        private void printTopAverageExecutionTime() {
+        private void printTopAverageExecutionTime(StringBuffer sb) {
             List<Map.Entry<Class, Long>> averages = new ArrayList<Map.Entry<Class, Long>>();
 
             for (Map.Entry<Class, MessageTaskStatistics> entry : taskStatistics.entrySet()) {
@@ -660,12 +660,11 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
             sort(averages);
 
-            StringBuffer sb = new StringBuffer("Top average time (ms):\n");
+            sb.append("Top average time (ms):\n");
             for (int k = 0; k < averages.size() && k < 10; k++) {
                 Map.Entry<Class, Long> entry = averages.get(k);
                 sb.append("\t").append(entry.getKey().getName()).append("=").append(entry.getValue()).append("\n");
             }
-            logger.info(sb.toString());
         }
 
         private class SimpleMapEntry<K, V> implements Map.Entry<K, V> {
