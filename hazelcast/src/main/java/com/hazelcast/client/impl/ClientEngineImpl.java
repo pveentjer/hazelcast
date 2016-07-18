@@ -90,6 +90,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import static com.hazelcast.spi.ExecutionService.CLIENT_EXECUTOR;
 import static com.hazelcast.spi.impl.OperationResponseHandlerFactory.createEmptyResponseHandler;
 import static com.hazelcast.spi.properties.GroupProperty.CLIENT_ENGINE_THREAD_COUNT;
+import static org.yecht.LevelStatus.map;
 
 /**
  * Class that requests, listeners from client handled in node side.
@@ -603,6 +604,8 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
                 mostCalled.add(new SimpleMapEntry<Class, Long>(entry.getKey(), entry.getValue().totalInvocations.get()));
             }
 
+            sort(mostCalled);
+
             StringBuffer sb = new StringBuffer("Top invocations:\n");
             for (int k = 0; k < mostCalled.size() && k < 10; k++) {
                 Map.Entry<Class, Long> entry = mostCalled.get(k);
@@ -613,47 +616,53 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
 
         private void printTopExecutionTime() {
-            List<Map.Entry<Class, Long>> mostCalled = new ArrayList<Map.Entry<Class, Long>>();
+            List<Map.Entry<Class, Long>> executionTimes = new ArrayList<Map.Entry<Class, Long>>();
 
             for (Map.Entry<Class, MessageTaskStatistics> entry : taskStatistics.entrySet()) {
-                mostCalled.add(new SimpleMapEntry<Class, Long>(entry.getKey(), entry.getValue().totalTime.get()));
+                executionTimes.add(new SimpleMapEntry<Class, Long>(entry.getKey(), entry.getValue().totalTime.get()));
             }
 
+            sort(executionTimes);
+
             StringBuffer sb = new StringBuffer("Top execution time (ms):\n");
-            for (int k = 0; k < mostCalled.size() && k < 10; k++) {
-                Map.Entry<Class, Long> entry = mostCalled.get(k);
+            for (int k = 0; k < executionTimes.size() && k < 10; k++) {
+                Map.Entry<Class, Long> entry = executionTimes.get(k);
                 sb.append("\t").append(entry.getKey().getName()).append("=").append(entry.getValue()).append("\n");
             }
             logger.info(sb.toString());
         }
 
         private void printTopMaxExecutionTime() {
-            List<Map.Entry<Class, Long>> mostCalled = new ArrayList<Map.Entry<Class, Long>>();
+            List<Map.Entry<Class, Long>> maxExecutionTimes = new ArrayList<Map.Entry<Class, Long>>();
 
             for (Map.Entry<Class, MessageTaskStatistics> entry : taskStatistics.entrySet()) {
-                mostCalled.add(new SimpleMapEntry<Class, Long>(entry.getKey(), entry.getValue().maxTime.get()));
+                maxExecutionTimes.add(new SimpleMapEntry<Class, Long>(entry.getKey(), entry.getValue().maxTime.get()));
             }
 
+            sort(maxExecutionTimes);
+
             StringBuffer sb = new StringBuffer("Top max time (ms):\n");
-            for (int k = 0; k < mostCalled.size() && k < 10; k++) {
-                Map.Entry<Class, Long> entry = mostCalled.get(k);
+            for (int k = 0; k < maxExecutionTimes.size() && k < 10; k++) {
+                Map.Entry<Class, Long> entry = maxExecutionTimes.get(k);
                 sb.append("\t").append(entry.getKey().getName()).append("=").append(entry.getValue()).append("\n");
             }
             logger.info(sb.toString());
         }
 
         private void printTopAverageExecutionTime() {
-            List<Map.Entry<Class, Long>> mostCalled = new ArrayList<Map.Entry<Class, Long>>();
+            List<Map.Entry<Class, Long>> averages = new ArrayList<Map.Entry<Class, Long>>();
 
             for (Map.Entry<Class, MessageTaskStatistics> entry : taskStatistics.entrySet()) {
                 MessageTaskStatistics taskStatistics = entry.getValue();
                 long average = taskStatistics.totalTime.get() / taskStatistics.totalInvocations.get();
-                mostCalled.add(new SimpleMapEntry<Class, Long>(entry.getKey(), average));
+                averages.add(new SimpleMapEntry<Class, Long>(entry.getKey(), average));
             }
 
+            sort(averages);
+
             StringBuffer sb = new StringBuffer("Top average time (ms):\n");
-            for (int k = 0; k < mostCalled.size() && k < 10; k++) {
-                Map.Entry<Class, Long> entry = mostCalled.get(k);
+            for (int k = 0; k < averages.size() && k < 10; k++) {
+                Map.Entry<Class, Long> entry = averages.get(k);
                 sb.append("\t").append(entry.getKey().getName()).append("=").append(entry.getValue()).append("\n");
             }
             logger.info(sb.toString());
@@ -685,15 +694,13 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
             }
         }
 
-        public List<Map.Entry<Class, Long>> sort(Map<Class, Long> map) {
-            List<Map.Entry<Class, Long>> entries = new ArrayList<Map.Entry<Class, Long>>(map.entrySet());
+        public void sort(List<Map.Entry<Class, Long>> entries) {
             Collections.sort(entries, new Comparator<Map.Entry<Class, Long>>() {
                 @Override
                 public int compare(Map.Entry<Class, Long> o1, Map.Entry<Class, Long> o2) {
                     return o1.getValue().compareTo(o2.getValue());
                 }
             });
-            return entries;
         }
 
         private class MyRunnable implements Runnable {

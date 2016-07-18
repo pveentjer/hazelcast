@@ -19,11 +19,14 @@ package com.hazelcast.client.impl.protocol.task;
 import com.hazelcast.client.impl.protocol.ClientMessage;
 import com.hazelcast.client.impl.protocol.codec.ClientPingCodec;
 import com.hazelcast.instance.Node;
+import com.hazelcast.logging.ILogger;
+import com.hazelcast.logging.Logger;
 import com.hazelcast.nio.Connection;
 
 import java.security.Permission;
 
 public class PingMessageTask extends AbstractCallableMessageTask<ClientPingCodec.RequestParameters> {
+    private ILogger logger = Logger.getLogger(PingMessageTask.class);
 
     public PingMessageTask(ClientMessage clientMessage, Node node, Connection connection) {
         super(clientMessage, node, connection);
@@ -41,6 +44,7 @@ public class PingMessageTask extends AbstractCallableMessageTask<ClientPingCodec
 
     @Override
     protected Object call() throws Exception {
+        logger.severe("Ping executed");
         return null;
     }
 
