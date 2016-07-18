@@ -69,10 +69,14 @@ import com.hazelcast.transaction.TransactionManagerService;
 import com.hazelcast.util.executor.ExecutorType;
 
 import javax.security.auth.login.LoginException;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
@@ -94,7 +98,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         ManagedService, MembershipAwareService, EventPublishingService<ClientEvent, ClientListener> {
 
     public final static boolean PRIORITY_SCHEDULING = Boolean.parseBoolean(System.getProperty("client.priorityScheduling", "true"));
-    public final static boolean EXECUTOR_TRACKING = Boolean.parseBoolean(System.getProperty("client.executor.tracking", "true");
+    public final static boolean EXECUTOR_TRACKING = Boolean.parseBoolean(System.getProperty("client.executor.tracking", "true"));
 
     /**
      * Service name to be used in requests.
@@ -105,8 +109,8 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
     private static final int EXECUTOR_QUEUE_CAPACITY_PER_CORE = 100000;
     private static final int THREADS_PER_CORE = 20;
 
-    private final ConcurrentHashMap<Class, AtomicLong> invocationCountMap = new ConcurrentHashMap<Class, AtomicLong>();
-    private final ConcurrentHashMap<Class, AtomicLong> timeMap = new ConcurrentHashMap<Class, AtomicLong>();
+    private final ConcurrentHashMap<Class, MessageTaskStatistics> taskStatistics = new ConcurrentHashMap<Class, MessageTaskStatistics>();
+
 
     private final Node node;
     private final NodeEngineImpl nodeEngine;
@@ -543,21 +547,19 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
                 task.run();
             } finally {
                 long durationMs = System.currentTimeMillis() - startMs;
-
-                Class clazz = task.getClass();
-                getAtomicLong(invocationCountMap, clazz).incrementAndGet();
-                getAtomicLong(timeMap, clazz).addAndGet(durationMs);
+                MessageTaskStatistics statistics = getStatistics(task.getClass());
+                statistics.update(durationMs);
             }
         }
 
-        private AtomicLong getAtomicLong(ConcurrentMap<Class, AtomicLong> map, Class clazz) {
-            AtomicLong c = map.get(clazz);
-            if (c == null) {
-                AtomicLong update = new AtomicLong();
-                AtomicLong found = map.putIfAbsent(clazz, update);
-                c = found == null ? update : found;
+        private MessageTaskStatistics getStatistics(Class clazz) {
+            MessageTaskStatistics statistics = taskStatistics.get(clazz);
+            if (statistics == null) {
+                MessageTaskStatistics update = new MessageTaskStatistics(clazz);
+                MessageTaskStatistics found = taskStatistics.putIfAbsent(clazz, update);
+                statistics = found == null ? update : found;
             }
-            return c;
+            return statistics;
         }
     }
 
@@ -588,13 +590,110 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         }
 
         public void printOperations() {
-            for (Map.Entry<Class, AtomicLong> entry : invocationCountMap.entrySet()) {
-                System.out.println(entry.getKey().getName() + " invocations:" + entry.getValue().get());
+            printTopInvocations();
+            printTopExecutionTime();
+            printTopMaxExecutionTime();
+            printTopAverageExecutionTime();
+        }
+
+        private void printTopInvocations() {
+            List<Map.Entry<Class, Long>> mostCalled = new ArrayList<Map.Entry<Class, Long>>();
+
+            for (Map.Entry<Class, MessageTaskStatistics> entry : taskStatistics.entrySet()) {
+                mostCalled.add(new SimpleMapEntry<Class, Long>(entry.getKey(), entry.getValue().totalInvocations.get()));
             }
 
-            for (Map.Entry<Class, AtomicLong> entry : timeMap.entrySet()) {
-                System.out.println(entry.getKey().getName() + " total time: " + entry.getValue().get());
+            StringBuffer sb = new StringBuffer("Top invocations:\n");
+            for (int k = 0; k < mostCalled.size() && k < 10; k++) {
+                Map.Entry<Class, Long> entry = mostCalled.get(k);
+                sb.append("\t").append(entry.getKey().getName()).append("=").append(entry.getValue()).append("\n");
             }
+            logger.info(sb.toString());
+        }
+
+
+        private void printTopExecutionTime() {
+            List<Map.Entry<Class, Long>> mostCalled = new ArrayList<Map.Entry<Class, Long>>();
+
+            for (Map.Entry<Class, MessageTaskStatistics> entry : taskStatistics.entrySet()) {
+                mostCalled.add(new SimpleMapEntry<Class, Long>(entry.getKey(), entry.getValue().totalTime.get()));
+            }
+
+            StringBuffer sb = new StringBuffer("Top execution time (ms):\n");
+            for (int k = 0; k < mostCalled.size() && k < 10; k++) {
+                Map.Entry<Class, Long> entry = mostCalled.get(k);
+                sb.append("\t").append(entry.getKey().getName()).append("=").append(entry.getValue()).append("\n");
+            }
+            logger.info(sb.toString());
+        }
+
+        private void printTopMaxExecutionTime() {
+            List<Map.Entry<Class, Long>> mostCalled = new ArrayList<Map.Entry<Class, Long>>();
+
+            for (Map.Entry<Class, MessageTaskStatistics> entry : taskStatistics.entrySet()) {
+                mostCalled.add(new SimpleMapEntry<Class, Long>(entry.getKey(), entry.getValue().maxTime.get()));
+            }
+
+            StringBuffer sb = new StringBuffer("Top max time (ms):\n");
+            for (int k = 0; k < mostCalled.size() && k < 10; k++) {
+                Map.Entry<Class, Long> entry = mostCalled.get(k);
+                sb.append("\t").append(entry.getKey().getName()).append("=").append(entry.getValue()).append("\n");
+            }
+            logger.info(sb.toString());
+        }
+
+        private void printTopAverageExecutionTime() {
+            List<Map.Entry<Class, Long>> mostCalled = new ArrayList<Map.Entry<Class, Long>>();
+
+            for (Map.Entry<Class, MessageTaskStatistics> entry : taskStatistics.entrySet()) {
+                MessageTaskStatistics taskStatistics = entry.getValue();
+                long average = taskStatistics.totalTime.get() / taskStatistics.totalInvocations.get();
+                mostCalled.add(new SimpleMapEntry<Class, Long>(entry.getKey(), average));
+            }
+
+            StringBuffer sb = new StringBuffer("Top average time (ms):\n");
+            for (int k = 0; k < mostCalled.size() && k < 10; k++) {
+                Map.Entry<Class, Long> entry = mostCalled.get(k);
+                sb.append("\t").append(entry.getKey().getName()).append("=").append(entry.getValue()).append("\n");
+            }
+            logger.info(sb.toString());
+        }
+
+        private class SimpleMapEntry<K, V> implements Map.Entry<K, V> {
+
+            private final K key;
+            private final V value;
+
+            public SimpleMapEntry(K key, V value) {
+                this.key = key;
+                this.value = value;
+            }
+
+            @Override
+            public K getKey() {
+                return key;
+            }
+
+            @Override
+            public V getValue() {
+                return value;
+            }
+
+            @Override
+            public V setValue(V value) {
+                throw new UnsupportedOperationException();
+            }
+        }
+
+        public List<Map.Entry<Class, Long>> sort(Map<Class, Long> map) {
+            List<Map.Entry<Class, Long>> entries = new ArrayList<Map.Entry<Class, Long>>(map.entrySet());
+            Collections.sort(entries, new Comparator<Map.Entry<Class, Long>>() {
+                @Override
+                public int compare(Map.Entry<Class, Long> o1, Map.Entry<Class, Long> o2) {
+                    return o1.getValue().compareTo(o2.getValue());
+                }
+            });
+            return entries;
         }
 
         private class MyRunnable implements Runnable {
@@ -610,6 +709,34 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
                 startMillis = System.currentTimeMillis();
                 executor.execute(this);
+            }
+        }
+    }
+
+
+    private static class MessageTaskStatistics {
+        private final Class clazz;
+        private final AtomicLong totalTime = new AtomicLong();
+        private final AtomicLong totalInvocations = new AtomicLong();
+        private final AtomicLong maxTime = new AtomicLong();
+
+        public MessageTaskStatistics(Class clazz) {
+            this.clazz = clazz;
+        }
+
+        public void update(long time) {
+            totalInvocations.incrementAndGet();
+            totalTime.addAndGet(time);
+
+            for (; ; ) {
+                long current = maxTime.get();
+                if (time <= current) {
+                    break;
+                }
+
+                if (maxTime.compareAndSet(current, time)) {
+                    break;
+                }
             }
         }
     }
