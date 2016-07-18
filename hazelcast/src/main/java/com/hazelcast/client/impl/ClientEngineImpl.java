@@ -64,7 +64,6 @@ import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationservice.InternalOperationService;
 import com.hazelcast.spi.partition.IPartitionService;
-import com.hazelcast.spi.properties.GroupProperty;
 import com.hazelcast.spi.serialization.SerializationService;
 import com.hazelcast.transaction.TransactionManagerService;
 import com.hazelcast.util.executor.ExecutorType;
@@ -82,6 +81,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static com.hazelcast.spi.ExecutionService.CLIENT_EXECUTOR;
 import static com.hazelcast.spi.impl.OperationResponseHandlerFactory.createEmptyResponseHandler;
@@ -93,7 +93,8 @@ import static com.hazelcast.spi.properties.GroupProperty.CLIENT_ENGINE_THREAD_CO
 public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwareService,
         ManagedService, MembershipAwareService, EventPublishingService<ClientEvent, ClientListener> {
 
-    public final static boolean PRIORITY_SCHEDULING = Boolean.getBoolean("client.priorityScheduling");
+    public final static boolean PRIORITY_SCHEDULING = Boolean.parseBoolean(System.getProperty("client.priorityScheduling", "true"));
+    public final static boolean EXECUTOR_TRACKING = Boolean.parseBoolean(System.getProperty("client.executor.tracking", "true");
 
     /**
      * Service name to be used in requests.
@@ -103,6 +104,9 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
     private static final int ENDPOINT_REMOVE_DELAY_SECONDS = 10;
     private static final int EXECUTOR_QUEUE_CAPACITY_PER_CORE = 100000;
     private static final int THREADS_PER_CORE = 20;
+
+    private final ConcurrentHashMap<Class, AtomicLong> invocationCountMap = new ConcurrentHashMap<Class, AtomicLong>();
+    private final ConcurrentHashMap<Class, AtomicLong> timeMap = new ConcurrentHashMap<Class, AtomicLong>();
 
     private final Node node;
     private final NodeEngineImpl nodeEngine;
@@ -135,7 +139,8 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
         new ClientExecutorDelayMonitorThread().start();
 
-        logger.info("Priority scheduling enabled:"+PRIORITY_SCHEDULING);
+        logger.info("Priority scheduling enabled:" + PRIORITY_SCHEDULING);
+        logger.info("Tracking enabled:" + EXECUTOR_TRACKING);
     }
 
     private ClientExceptionFactory initClientExceptionFactory() {
@@ -180,7 +185,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
             if (isUrgent(messageTask) && PRIORITY_SCHEDULING) {
                 operationService.execute(new PriorityRunnable(messageTask));
             } else {
-                executor.execute(messageTask);
+                executor.execute(EXECUTOR_TRACKING ? new TrackingMessageTask(messageTask) : messageTask);
             }
         } else {
             operationService.execute(messageTask);
@@ -193,24 +198,6 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
                 || clazz == GetPartitionsMessageTask.class;
     }
 
-    private static class PriorityRunnable implements PartitionSpecificRunnable, UrgentSystemOperation {
-
-        private final MessageTask task;
-
-        public PriorityRunnable(MessageTask task) {
-            this.task = task;
-        }
-
-        @Override
-        public void run() {
-            task.run();
-        }
-
-        @Override
-        public int getPartitionId() {
-            return task.getPartitionId();
-        }
-    }
 
     @Override
     public IPartitionService getPartitionService() {
@@ -518,14 +505,78 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         return resultMap;
     }
 
+    private static class PriorityRunnable implements PartitionSpecificRunnable, UrgentSystemOperation {
+
+        private final MessageTask task;
+
+        public PriorityRunnable(MessageTask task) {
+            this.task = task;
+        }
+
+        @Override
+        public void run() {
+            task.run();
+        }
+
+        @Override
+        public int getPartitionId() {
+            return task.getPartitionId();
+        }
+    }
+
+    private class TrackingMessageTask implements MessageTask {
+        private final MessageTask task;
+
+        public TrackingMessageTask(MessageTask task) {
+            this.task = task;
+        }
+
+        @Override
+        public int getPartitionId() {
+            return task.getPartitionId();
+        }
+
+        @Override
+        public void run() {
+            long startMs = System.currentTimeMillis();
+            try {
+                task.run();
+            } finally {
+                long durationMs = System.currentTimeMillis() - startMs;
+
+                Class clazz = task.getClass();
+                getAtomicLong(invocationCountMap, clazz).incrementAndGet();
+                getAtomicLong(timeMap, clazz).addAndGet(durationMs);
+            }
+        }
+
+        private AtomicLong getAtomicLong(ConcurrentMap<Class, AtomicLong> map, Class clazz) {
+            AtomicLong c = map.get(clazz);
+            if (c == null) {
+                AtomicLong update = new AtomicLong();
+                AtomicLong found = map.putIfAbsent(clazz, update);
+                c = found == null ? update : found;
+            }
+            return c;
+        }
+    }
+
     private class ClientExecutorDelayMonitorThread extends Thread {
+
+        @Override
         public void run() {
             MyRunnable command = new MyRunnable();
             executor.execute(command);
 
             try {
+                int k = 0;
                 while (isAlive()) {
                     Thread.sleep(1000);
+                    k++;
+
+                    if (k % 10 == 0) {
+                        printOperations();
+                    }
 
                     long delayMillis = System.currentTimeMillis() - command.startMillis;
                     if (delayMillis > 5000) {
@@ -533,6 +584,16 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
                     }
                 }
             } catch (InterruptedException e) {
+            }
+        }
+
+        public void printOperations() {
+            for (Map.Entry<Class, AtomicLong> entry : invocationCountMap.entrySet()) {
+                System.out.println(entry.getKey().getName() + " invocations:" + entry.getValue().get());
+            }
+
+            for (Map.Entry<Class, AtomicLong> entry : timeMap.entrySet()) {
+                System.out.println(entry.getKey().getName() + " total time: " + entry.getValue().get());
             }
         }
 
