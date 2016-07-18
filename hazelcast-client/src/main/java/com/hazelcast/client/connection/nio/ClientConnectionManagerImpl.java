@@ -59,6 +59,7 @@ import com.hazelcast.spi.properties.HazelcastProperties;
 import com.hazelcast.spi.serialization.SerializationService;
 import com.hazelcast.util.Clock;
 import com.hazelcast.util.ExceptionUtil;
+import com.hazelcast.util.StringUtil;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -403,6 +404,8 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
             }
             final long now = Clock.currentTimeMillis();
             for (ClientConnection connection : connections.values()) {
+                logger.info(connection.getEndPoint()+".lastRead="+StringUtil.timeToString(connection.lastReadTimeMillis()));
+
                 if (now - connection.lastReadTimeMillis() > heartBeatTimeout) {
                     if (connection.isHeartBeating()) {
                         logger.warning("Heartbeat failed to connection : " + connection);
@@ -411,6 +414,7 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
                     }
                 }
                 if (now - connection.lastReadTimeMillis() > heartBeatInterval) {
+                    logger.info("Sending ping to: "+connection.getEndPoint());
                     ClientMessage request = ClientPingCodec.encodeRequest();
                     ClientInvocation clientInvocation = new ClientInvocation(client, request, connection);
                     clientInvocation.setBypassHeartbeatCheck(true);
