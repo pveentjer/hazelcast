@@ -568,8 +568,11 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
         @Override
         public void run() {
-            MyRunnable command = new MyRunnable();
-            executor.execute(command);
+            ExecutorDelayMeasuringTask executorDelayMeasuringTask = new ExecutorDelayMeasuringTask();
+            executor.execute(executorDelayMeasuringTask);
+
+            GenericPriorityExecutionDelayMeasuringTask genericPriorityExecutionDelayMeasuringTask = new GenericPriorityExecutionDelayMeasuringTask();
+            nodeEngine.getOperationService().execute(genericPriorityExecutionDelayMeasuringTask);
 
             try {
                 int k = 0;
@@ -581,10 +584,8 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
                         printOperations();
                     }
 
-                    long delayMillis = System.currentTimeMillis() - command.startMillis;
-                    if (delayMillis > 5000) {
-                        logger.warning("Delay in client task: " + delayMillis + " ms");
-                    }
+                    executorDelayMeasuringTask.logProblems();
+                    genericPriorityExecutionDelayMeasuringTask.logProblems();
                 }
             } catch (InterruptedException e) {
             }
@@ -702,7 +703,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
             }
         }
 
-        private class MyRunnable implements Runnable {
+        private class ExecutorDelayMeasuringTask implements Runnable {
             private volatile long startMillis = System.currentTimeMillis();
 
             @Override
@@ -715,6 +716,41 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
                 startMillis = System.currentTimeMillis();
                 executor.execute(this);
+            }
+
+            public void logProblems(){
+                long delayMillis = System.currentTimeMillis() - startMillis;
+                if (delayMillis > 5000) {
+                    logger.warning("Delay in client executor: " + delayMillis + " ms");
+                }
+            }
+        }
+
+        private class GenericPriorityExecutionDelayMeasuringTask implements PartitionSpecificRunnable, UrgentSystemOperation {
+            private volatile long startMillis = System.currentTimeMillis();
+
+            @Override
+            public void run() {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    return;
+                }
+
+                startMillis = System.currentTimeMillis();
+                nodeEngine.getOperationService().execute(this);
+            }
+
+            @Override
+            public int getPartitionId() {
+                return -1;
+            }
+
+            public void logProblems(){
+                long delayMillis = System.currentTimeMillis() - startMillis;
+                if (delayMillis > 5000) {
+                    logger.warning("Delay in generic priority executor: " + delayMillis + " ms");
+                }
             }
         }
     }
