@@ -126,7 +126,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
                 endpointManager, this, nodeEngine.getExecutionService(), node.getProperties());
         heartBeatMonitor.start();
 
-        new MyThread().start();
+        new ClientExecutorDelayMonitorThread().start();
     }
 
     private ClientExceptionFactory initClientExceptionFactory() {
@@ -490,7 +490,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         return resultMap;
     }
 
-    private class MyThread extends Thread {
+    private class ClientExecutorDelayMonitorThread extends Thread {
         public void run() {
             MyRunnable command = new MyRunnable();
             executor.execute(command);
@@ -501,7 +501,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
                     long delayMillis = System.currentTimeMillis() - command.startMillis;
                     if (delayMillis > 5000) {
-                        logger.severe("Delay in client task: " + delayMillis + " ms");
+                        logger.warning("Delay in client task: " + delayMillis + " ms");
                     }
                 }
             } catch (InterruptedException e) {
