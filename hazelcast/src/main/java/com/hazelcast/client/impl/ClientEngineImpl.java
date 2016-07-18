@@ -642,7 +642,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
             sort(maxExecutionTimes);
 
-            sb.append(new StringBuffer("Top max time (ms):\n");
+            sb.append("Top max time (ms):\n");
             for (int k = 0; k < maxExecutionTimes.size() && k < 10; k++) {
                 Map.Entry<Class, Long> entry = maxExecutionTimes.get(k);
                 sb.append("\t").append(entry.getKey().getName()).append("=").append(entry.getValue()).append("\n");
