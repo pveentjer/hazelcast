@@ -626,7 +626,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
             sort(executionTimes);
 
-            sb.append("Top execution time (ms):\n");
+            sb.append("Top total execution time (ms):\n");
             for (int k = 0; k < executionTimes.size() && k < 10; k++) {
                 Map.Entry<Class, Long> entry = executionTimes.get(k);
                 sb.append("\t").append(entry.getKey().getName()).append("=").append(entry.getValue()).append("\n");
@@ -642,7 +642,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
             sort(maxExecutionTimes);
 
-            sb.append("Top max time (ms):\n");
+            sb.append("Top max execution time (ms):\n");
             for (int k = 0; k < maxExecutionTimes.size() && k < 10; k++) {
                 Map.Entry<Class, Long> entry = maxExecutionTimes.get(k);
                 sb.append("\t").append(entry.getKey().getName()).append("=").append(entry.getValue()).append("\n");
@@ -667,11 +667,11 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
             }
         }
 
-        public void sort(List<Map.Entry<Class, Long>> entries) {
-            Collections.sort(entries, new Comparator<Map.Entry<Class, Long>>() {
+        public void sort(List<Map.Entry<Class, Long>> list) {
+            Collections.sort(list, new Comparator<Map.Entry<Class, Long>>() {
                 @Override
                 public int compare(Map.Entry<Class, Long> o1, Map.Entry<Class, Long> o2) {
-                    return o1.getValue().compareTo(o2.getValue());
+                    return o2.getValue().compareTo(o1.getValue());
                 }
             });
         }
