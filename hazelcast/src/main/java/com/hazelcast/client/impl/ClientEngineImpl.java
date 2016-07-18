@@ -28,6 +28,7 @@ import com.hazelcast.client.impl.operations.PostJoinClientOperation;
 import com.hazelcast.client.impl.protocol.ClientExceptionFactory;
 import com.hazelcast.client.impl.protocol.ClientMessage;
 import com.hazelcast.client.impl.protocol.MessageTaskFactory;
+import com.hazelcast.client.impl.protocol.task.GetPartitionsMessageTask;
 import com.hazelcast.client.impl.protocol.task.MessageTask;
 import com.hazelcast.client.impl.protocol.task.PingMessageTask;
 import com.hazelcast.config.Config;
@@ -58,7 +59,9 @@ import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationService;
 import com.hazelcast.spi.PostJoinAwareService;
 import com.hazelcast.spi.ProxyService;
+import com.hazelcast.spi.UrgentSystemOperation;
 import com.hazelcast.spi.impl.NodeEngineImpl;
+import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationservice.InternalOperationService;
 import com.hazelcast.spi.partition.IPartitionService;
 import com.hazelcast.spi.properties.GroupProperty;
@@ -80,13 +83,17 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
+import static com.hazelcast.spi.ExecutionService.CLIENT_EXECUTOR;
 import static com.hazelcast.spi.impl.OperationResponseHandlerFactory.createEmptyResponseHandler;
+import static com.hazelcast.spi.properties.GroupProperty.CLIENT_ENGINE_THREAD_COUNT;
 
 /**
  * Class that requests, listeners from client handled in node side.
  */
 public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwareService,
         ManagedService, MembershipAwareService, EventPublishingService<ClientEvent, ClientListener> {
+
+    public final static boolean PRIORITY_SCHEDULING = Boolean.getBoolean("client.priorityScheduling");
 
     /**
      * Service name to be used in requests.
@@ -127,6 +134,8 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         heartBeatMonitor.start();
 
         new ClientExecutorDelayMonitorThread().start();
+
+        logger.info("Priority scheduling enabled:"+PRIORITY_SCHEDULING);
     }
 
     private ClientExceptionFactory initClientExceptionFactory() {
@@ -138,12 +147,12 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         final ExecutionService executionService = nodeEngine.getExecutionService();
         int coreSize = Runtime.getRuntime().availableProcessors();
 
-        int threadCount = node.getProperties().getInteger(GroupProperty.CLIENT_ENGINE_THREAD_COUNT);
+        int threadCount = node.getProperties().getInteger(CLIENT_ENGINE_THREAD_COUNT);
         if (threadCount <= 0) {
             threadCount = coreSize * THREADS_PER_CORE;
         }
 
-        return executionService.register(ExecutionService.CLIENT_EXECUTOR,
+        return executionService.register(CLIENT_EXECUTOR,
                 threadCount, coreSize * EXECUTOR_QUEUE_CAPACITY_PER_CORE,
                 ExecutorType.CONCRETE);
     }
@@ -168,19 +177,38 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         int partitionId = clientMessage.getPartitionId();
         final MessageTask messageTask = messageTaskFactory.create(clientMessage, connection);
         if (partitionId < 0) {
-            if (messageTask instanceof PingMessageTask) {
-                PingMessageTask pingMessageTask = (PingMessageTask) messageTask;
-                try {
-                    pingMessageTask.processMessage();
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-                //operationService.execute(new PriorityPartitionSpecificRunnable(messageTask));
+            if (isUrgent(messageTask) && PRIORITY_SCHEDULING) {
+                operationService.execute(new PriorityRunnable(messageTask));
             } else {
                 executor.execute(messageTask);
             }
         } else {
             operationService.execute(messageTask);
+        }
+    }
+
+    private boolean isUrgent(MessageTask messageTask) {
+        Class clazz = messageTask.getClass();
+        return clazz == PingMessageTask.class
+                || clazz == GetPartitionsMessageTask.class;
+    }
+
+    private static class PriorityRunnable implements PartitionSpecificRunnable, UrgentSystemOperation {
+
+        private final MessageTask task;
+
+        public PriorityRunnable(MessageTask task) {
+            this.task = task;
+        }
+
+        @Override
+        public void run() {
+            task.run();
+        }
+
+        @Override
+        public int getPartitionId() {
+            return task.getPartitionId();
         }
     }
 
