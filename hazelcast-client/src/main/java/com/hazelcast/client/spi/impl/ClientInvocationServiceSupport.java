@@ -220,7 +220,9 @@ abstract class ClientInvocationServiceSupport implements ClientInvocationService
                 }
 
                 iter.remove();
-                invocation.notifyException(new TargetDisconnectedException(connection.getCloseReason(), connection.getCloseCause()));
+                invocation.notifyException(
+                        new TargetDisconnectedException("Is connection closed?:"+connection.isAlive()
+                                +", reason:"+connection.getCloseReason()+" "+connection, connection.getCloseCause()));
             }
             if (expiredConnections != null) {
                 logExpiredConnections(expiredConnections);
