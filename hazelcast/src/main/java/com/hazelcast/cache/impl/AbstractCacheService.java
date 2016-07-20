@@ -308,7 +308,7 @@ public abstract class AbstractCacheService
             }
         }
         if (localConfig == null) {
-            logger.info("Added cache config: " + config);
+            //logger.info("Added cache config: " + config);
         }
         return localConfig;
     }
@@ -317,7 +317,7 @@ public abstract class AbstractCacheService
     public CacheConfig deleteCacheConfig(String name) {
         CacheConfig config = configs.remove(name);
         if (config != null) {
-            logger.info("Removed cache config: " + config);
+           // logger.info("Removed cache config: " + config);
         }
         return config;
     }
