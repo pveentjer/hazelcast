@@ -404,7 +404,7 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
             }
             final long now = Clock.currentTimeMillis();
             for (ClientConnection connection : connections.values()) {
-                logger.info(connection.getEndPoint()+".lastRead="+StringUtil.timeToString(connection.lastReadTimeMillis()));
+                logger.info(connection.getLocalSocketAddress()+"->"+connection.getEndPoint()+".lastRead="+StringUtil.timeToString(connection.lastReadTimeMillis()));
 
                 long idleTime = now - connection.lastReadTimeMillis();
                 if (idleTime > heartBeatTimeout) {
