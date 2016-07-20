@@ -34,6 +34,7 @@ import com.hazelcast.internal.metrics.ProbeLevel;
 import com.hazelcast.internal.util.collection.MPSCQueue;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Connection;
+import com.hazelcast.spi.exception.TargetDisconnectedException;
 import com.hazelcast.spi.properties.HazelcastProperty;
 
 import java.io.IOException;
@@ -201,7 +202,7 @@ abstract class ClientInvocationServiceSupport implements ClientInvocationService
                     continue;
                 }
 
-                if (true || connection.isHeartBeating()) {
+                if (connection.isHeartBeating()) {
                     continue;
                 }
 
@@ -219,13 +220,7 @@ abstract class ClientInvocationServiceSupport implements ClientInvocationService
                 }
 
                 iter.remove();
-                Exception ex = newTargetDisconnectedExceptionCausedByHeartBeat(
-                        connection.getRemoteEndpoint(),
-                        connection.toString(),
-                        connection.getLastHeartbeatMillis(),
-                        connection.lastReadTimeMillis(),
-                        connection.getCloseCause());
-                invocation.notifyException(ex);
+                invocation.notifyException(new TargetDisconnectedException(connection.getCloseReason(), connection.getCloseCause()));
             }
             if (expiredConnections != null) {
                 logExpiredConnections(expiredConnections);
