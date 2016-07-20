@@ -220,6 +220,12 @@ public class ClientConnection implements Connection {
             return;
         }
 
+        try{
+            throw new Exception("Tracking cause of connection closer:"+this,cause);
+        }catch (Exception e){
+            logger.severe(e);
+        }
+
         closeCause = cause;
         closeReason = reason;
 
