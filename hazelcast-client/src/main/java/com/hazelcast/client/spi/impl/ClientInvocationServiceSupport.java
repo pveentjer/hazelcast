@@ -200,7 +200,10 @@ abstract class ClientInvocationServiceSupport implements ClientInvocationService
                 if (connection == null) {
                     continue;
                 }
-                if (connection.isHeartBeating()) {
+
+                long idleTime = System.currentTimeMillis()-connection.lastReadTimeMillis();
+
+                if (idleTime<TimeUnit.SECONDS.toMillis(120)) {
                     continue;
                 }
 

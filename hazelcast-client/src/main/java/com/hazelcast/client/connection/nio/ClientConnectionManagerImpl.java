@@ -406,14 +406,16 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
             for (ClientConnection connection : connections.values()) {
                 logger.info(connection.getEndPoint()+".lastRead="+StringUtil.timeToString(connection.lastReadTimeMillis()));
 
-                if (now - connection.lastReadTimeMillis() > heartBeatTimeout) {
+                long idleTime = now - connection.lastReadTimeMillis();
+                if (idleTime > heartBeatTimeout) {
                     if (connection.isHeartBeating()) {
                         logger.warning("Heartbeat failed to connection : " + connection);
                         connection.heartBeatingFailed();
                         fireHeartBeatStopped(connection);
                     }
                 }
-                if (now - connection.lastReadTimeMillis() > heartBeatInterval) {
+
+                if (idleTime > heartBeatInterval) {
                     logger.info("Sending ping to: "+connection.getEndPoint());
                     ClientMessage request = ClientPingCodec.encodeRequest();
                     ClientInvocation clientInvocation = new ClientInvocation(client, request, connection);
