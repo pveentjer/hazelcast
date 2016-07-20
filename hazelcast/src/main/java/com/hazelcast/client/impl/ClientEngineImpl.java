@@ -186,12 +186,15 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         int partitionId = clientMessage.getPartitionId();
         MessageTask messageTask = messageTaskFactory.create(clientMessage, connection);
         if (partitionId < 0) {
+
             if (messageTask instanceof PingMessageTask) {
+                PingMessageTask pingMessageTask = (PingMessageTask) messageTask;
+                pingMessageTask.connection = connection;
+                pingMessageTask.receivedMillis = System.currentTimeMillis();
                 logger.severe("Received ping from " + connection.getEndPoint());
             }
 
             messageTask = EXECUTOR_TRACKING ? new TrackingMessageTask(messageTask) : messageTask;
-
 
             if (isUrgent(messageTask) && PRIORITY_SCHEDULING) {
                 operationService.execute(new PriorityRunnable(messageTask));
@@ -571,12 +574,11 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
     }
 
     private class ClientExecutorDelayMonitorThread extends Thread {
+        ExecutorDelayMeasuringTask executorDelayMeasuringTask = new ExecutorDelayMeasuringTask();
+        GenericPriorityExecutionDelayMeasuringTask genericPriorityExecutionDelayMeasuringTask = new GenericPriorityExecutionDelayMeasuringTask();
 
         @Override
         public void run() {
-            ExecutorDelayMeasuringTask executorDelayMeasuringTask = new ExecutorDelayMeasuringTask();
-
-            GenericPriorityExecutionDelayMeasuringTask genericPriorityExecutionDelayMeasuringTask = new GenericPriorityExecutionDelayMeasuringTask();
 
             try {
                 int k = 0;
@@ -587,9 +589,6 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
                     if (k % 10 == 0) {
                         printOperations();
                     }
-
-                    executorDelayMeasuringTask.logProblems();
-                    genericPriorityExecutionDelayMeasuringTask.logProblems();
 
                     if (executorDelayMeasuringTask.done) {
                         executorDelayMeasuringTask.restart();
@@ -610,7 +609,8 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
             printTopExecutionTime(sb);
             printTopMaxExecutionTime(sb);
             printTopAverageExecutionTime(sb);
-
+            sb.append("ExecutorDelay: " + executorDelayMeasuringTask.getDelay()+" ms\n");
+            sb.append("Generic Priority Execution Delay: " + genericPriorityExecutionDelayMeasuringTask.getDelay()+" ms\n");
             logger.info(sb.toString());
         }
 
@@ -731,15 +731,13 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
                 done = true;
             }
 
-            public void logProblems() {
+
+            public long getDelay() {
                 if (done) {
-                    return;
+                    return 0;
                 }
 
-                long delayMillis = System.currentTimeMillis() - startMillis;
-                if (delayMillis > 5000) {
-                    logger.warning("Delay in client executor: " + delayMillis + " ms");
-                }
+                return System.currentTimeMillis() - startMillis;
             }
         }
 
@@ -763,14 +761,12 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
                 return -1;
             }
 
-            public void logProblems() {
+            public long getDelay() {
                 if (done) {
-                    return;
+                    return 0;
                 }
-                long delayMillis = System.currentTimeMillis() - startMillis;
-                if (delayMillis > 5000) {
-                    logger.warning("Delay in generic priority executor: " + delayMillis + " ms");
-                }
+
+                return System.currentTimeMillis() - startMillis;
             }
         }
     }

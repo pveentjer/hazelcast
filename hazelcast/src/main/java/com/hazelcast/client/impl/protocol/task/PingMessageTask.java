@@ -27,6 +27,8 @@ import java.security.Permission;
 
 public class PingMessageTask extends AbstractCallableMessageTask<ClientPingCodec.RequestParameters> {
     private ILogger logger = Logger.getLogger(PingMessageTask.class);
+    public Connection connection;
+    public long receivedMillis;
 
     public PingMessageTask(ClientMessage clientMessage, Node node, Connection connection) {
         super(clientMessage, node, connection);
@@ -44,7 +46,7 @@ public class PingMessageTask extends AbstractCallableMessageTask<ClientPingCodec
 
     @Override
     protected Object call() throws Exception {
-        logger.severe("Ping executed");
+        logger.severe("Ping executed on connection:" + connection + " delay: " + (System.currentTimeMillis() - receivedMillis));
         return null;
     }
 
