@@ -590,11 +590,11 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
                         printOperations();
                     }
 
-                    if (executorDelayMeasuringTask.done) {
+                    if (!executorDelayMeasuringTask.started) {
                         executorDelayMeasuringTask.restart();
                     }
 
-                    if (genericPriorityExecutionDelayMeasuringTask.done) {
+                    if (!genericPriorityExecutionDelayMeasuringTask.started) {
                         genericPriorityExecutionDelayMeasuringTask.restart();
 
                     }
@@ -718,22 +718,22 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
         private class ExecutorDelayMeasuringTask implements Runnable {
             private volatile long startMillis;
-            private volatile boolean done = true;
+            private volatile boolean started;
 
             public void restart() {
                 startMillis = System.currentTimeMillis();
-                done = false;
+                started = true;
                 executor.execute(this);
             }
 
             @Override
             public void run() {
-                done = true;
+                started = false;
             }
 
 
             public long getDelay() {
-                if (done) {
+                if (!started) {
                     return 0;
                 }
 
@@ -743,17 +743,17 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
         private class GenericPriorityExecutionDelayMeasuringTask implements PartitionSpecificRunnable, UrgentSystemOperation {
             private volatile long startMillis;
-            private volatile boolean done = true;
+            private volatile boolean started;
 
             public void restart() {
                 startMillis = System.currentTimeMillis();
-                done = false;
+                started = true;
                 nodeEngine.getOperationService().execute(this);
             }
 
             @Override
             public void run() {
-                done = true;
+                started = false;
             }
 
             @Override
@@ -762,7 +762,7 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
             }
 
             public long getDelay() {
-                if (done) {
+                if (!started) {
                     return 0;
                 }
 
