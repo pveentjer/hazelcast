@@ -296,9 +296,9 @@ public class Invocation_TimeoutTest extends HazelcastTestSupport {
     }
 
     @Test
-    @Ignore //https://github.com/hazelcast/hazelcast/issues/7932
+    //@Ignore //https://github.com/hazelcast/hazelcast/issues/7932
     public void async_whenCallTimeout_thenOperationTimeoutException() throws Exception {
-        long callTimeoutMs = 60000;
+        long callTimeoutMs = 5000;
         Config config = new Config().setProperty(GroupProperty.OPERATION_CALL_TIMEOUT_MILLIS.getName(), "" + callTimeoutMs);
         TestHazelcastInstanceFactory factory = createHazelcastInstanceFactory(2);
         HazelcastInstance local = factory.newHazelcastInstance(config);
@@ -308,14 +308,28 @@ public class Invocation_TimeoutTest extends HazelcastTestSupport {
         OperationService opService = getOperationService(local);
 
         int partitionId = getPartitionId(remote);
-        opService.invokeOnPartition(new SlowOperation(callTimeoutMs * 2).setPartitionId(partitionId));
+        opService.invokeOnPartition(new SlowOperation(Math.round(callTimeoutMs * 1.5)).setPartitionId(partitionId));
 
         ICompletableFuture<Object> future = opService.invokeOnPartition(new DummyOperation().setPartitionId(partitionId));
 
-        ExecutionCallback<Object> callback = getExecutionCallbackMock();
+        ExecutionCallback<Object> callback = new ExecutionCallback<Object>() {
+            @Override
+            public void onResponse(Object response) {
+                System.out.println("response:"+response);
+            }
+
+            @Override
+            public void onFailure(Throwable t) {
+                t.printStackTrace();
+            }
+        };
         future.andThen(callback);
 
-        assertEventuallyFailsWithCallTimeout(callback);
+        Thread.sleep(1000000);
+
+        //assertEventuallyFailsWithHeartbeatTimeout(callback);
+
+        //assertEventuallyFailsWithCallTimeout(callback);
     }
 
     @SuppressWarnings("unchecked")

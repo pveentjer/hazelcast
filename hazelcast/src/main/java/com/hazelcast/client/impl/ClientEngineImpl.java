@@ -575,10 +575,8 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         @Override
         public void run() {
             ExecutorDelayMeasuringTask executorDelayMeasuringTask = new ExecutorDelayMeasuringTask();
-            executor.execute(executorDelayMeasuringTask);
 
             GenericPriorityExecutionDelayMeasuringTask genericPriorityExecutionDelayMeasuringTask = new GenericPriorityExecutionDelayMeasuringTask();
-            nodeEngine.getOperationService().execute(genericPriorityExecutionDelayMeasuringTask);
 
             try {
                 int k = 0;
@@ -592,6 +590,15 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
 
                     executorDelayMeasuringTask.logProblems();
                     genericPriorityExecutionDelayMeasuringTask.logProblems();
+
+                    if (executorDelayMeasuringTask.done) {
+                        executorDelayMeasuringTask.restart();
+                    }
+
+                    if (genericPriorityExecutionDelayMeasuringTask.done) {
+                        genericPriorityExecutionDelayMeasuringTask.restart();
+
+                    }
                 }
             } catch (InterruptedException e) {
             }
@@ -710,21 +717,25 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         }
 
         private class ExecutorDelayMeasuringTask implements Runnable {
-            private volatile long startMillis = System.currentTimeMillis();
+            private volatile long startMillis;
+            private volatile boolean done = true;
 
-            @Override
-            public void run() {
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    return;
-                }
-
+            public void restart() {
                 startMillis = System.currentTimeMillis();
+                done = false;
                 executor.execute(this);
             }
 
+            @Override
+            public void run() {
+                done = true;
+            }
+
             public void logProblems() {
+                if (done) {
+                    return;
+                }
+
                 long delayMillis = System.currentTimeMillis() - startMillis;
                 if (delayMillis > 5000) {
                     logger.warning("Delay in client executor: " + delayMillis + " ms");
@@ -733,18 +744,18 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
         }
 
         private class GenericPriorityExecutionDelayMeasuringTask implements PartitionSpecificRunnable, UrgentSystemOperation {
-            private volatile long startMillis = System.currentTimeMillis();
+            private volatile long startMillis;
+            private volatile boolean done = true;
+
+            public void restart() {
+                startMillis = System.currentTimeMillis();
+                done = false;
+                nodeEngine.getOperationService().execute(this);
+            }
 
             @Override
             public void run() {
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    return;
-                }
-
-                startMillis = System.currentTimeMillis();
-                nodeEngine.getOperationService().execute(this);
+                done = true;
             }
 
             @Override
@@ -753,6 +764,9 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
             }
 
             public void logProblems() {
+                if (done) {
+                    return;
+                }
                 long delayMillis = System.currentTimeMillis() - startMillis;
                 if (delayMillis > 5000) {
                     logger.warning("Delay in generic priority executor: " + delayMillis + " ms");
