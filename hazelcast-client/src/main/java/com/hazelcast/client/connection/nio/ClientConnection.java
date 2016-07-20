@@ -319,9 +319,8 @@ public class ClientConnection implements Connection {
     @Override
     public String toString() {
         return "ClientConnection{"
-                + "live=" + live
-                + ", writeHandler=" + writeHandler
-                + ", readHandler=" + readHandler
+                + "localAddress:"+getLocalSocketAddress()
+                + ", live=" + live
                 + ", connectionId=" + connectionId
                 + ", socketChannel=" + socketChannelWrapper
                 + ", remoteEndpoint=" + remoteEndpoint
