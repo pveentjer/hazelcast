@@ -22,6 +22,7 @@ import com.hazelcast.instance.Node;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.Logger;
 import com.hazelcast.nio.Connection;
+import com.hazelcast.util.StringUtil;
 
 import java.security.Permission;
 
@@ -46,7 +47,10 @@ public class PingMessageTask extends AbstractCallableMessageTask<ClientPingCodec
 
     @Override
     protected Object call() throws Exception {
-        logger.severe("Ping executed on connection:" + connection + " delay: " + (System.currentTimeMillis() - receivedMillis));
+        logger.severe("Ping executed on connection:" + connection
+                + " delay: " + (System.currentTimeMillis() - receivedMillis)
+                + " lastWriteTime:" + StringUtil.timeToString(connection.lastWriteTimeMillis())
+        );
         return null;
     }
 
