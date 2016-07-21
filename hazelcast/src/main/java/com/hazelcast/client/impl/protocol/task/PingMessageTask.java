@@ -48,8 +48,9 @@ public class PingMessageTask extends AbstractCallableMessageTask<ClientPingCodec
     @Override
     protected Object call() throws Exception {
         logger.severe("Ping executed on connection:" + connection
-                + " delay: " + (System.currentTimeMillis() - receivedMillis)
+                + " delay: " + (System.currentTimeMillis() - receivedMillis)+" ms, "
                 + " lastWriteTime:" + StringUtil.timeToString(connection.lastWriteTimeMillis())
+                + " lastReadTime:" + StringUtil.timeToString(connection.lastReadTimeMillis())
         );
         return null;
     }
