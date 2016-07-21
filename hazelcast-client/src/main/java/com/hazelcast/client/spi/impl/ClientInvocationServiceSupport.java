@@ -202,7 +202,7 @@ abstract class ClientInvocationServiceSupport implements ClientInvocationService
                     continue;
                 }
 
-                if (connection.isHeartBeating()) {
+                if (connection.isAlive()) {
                     continue;
                 }
 
