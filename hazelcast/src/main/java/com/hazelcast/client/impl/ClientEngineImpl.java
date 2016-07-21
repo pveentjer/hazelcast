@@ -609,8 +609,8 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
             printTopExecutionTime(sb);
             printTopMaxExecutionTime(sb);
             printTopAverageExecutionTime(sb);
-            sb.append("ExecutorDelay: " + executorDelayMeasuringTask.getDelay()+" ms\n");
-            sb.append("Generic Priority Execution Delay: " + genericPriorityExecutionDelayMeasuringTask.getDelay()+" ms\n");
+//            sb.append("ExecutorDelay: " + executorDelayMeasuringTask.getDelay()+" ms\n");
+//            sb.append("Generic Priority Execution Delay: " + genericPriorityExecutionDelayMeasuringTask.getDelay()+" ms\n");
             logger.info(sb.toString());
         }
 
@@ -721,9 +721,9 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
             private volatile boolean started;
 
             public void restart() {
-                startMillis = System.currentTimeMillis();
-                started = true;
-                executor.execute(this);
+//                startMillis = System.currentTimeMillis();
+//                started = true;
+//                executor.execute(this);
             }
 
             @Override
@@ -746,9 +746,9 @@ public class ClientEngineImpl implements ClientEngine, CoreService, PostJoinAwar
             private volatile boolean started;
 
             public void restart() {
-                startMillis = System.currentTimeMillis();
-                started = true;
-                nodeEngine.getOperationService().execute(this);
+//                startMillis = System.currentTimeMillis();
+//                started = true;
+//                nodeEngine.getOperationService().execute(this);
             }
 
             @Override
