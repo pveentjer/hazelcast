@@ -58,13 +58,13 @@ public abstract class AbstractClientSelectionHandler implements SelectionHandler
     }
 
     @Probe(level = DEBUG)
-    private long opsInterested() {
+    protected long opsInterested() {
         SelectionKey selectionKey = this.sk;
         return selectionKey == null ? -1 : selectionKey.interestOps();
     }
 
     @Probe(level = DEBUG)
-    private long opsReady() {
+    protected long opsReady() {
         SelectionKey selectionKey = this.sk;
         return selectionKey == null ? -1 : selectionKey.readyOps();
     }

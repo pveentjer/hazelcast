@@ -43,6 +43,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.hazelcast.util.StringUtil.stringToBytes;
+import static com.hazelcast.util.StringUtil.timeToString;
 
 /**
  * Client implementation of {@link Connection}.
@@ -325,11 +326,18 @@ public class ClientConnection implements Connection {
     @Override
     public String toString() {
         return "ClientConnection{"
-                + "localAddress:"+getLocalSocketAddress()
-                + ", live=" + live
+                + "live=" + live
                 + ", connectionId=" + connectionId
                 + ", socketChannel=" + socketChannelWrapper
                 + ", remoteEndpoint=" + remoteEndpoint
+                + ", lastReadTime=" + timeToString(lastReadTimeMillis())
+                + ", lastWriteTime=" + timeToString(lastWriteTimeMillis())
+                + ", closedTime=" + timeToString(closedTime)
+                + ", lastHeartbeat=" + timeToString(lastHeartbeatMillis)
+                + ", read.opsInterested=" + readHandler.opsInterested()
+                + ", read.opsReady=" + readHandler.opsReady()
+                + ", write.opsInterested=" + writeHandler.opsInterested()
+                + ", write.opsReady=" + writeHandler.opsReady()
                 + '}';
     }
 
