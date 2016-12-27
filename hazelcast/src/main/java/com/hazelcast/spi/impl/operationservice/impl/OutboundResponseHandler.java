@@ -85,17 +85,21 @@ public final class OutboundResponseHandler implements OperationResponseHandler {
             throw new IllegalArgumentException("Target is this node! -> " + target + ", response: " + response);
         }
 
-        byte[] bytes = serializationService.toBytes(response);
-        Packet packet = new Packet(bytes, -1)
-                .setPacketType(Packet.Type.OPERATION)
-                .raiseFlags(FLAG_OP_RESPONSE);
+        for (int k = 0; k < 20; k++) {
 
-        if (response.isUrgent()) {
-            packet.raiseFlags(FLAG_URGENT);
+            byte[] bytes = serializationService.toBytes(response);
+            Packet packet = new Packet(bytes, -1)
+                    .setPacketType(Packet.Type.OPERATION)
+                    .raiseFlags(FLAG_OP_RESPONSE);
+
+            if (response.isUrgent()) {
+                packet.raiseFlags(FLAG_URGENT);
+            }
+
+            ConnectionManager connectionManager = node.getConnectionManager();
+            Connection connection = connectionManager.getOrConnect(target);
+            connectionManager.transmit(packet, connection);
         }
-
-        ConnectionManager connectionManager = node.getConnectionManager();
-        Connection connection = connectionManager.getOrConnect(target);
-        return connectionManager.transmit(packet, connection);
+        return true;
     }
 }
