@@ -30,7 +30,7 @@ public class ClientMain {
         for (int i = 0; i < 3; i++) {
             byte[] d = new byte[sizes[i] * 1024 * 1024];
             long startTime = System.currentTimeMillis();
-            map.put("mykey", d);
+            map.set("mykey", d);
             long putTime = System.currentTimeMillis() - startTime;
             startTime = System.currentTimeMillis();
             d = map.get("mykey");
@@ -39,7 +39,7 @@ public class ClientMain {
                 toGigabitPerSecond(d, putTime);
                 System.out.println(sizes[i] + "MB");
                 System.out.println("\tput-time:" + putTime + "ms, speed:" + toGigabitPerSecond(d, putTime) + " Gbit/second");
-                System.out.println("\t+get time: " + getTime + "ms, speed:" + toGigabitPerSecond(d, getTime) + " Gbit/second");
+                System.out.println("\tget time: " + getTime + "ms, speed:" + toGigabitPerSecond(d, getTime) + " Gbit/second");
             }
         }
         map.clear();
