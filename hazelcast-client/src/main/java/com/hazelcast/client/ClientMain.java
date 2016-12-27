@@ -33,7 +33,7 @@ public class ClientMain {
         {
             byte [] d = new byte[sizes[i] * 1024*1024];
             long startTime = System.currentTimeMillis();
-            map.set("mykey", d);
+            map.put("mykey", d);
             long putTime = System.currentTimeMillis() - startTime;
             startTime = System.currentTimeMillis();
             d = map.get("mykey");
@@ -41,5 +41,6 @@ public class ClientMain {
             if(!warmup)
             System.out.println(sizes[i] + "MB put:" + putTime + "ms get time: " + getTime + "ms");
         }
+        map.clear();
     }
 }
