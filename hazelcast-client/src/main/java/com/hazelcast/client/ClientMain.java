@@ -20,6 +20,14 @@ public class ClientMain {
         IMap<String, byte[]> map = client.getMap("test");
         System.out.println("Map Size:" + map.size());
 
+        for(int k=0;k<20;k++){
+            benchmark(true, map);
+        }
+
+        benchmark(false, map);
+    }
+
+    private static void benchmark(boolean warmup, IMap<String, byte[]> map) {
         int [] sizes = {1, 10,100,200};
         for(int i =0; i < 3; i ++)
         {
@@ -30,6 +38,7 @@ public class ClientMain {
             startTime = System.currentTimeMillis();
             d = map.get("mykey");
             long getTime = System.currentTimeMillis() - startTime;
+            if(!warmup)
             System.out.println(sizes[i] + "MB put:" + putTime + "ms get time: " + getTime + "ms");
         }
     }
