@@ -2,6 +2,7 @@ package com.hazelcast.client;
 
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.core.IMap;
 
 import java.util.concurrent.ConcurrentMap;
 
@@ -16,7 +17,7 @@ public class ClientMain {
         config.getNetworkConfig().addAddress("10.212.1.114");
 
         HazelcastInstance client = HazelcastClient.newHazelcastClient(config);
-        ConcurrentMap<String, byte[]> map = client.getMap("test");
+        IMap<String, byte[]> map = client.getMap("test");
         System.out.println("Map Size:" + map.size());
 
         int [] sizes = {1, 10,100,200};
@@ -24,7 +25,7 @@ public class ClientMain {
         {
             byte [] d = new byte[sizes[i] * 1024*1024];
             long startTime = System.currentTimeMillis();
-            map.put("mykey", d);
+            map.set("mykey", d);
             long putTime = System.currentTimeMillis() - startTime;
             startTime = System.currentTimeMillis();
             d = map.get("mykey");
