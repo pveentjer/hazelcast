@@ -15,7 +15,7 @@ public class ClientMain {
         config.getNetworkConfig().getSocketOptions().setBufferSize(2048);
         config.getNetworkConfig().addAddress("10.212.1.114");
 
-        HazelcastInstance client = HazelcastClient.newHazelcastClient();
+        HazelcastInstance client = HazelcastClient.newHazelcastClient(config);
         ConcurrentMap<String, byte[]> map = client.getMap("test");
         System.out.println("Map Size:" + map.size());
 
