@@ -69,6 +69,7 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
     private final int connectionId;
 
     private final IOService ioService;
+    private final String protocol;
 
     private Address endPoint;
 
@@ -83,7 +84,9 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
     public TcpIpConnection(TcpIpConnectionManager connectionManager,
                            int connectionId,
                            SocketChannel socketChannel,
-                           IOThreadingModel ioThreadingModel) {
+                           IOThreadingModel ioThreadingModel,
+                           String protocol) {
+        this.protocol = protocol;
         this.connectionId = connectionId;
         this.connectionManager = connectionManager;
         this.ioService = connectionManager.getIoService();
@@ -91,6 +94,12 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
         this.socketChannel = socketChannel;
         this.socketWriter = ioThreadingModel.newSocketWriter(this);
         this.socketReader = ioThreadingModel.newSocketReader(this);
+    }
+
+
+    @Override
+    public String getProtocol() {
+        return protocol;
     }
 
     @Override

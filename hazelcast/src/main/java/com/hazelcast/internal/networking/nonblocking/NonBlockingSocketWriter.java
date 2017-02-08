@@ -19,13 +19,13 @@ package com.hazelcast.internal.networking.nonblocking;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.internal.networking.SocketWriter;
-import com.hazelcast.internal.networking.SocketWriterInitializer;
 import com.hazelcast.internal.networking.WriteHandler;
 import com.hazelcast.internal.networking.nonblocking.iobalancer.IOBalancer;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.OutboundFrame;
 import com.hazelcast.nio.Packet;
+import com.hazelcast.nio.Protocols;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 
 import java.io.IOException;
@@ -38,7 +38,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.DEBUG;
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
-import static com.hazelcast.nio.Protocols.CLUSTER;
 import static com.hazelcast.util.EmptyStatement.ignore;
 import static java.lang.Math.max;
 import static java.lang.System.currentTimeMillis;
@@ -60,9 +59,8 @@ public final class NonBlockingSocketWriter
     @SuppressWarnings("checkstyle:visibilitymodifier")
     @Probe(name = "priorityWriteQueueSize")
     public final Queue<OutboundFrame> urgentWriteQueue = new ConcurrentLinkedQueue<OutboundFrame>();
-    private final SocketWriterInitializer initializer;
 
-    private ByteBuffer outputBuffer;
+    private final ByteBuffer outputBuffer;
 
     private final AtomicBoolean scheduled = new AtomicBoolean(false);
     @Probe(name = "bytesWritten")
@@ -71,7 +69,7 @@ public final class NonBlockingSocketWriter
     private final SwCounter normalFramesWritten = newSwCounter();
     @Probe(name = "priorityFramesWritten")
     private final SwCounter priorityFramesWritten = newSwCounter();
-    private WriteHandler writeHandler;
+    private final WriteHandler writeHandler;
 
     private volatile OutboundFrame currentFrame;
     private volatile long lastWriteTime;
@@ -85,9 +83,11 @@ public final class NonBlockingSocketWriter
                                    NonBlockingIOThread ioThread,
                                    ILogger logger,
                                    IOBalancer balancer,
-                                   SocketWriterInitializer initializer) {
+                                   WriteHandler writeHandler,
+                                   ByteBuffer outputBuffer) {
         super(connection, ioThread, OP_WRITE, logger, balancer);
-        this.initializer = initializer;
+        this.writeHandler = writeHandler;
+        this.outputBuffer = outputBuffer;
     }
 
     @Override
@@ -138,14 +138,23 @@ public final class NonBlockingSocketWriter
     // accessed from ReadHandler and SocketConnector
     @Override
     public void setProtocol(final String protocol) {
+        System.out.println("protocol about to be written: "+protocol);
+
         final CountDownLatch latch = new CountDownLatch(1);
         ioThread.addTaskAndWakeup(new Runnable() {
             @Override
             public void run() {
                 try {
-                    if (writeHandler == null) {
-                        initializer.init(connection, NonBlockingSocketWriter.this, protocol);
-                    }
+
+                    ByteBuffer bb = ByteBuffer.wrap(Protocols.CLUSTER.getBytes());
+                    socketChannel.write(bb);
+                   // registerOp(OP_WRITE);
+//                    if (writeHandler == null) {
+//                        initializer.init(connection, NonBlockingSocketWriter.this, protocol);
+//                    }
+
+                    System.out.println("protocol written");
+
                 } catch (Throwable t) {
                     onFailure(t);
                 } finally {
@@ -160,10 +169,6 @@ public final class NonBlockingSocketWriter
         }
     }
 
-    @Override
-    public void initOutputBuffer(ByteBuffer outputBuffer) {
-        this.outputBuffer = outputBuffer;
-    }
 
     @Override
     public void write(OutboundFrame frame) {
@@ -285,10 +290,10 @@ public final class NonBlockingSocketWriter
         eventCount.inc();
         lastWriteTime = currentTimeMillis();
 
-        if (writeHandler == null) {
-            initializer.init(connection, this, CLUSTER);
-            registerOp(OP_WRITE);
-        }
+//        if (writeHandler == null) {
+//            initializer.init(connection, this, CLUSTER);
+//            registerOp(OP_WRITE);
+//        }
 
         fillOutputBuffer();
 
@@ -301,11 +306,6 @@ public final class NonBlockingSocketWriter
         } else {
             startMigration();
         }
-    }
-
-    @Override
-    public void initWriteHandler(WriteHandler writeHandler) {
-        this.writeHandler = writeHandler;
     }
 
     private void startMigration() throws IOException {

@@ -20,16 +20,18 @@ import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
 import com.hazelcast.internal.networking.IOThreadingModel;
+import com.hazelcast.internal.networking.ProtocolBasedFactory;
+import com.hazelcast.internal.networking.ReadHandler;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.internal.networking.SocketReader;
-import com.hazelcast.internal.networking.SocketReaderInitializer;
 import com.hazelcast.internal.networking.SocketWriter;
-import com.hazelcast.internal.networking.SocketWriterInitializer;
+import com.hazelcast.internal.networking.WriteHandler;
 import com.hazelcast.internal.networking.nonblocking.iobalancer.IOBalancer;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
+import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.hazelcast.util.HashUtil.hashToIndex;
@@ -57,8 +59,10 @@ public class NonBlockingIOThreadingModel
     private final HazelcastThreadGroup hazelcastThreadGroup;
     private final IOOutOfMemoryHandler oomeHandler;
     private final int balanceIntervalSeconds;
-    private final SocketWriterInitializer socketWriterInitializer;
-    private final SocketReaderInitializer socketReaderInitializer;
+    private final ProtocolBasedFactory<ByteBuffer> inputBufferFactory;
+    private final ProtocolBasedFactory<ReadHandler> readHandlerFactory;
+    private final ProtocolBasedFactory<ByteBuffer> outputBufferFactory;
+    private final ProtocolBasedFactory<WriteHandler> writeHandlerFactory;
 
     // The selector mode determines how IO threads will block (or not) on the Selector:
     //  select:         this is the default mode, uses Selector.select(long timeout)
@@ -80,8 +84,10 @@ public class NonBlockingIOThreadingModel
             int inputThreadCount,
             int outputThreadCount,
             int balanceIntervalSeconds,
-            SocketWriterInitializer socketWriterInitializer,
-            SocketReaderInitializer socketReaderInitializer) {
+            ProtocolBasedFactory<ByteBuffer> inputBufferFactory,
+            ProtocolBasedFactory<ReadHandler> readHandlerFactory,
+            ProtocolBasedFactory<ByteBuffer> outputBufferFactory,
+            ProtocolBasedFactory<WriteHandler> writeHandlerFactory) {
         this.hazelcastThreadGroup = hazelcastThreadGroup;
         this.metricsRegistry = metricsRegistry;
         this.loggingService = loggingService;
@@ -90,8 +96,11 @@ public class NonBlockingIOThreadingModel
         this.outputThreads = new NonBlockingIOThread[outputThreadCount];
         this.oomeHandler = oomeHandler;
         this.balanceIntervalSeconds = balanceIntervalSeconds;
-        this.socketWriterInitializer = socketWriterInitializer;
-        this.socketReaderInitializer = socketReaderInitializer;
+        this.inputBufferFactory = inputBufferFactory;
+        this.readHandlerFactory = readHandlerFactory;
+        this.outputBufferFactory = outputBufferFactory;
+        this.writeHandlerFactory = writeHandlerFactory;
+
     }
 
     private SelectorMode getSelectorMode() {
@@ -230,7 +239,8 @@ public class NonBlockingIOThreadingModel
                 outputThread,
                 loggingService.getLogger(NonBlockingSocketWriter.class),
                 ioBalancer,
-                socketWriterInitializer);
+                writeHandlerFactory.create(connection),
+                outputBufferFactory.create(connection));
     }
 
     @Override
@@ -246,6 +256,7 @@ public class NonBlockingIOThreadingModel
                 inputThread,
                 loggingService.getLogger(NonBlockingSocketReader.class),
                 ioBalancer,
-                socketReaderInitializer);
+                readHandlerFactory.create(connection),
+                inputBufferFactory.create(connection));
     }
 }

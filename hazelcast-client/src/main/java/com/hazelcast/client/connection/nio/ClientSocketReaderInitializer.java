@@ -16,38 +16,30 @@
 
 package com.hazelcast.client.connection.nio;
 
-import com.hazelcast.client.connection.ClientConnectionManager;
-import com.hazelcast.client.impl.protocol.ClientMessage;
-import com.hazelcast.client.impl.protocol.util.ClientMessageReadHandler;
-import com.hazelcast.nio.IOUtil;
-import com.hazelcast.internal.networking.ReadHandler;
-import com.hazelcast.internal.networking.SocketReader;
 import com.hazelcast.internal.networking.SocketReaderInitializer;
-
-import java.io.IOException;
 
 class ClientSocketReaderInitializer implements SocketReaderInitializer<ClientConnection> {
 
-    private final int bufferSize;
-    private final boolean direct;
-
-    ClientSocketReaderInitializer(int bufferSize, boolean direct) {
-        this.bufferSize = bufferSize;
-        this.direct = direct;
-    }
-
-    @Override
-    public void init(final ClientConnection connection, SocketReader reader) throws IOException {
-        reader.initInputBuffer(IOUtil.newByteBuffer(bufferSize, direct));
-
-        ReadHandler readHandler = new ClientMessageReadHandler(reader.getNormalFramesReadCounter(),
-                new ClientMessageReadHandler.MessageHandler() {
-                    private final ClientConnectionManager connectionManager = connection.getConnectionManager();
-                    @Override
-                    public void handleMessage(ClientMessage message) {
-                        connectionManager.handleClientMessage(message, connection);
-                    }
-                });
-        reader.initReadHandler(readHandler);
-    }
+//    private final int bufferSize;
+//    private final boolean direct;
+//
+//    ClientSocketReaderInitializer(int bufferSize, boolean direct) {
+//        this.bufferSize = bufferSize;
+//        this.direct = direct;
+//    }
+//
+//    @Override
+//    public void init(final ClientConnection connection, SocketReader reader) throws IOException {
+//        reader.initInputBuffer(IOUtil.newByteBuffer(bufferSize, direct));
+//
+//        ReadHandler readHandler = new ClientMessageReadHandler(reader.getNormalFramesReadCounter(),
+//                new ClientMessageReadHandler.MessageHandler() {
+//                    private final ClientConnectionManager connectionManager = connection.getConnectionManager();
+//                    @Override
+//                    public void handleMessage(ClientMessage message) {
+//                        connectionManager.handleClientMessage(message, connection);
+//                    }
+//                });
+//        reader.initReadHandler(readHandler);
+//    }
 }

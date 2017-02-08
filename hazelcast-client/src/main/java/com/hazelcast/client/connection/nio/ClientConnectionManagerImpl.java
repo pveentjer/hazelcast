@@ -46,7 +46,6 @@ import com.hazelcast.core.HazelcastException;
 import com.hazelcast.instance.BuildInfoProvider;
 import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
-import com.hazelcast.internal.networking.SocketChannelWrapper;
 import com.hazelcast.internal.networking.SocketChannelWrapperFactory;
 import com.hazelcast.internal.networking.nonblocking.NonBlockingIOThreadingModel;
 import com.hazelcast.internal.serialization.InternalSerializationService;
@@ -188,8 +187,7 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
                 inputThreads,
                 outputThreads,
                 properties.getInteger(ClientProperty.IO_BALANCER_INTERVAL_SECONDS),
-                new ClientSocketWriterInitializer(getBufferSize(), directBuffer),
-                new ClientSocketReaderInitializer(getBufferSize(), directBuffer));
+                null,null,null,null);
     }
 
     private SocketInterceptor initSocketInterceptor(SocketInterceptorConfig sic) {

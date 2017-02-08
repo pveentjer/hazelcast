@@ -17,17 +17,20 @@
 package com.hazelcast.instance;
 
 import com.hazelcast.cluster.Joiner;
+import com.hazelcast.internal.networking.IOThreadingModel;
+import com.hazelcast.internal.networking.ProtocolBasedFactory;
+import com.hazelcast.internal.networking.ReadHandler;
+import com.hazelcast.internal.networking.SocketConnection;
+import com.hazelcast.internal.networking.WriteHandler;
+import com.hazelcast.internal.networking.nonblocking.NonBlockingIOThreadingModel;
 import com.hazelcast.logging.LoggingServiceImpl;
 import com.hazelcast.nio.ConnectionManager;
 import com.hazelcast.nio.NodeIOService;
-import com.hazelcast.internal.networking.IOThreadingModel;
-import com.hazelcast.nio.tcp.SocketReaderInitializerImpl;
-import com.hazelcast.nio.tcp.SocketWriterInitializerImpl;
+import com.hazelcast.nio.tcp.TcpIpConnection;
 import com.hazelcast.nio.tcp.TcpIpConnectionManager;
-import com.hazelcast.internal.networking.nonblocking.NonBlockingIOThreadingModel;
-import com.hazelcast.internal.networking.spinning.SpinningIOThreadingModel;
 import com.hazelcast.spi.annotation.PrivateApi;
 
+import java.nio.ByteBuffer;
 import java.nio.channels.ServerSocketChannel;
 
 @PrivateApi
@@ -61,32 +64,56 @@ public class DefaultNodeContext implements NodeContext {
                 ioThreadingModel);
     }
 
-    private IOThreadingModel createTcpIpConnectionThreadingModel(Node node, NodeIOService ioService) {
+    private IOThreadingModel createTcpIpConnectionThreadingModel(Node node, final NodeIOService ioService) {
         boolean spinning = Boolean.getBoolean("hazelcast.io.spinning");
         LoggingServiceImpl loggingService = node.loggingService;
 
-        SocketWriterInitializerImpl socketWriterInitializer
-                = new SocketWriterInitializerImpl(loggingService.getLogger(SocketWriterInitializerImpl.class));
-        SocketReaderInitializerImpl socketReaderInitializer
-                = new SocketReaderInitializerImpl(loggingService.getLogger(SocketReaderInitializerImpl.class));
-        if (spinning) {
-            return new SpinningIOThreadingModel(
-                    loggingService,
-                    node.getHazelcastThreadGroup(),
-                    ioService.getIoOutOfMemoryHandler(),
-                    socketWriterInitializer,
-                    socketReaderInitializer);
-        } else {
+//        SocketWriterInitializerImpl socketWriterInitializer
+//                = new SocketWriterInitializerImpl(loggingService.getLogger(SocketWriterInitializerImpl.class));
+//        SocketReaderInitializerImpl socketReaderInitializer
+//                = new SocketReaderInitializerImpl(loggingService.getLogger(SocketReaderInitializerImpl.class));
+//
+//        if (spinning) {
+//            return new SpinningIOThreadingModel(
+//                    loggingService,
+//                    node.getHazelcastThreadGroup(),
+//                    ioService.getIoOutOfMemoryHandler(),
+//                    socketWriterInitializer,
+//                    socketReaderInitializer);
+//        } else {
             return new NonBlockingIOThreadingModel(
                     loggingService,
                     node.nodeEngine.getMetricsRegistry(),
                     node.getHazelcastThreadGroup(),
-                    ioService.getIoOutOfMemoryHandler(), ioService.getInputSelectorThreadCount(),
-                    ioService.getOutputSelectorThreadCount(),
+                    ioService.getIoOutOfMemoryHandler(),
+                    ioService.getInputThreadCount(),
+                    ioService.getOutputThreadCount(),
                     ioService.getBalancerIntervalSeconds(),
-                    socketWriterInitializer,
-                    socketReaderInitializer
-            );
-        }
+                    new ProtocolBasedFactory<ByteBuffer>() {
+                        @Override
+                        public ByteBuffer create(SocketConnection connection) {
+                            return ByteBuffer.allocate(ioService.getSocketReceiveBufferSize());
+                        }
+                    },
+                    new ProtocolBasedFactory<ReadHandler>() {
+                        @Override
+                        public ReadHandler create(SocketConnection connection) {
+                            return ioService.createReadHandler((TcpIpConnection)connection);
+                        }
+                    },
+                    new ProtocolBasedFactory<ByteBuffer>() {
+                        @Override
+                        public ByteBuffer create(SocketConnection connection) {
+                            return ByteBuffer.allocate(ioService.getSocketSendBufferSize());
+                        }
+                    },
+                    new ProtocolBasedFactory<WriteHandler>() {
+                        @Override
+                        public WriteHandler create(SocketConnection connection) {
+                            return ioService.createWriteHandler((TcpIpConnection)connection);
+                        }
+                    });
+           // );
+        //}
     }
 }

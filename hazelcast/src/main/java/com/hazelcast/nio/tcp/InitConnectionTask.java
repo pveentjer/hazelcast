@@ -146,13 +146,13 @@ public class InitConnectionTask implements Runnable {
             connectionManager.interceptSocket(socketChannel.socket(), false);
 
             socketChannel.configureBlocking(false);
-            TcpIpConnection connection = connectionManager.newConnection(socketChannel, address);
+            TcpIpConnection connection = connectionManager.newConnection(socketChannel, address, Protocols.CLUSTER);
             connection.getSocketWriter().setProtocol(Protocols.CLUSTER);
             connectionManager.sendBindRequest(connection, address, true);
         } catch (Exception e) {
             closeSocket(socketChannel);
             logger.log(level, "Could not connect to: " + socketAddress + ". Reason: " + e.getClass().getSimpleName()
-                    + "[" + e.getMessage() + "]");
+                    + "[" + e.getMessage() + "]",e);
             throw e;
         }
     }

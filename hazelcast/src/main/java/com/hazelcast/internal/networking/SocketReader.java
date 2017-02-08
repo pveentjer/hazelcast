@@ -18,9 +18,6 @@ package com.hazelcast.internal.networking;
 
 import com.hazelcast.internal.util.counters.SwCounter;
 
-import java.nio.ByteBuffer;
-import java.nio.channels.SocketChannel;
-
 /**
  * The SocketReader is responsible for reading data from the socket, on behalf of a connection, into a
  * {@link java.nio.ByteBuffer}. Once the data is read into the ByteBuffer, this ByteBuffer is passed to the {@link ReadHandler}
@@ -83,11 +80,5 @@ public interface SocketReader {
      */
     void close();
 
-    void initInputBuffer(ByteBuffer inputBuffer);
-
-    void initReadHandler(ReadHandler readHandler);
-
-    SocketChannel getSocketChannel();
-
-    ByteBuffer getProtocolBuffer();
+    //SocketChannel getSocketChannel();
 }

@@ -20,7 +20,6 @@ import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.internal.networking.SocketWriter;
-import com.hazelcast.internal.networking.SocketWriterInitializer;
 import com.hazelcast.internal.networking.WriteHandler;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
@@ -32,10 +31,8 @@ import java.nio.ByteBuffer;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
-import java.util.logging.Level;
 
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
-import static com.hazelcast.nio.Protocols.CLUSTER;
 import static java.lang.System.currentTimeMillis;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -51,8 +48,7 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
     @Probe(name = "priorityWriteQueueSize")
     public final Queue<OutboundFrame> urgentWriteQueue = new ConcurrentLinkedQueue<OutboundFrame>();
 
-    private final SocketWriterInitializer initializer;
-    private ByteBuffer outputBuffer;
+    private final ByteBuffer outputBuffer;
     @Probe(name = "bytesWritten")
     private final SwCounter bytesWritten = newSwCounter();
     @Probe(name = "normalFramesWritten")
@@ -60,15 +56,17 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
     @Probe(name = "priorityFramesWritten")
     private final SwCounter priorityFramesWritten = newSwCounter();
     private volatile long lastWriteTime;
-    private WriteHandler writeHandler;
+    private final WriteHandler writeHandler;
     private volatile OutboundFrame currentFrame;
 
     public SpinningSocketWriter(SocketConnection connection,
                                 ILogger logger,
                                 IOOutOfMemoryHandler oomeHandler,
-                                SocketWriterInitializer initializer) {
+                                WriteHandler writeHandler,
+                                ByteBuffer outputBuffer) {
         super(connection, logger, oomeHandler);
-        this.initializer = initializer;
+        this.writeHandler = writeHandler;
+        this.outputBuffer = outputBuffer;
     }
 
     @Override
@@ -116,11 +114,6 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
     }
 
     @Override
-    public void initWriteHandler(WriteHandler writeHandler) {
-        this.writeHandler = writeHandler;
-    }
-
-    @Override
     public WriteHandler getWriteHandler() {
         return writeHandler;
     }
@@ -133,9 +126,9 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
             @Override
             public void run() {
                 logger.info("Setting protocol: " + protocol);
-                if (writeHandler == null) {
-                    initializer.init(connection, SpinningSocketWriter.this, protocol);
-                }
+//                if (writeHandler == null) {
+//                    initializer.init(connection, SpinningSocketWriter.this, protocol);
+//                }
                 latch.countDown();
             }
         }));
@@ -145,11 +138,6 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
         } catch (InterruptedException e) {
             logger.finest("CountDownLatch::await interrupted", e);
         }
-    }
-
-    @Override
-    public void initOutputBuffer(ByteBuffer outputBuffer) {
-        this.outputBuffer = outputBuffer;
     }
 
     private OutboundFrame poll() {
@@ -194,12 +182,6 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
 
     public void write() throws Exception {
         if (!connection.isAlive()) {
-            return;
-        }
-
-        if (writeHandler == null) {
-            logger.log(Level.WARNING, "SocketWriter is not set, creating SocketWriter with CLUSTER protocol!");
-            initializer.init(connection, this, CLUSTER);
             return;
         }
 

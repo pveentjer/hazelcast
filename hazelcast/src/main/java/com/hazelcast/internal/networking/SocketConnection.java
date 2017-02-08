@@ -22,6 +22,8 @@ import java.nio.channels.SocketChannel;
 
 public interface SocketConnection extends Connection {
 
+    String getProtocol();
+
     SocketReader getSocketReader();
 
     SocketWriter getSocketWriter();

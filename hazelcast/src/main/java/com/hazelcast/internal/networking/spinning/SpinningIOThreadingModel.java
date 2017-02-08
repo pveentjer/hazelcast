@@ -19,13 +19,16 @@ package com.hazelcast.internal.networking.spinning;
 import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
 import com.hazelcast.internal.networking.IOThreadingModel;
+import com.hazelcast.internal.networking.ProtocolBasedFactory;
+import com.hazelcast.internal.networking.ReadHandler;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.internal.networking.SocketReader;
-import com.hazelcast.internal.networking.SocketReaderInitializer;
 import com.hazelcast.internal.networking.SocketWriter;
-import com.hazelcast.internal.networking.SocketWriterInitializer;
+import com.hazelcast.internal.networking.WriteHandler;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
+
+import java.nio.ByteBuffer;
 
 /**
  * A {@link IOThreadingModel} that uses (busy) spinning on the SocketChannels to see if there is something
@@ -48,22 +51,28 @@ public class SpinningIOThreadingModel implements IOThreadingModel {
     private final LoggingService loggingService;
     private final SpinningInputThread inputThread;
     private final SpinningOutputThread outThread;
-    private final SocketWriterInitializer socketWriterInitializer;
-    private final SocketReaderInitializer socketReaderInitializer;
     private final IOOutOfMemoryHandler oomeHandler;
+    private final ProtocolBasedFactory<ByteBuffer> inputBufferFactory;
+    private final ProtocolBasedFactory<ReadHandler> readHandlerFactory;
+    private final ProtocolBasedFactory<ByteBuffer> outputBufferFactory;
+    private final ProtocolBasedFactory<WriteHandler> writeHandlerFactory;
 
     public SpinningIOThreadingModel(LoggingService loggingService,
                                     HazelcastThreadGroup hazelcastThreadGroup,
                                     IOOutOfMemoryHandler oomeHandler,
-                                    SocketWriterInitializer socketWriterInitializer,
-                                    SocketReaderInitializer socketReaderInitializer) {
+                                    ProtocolBasedFactory<ByteBuffer> inputBufferFactory,
+                                    ProtocolBasedFactory<ReadHandler> readHandlerFactory,
+                                    ProtocolBasedFactory<ByteBuffer> outputBufferFactory,
+                                    ProtocolBasedFactory<WriteHandler> writeHandlerFactory) {
         this.logger = loggingService.getLogger(SpinningIOThreadingModel.class);
         this.loggingService = loggingService;
         this.oomeHandler = oomeHandler;
         this.inputThread = new SpinningInputThread(hazelcastThreadGroup);
         this.outThread = new SpinningOutputThread(hazelcastThreadGroup);
-        this.socketWriterInitializer = socketWriterInitializer;
-        this.socketReaderInitializer = socketReaderInitializer;
+        this.inputBufferFactory = inputBufferFactory;
+        this.readHandlerFactory = readHandlerFactory;
+        this.outputBufferFactory = outputBufferFactory;
+        this.writeHandlerFactory = writeHandlerFactory;
     }
 
     @Override
@@ -74,13 +83,23 @@ public class SpinningIOThreadingModel implements IOThreadingModel {
     @Override
     public SocketWriter newSocketWriter(SocketConnection connection) {
         ILogger logger = loggingService.getLogger(SpinningSocketWriter.class);
-        return new SpinningSocketWriter(connection, logger, oomeHandler, socketWriterInitializer);
+        return new SpinningSocketWriter(
+                connection,
+                logger,
+                oomeHandler,
+                writeHandlerFactory.create(connection),
+                outputBufferFactory.create(connection));
     }
 
     @Override
     public SocketReader newSocketReader(SocketConnection connection) {
         ILogger logger = loggingService.getLogger(SpinningSocketReader.class);
-        return new SpinningSocketReader(connection, logger, oomeHandler, socketReaderInitializer);
+        return new SpinningSocketReader(
+                connection,
+                logger,
+                oomeHandler,
+                readHandlerFactory.create(connection),
+                inputBufferFactory.create(connection));
     }
 
     @Override

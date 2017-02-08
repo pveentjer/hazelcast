@@ -20,7 +20,6 @@ import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.networking.ReadHandler;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.internal.networking.SocketReader;
-import com.hazelcast.internal.networking.SocketReaderInitializer;
 import com.hazelcast.internal.networking.nonblocking.iobalancer.IOBalancer;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
@@ -43,7 +42,7 @@ public final class NonBlockingSocketReader
         extends AbstractHandler
         implements SocketReader {
 
-    protected ByteBuffer inputBuffer;
+    protected final ByteBuffer inputBuffer;
 
     @Probe(name = "bytesRead")
     private final SwCounter bytesRead = newSwCounter();
@@ -52,34 +51,19 @@ public final class NonBlockingSocketReader
     @Probe(name = "priorityFramesRead")
     private final SwCounter priorityFramesRead = newSwCounter();
 
-    private ReadHandler readHandler;
+    private final ReadHandler readHandler;
     private volatile long lastReadTime;
-    private final SocketReaderInitializer initializer;
-    private final ByteBuffer protocolBuffer = ByteBuffer.allocate(3);
 
     public NonBlockingSocketReader(
             SocketConnection connection,
             NonBlockingIOThread ioThread,
             ILogger logger,
             IOBalancer balancer,
-            SocketReaderInitializer initializer) {
+            ReadHandler readHandler,
+            ByteBuffer inputBuffer) {
         super(connection, ioThread, OP_READ, logger, balancer);
-        this.initializer = initializer;
-    }
-
-    @Override
-    public ByteBuffer getProtocolBuffer() {
-        return protocolBuffer;
-    }
-
-    @Override
-    public void initInputBuffer(ByteBuffer inputBuffer) {
-        this.inputBuffer = inputBuffer;
-    }
-
-    @Override
-    public void initReadHandler(ReadHandler readHandler) {
         this.readHandler = readHandler;
+        this.inputBuffer = inputBuffer;
     }
 
     @Probe(name = "idleTimeMs")
@@ -137,14 +121,6 @@ public final class NonBlockingSocketReader
         // we are going to set the timestamp even if the socketChannel is going to fail reading. In that case
         // the connection is going to be closed anyway.
         lastReadTime = currentTimeMillis();
-
-        if (readHandler == null) {
-            initializer.init(connection, this);
-            if (readHandler == null) {
-                // when using SSL, we can read 0 bytes since data read from socket can be handshake frames.
-                return;
-            }
-        }
 
         int readBytes = socketChannel.read(inputBuffer);
         if (readBytes <= 0) {

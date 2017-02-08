@@ -17,8 +17,6 @@
 package com.hazelcast.nio.tcp;
 
 import com.hazelcast.internal.networking.ReadHandler;
-import com.hazelcast.internal.networking.SocketReader;
-import com.hazelcast.internal.util.counters.Counter;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.spi.impl.packetdispatcher.PacketDispatcher;
 
@@ -38,15 +36,18 @@ public class MemberReadHandler implements ReadHandler {
     protected Packet packet;
 
     private final PacketDispatcher packetDispatcher;
-    private final Counter normalPacketsRead;
-    private final Counter priorityPacketsRead;
+//    private final Counter normalPacketsRead;
+//    private final Counter priorityPacketsRead;
 
     public MemberReadHandler(TcpIpConnection connection, PacketDispatcher packetDispatcher) {
         this.connection = connection;
         this.packetDispatcher = packetDispatcher;
-        SocketReader socketReader = connection.getSocketReader();
-        this.normalPacketsRead = socketReader.getNormalFramesReadCounter();
-        this.priorityPacketsRead = socketReader.getPriorityFramesReadCounter();
+//        SocketReader socketReader = connection.getSocketReader();
+//        if(socketReader == null){
+//            throw new NullPointerException();
+//        }
+//        this.normalPacketsRead = socketReader.getNormalFramesReadCounter();
+//        this.priorityPacketsRead = socketReader.getPriorityFramesReadCounter();
     }
 
     @Override
@@ -66,11 +67,11 @@ public class MemberReadHandler implements ReadHandler {
     }
 
     protected void handlePacket(Packet packet) {
-        if (packet.isFlagRaised(Packet.FLAG_URGENT)) {
-            priorityPacketsRead.inc();
-        } else {
-            normalPacketsRead.inc();
-        }
+//        if (packet.isFlagRaised(Packet.FLAG_URGENT)) {
+//            priorityPacketsRead.inc();
+//        } else {
+//            normalPacketsRead.inc();
+//        }
 
         packet.setConn(connection);
 

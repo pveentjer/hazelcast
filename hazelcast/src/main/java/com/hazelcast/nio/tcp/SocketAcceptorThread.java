@@ -18,12 +18,15 @@ package com.hazelcast.nio.tcp;
 
 import com.hazelcast.instance.OutOfMemoryErrorDispatcher;
 import com.hazelcast.internal.metrics.Probe;
+import com.hazelcast.internal.networking.IOThreadingModel;
 import com.hazelcast.internal.networking.nonblocking.SelectorMode;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.IOService;
 
+import java.io.EOFException;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -33,8 +36,10 @@ import java.util.Iterator;
 
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
 import static com.hazelcast.nio.IOUtil.closeResource;
+import static com.hazelcast.util.StringUtil.bytesToString;
 import static java.lang.Math.max;
 import static java.lang.System.currentTimeMillis;
+import static java.nio.channels.SelectionKey.OP_READ;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class SocketAcceptorThread extends Thread {
@@ -54,6 +59,8 @@ public class SocketAcceptorThread extends Thread {
     // count number of times the selector was recreated (if selectWorkaround is enabled)
     @Probe
     private final SwCounter selectorRecreateCount = newSwCounter();
+    private final boolean sslEnabled;
+    private final IOThreadingModel ioThreadingModel;
     // last time select returned
     private volatile long lastSelectTimeMs;
 
@@ -70,12 +77,16 @@ public class SocketAcceptorThread extends Thread {
             ThreadGroup threadGroup,
             String name,
             ServerSocketChannel serverSocketChannel,
-            TcpIpConnectionManager connectionManager) {
+            TcpIpConnectionManager connectionManager,
+            boolean sslEnabled) {
         super(threadGroup, name);
         this.serverSocketChannel = serverSocketChannel;
         this.connectionManager = connectionManager;
         this.ioService = connectionManager.getIoService();
         this.logger = ioService.getLoggingService().getLogger(getClass());
+        this.sslEnabled = sslEnabled;
+        this.ioThreadingModel = connectionManager.getIoThreadingModel();
+
     }
 
     /**
@@ -96,8 +107,11 @@ public class SocketAcceptorThread extends Thread {
 
         try {
             selector = Selector.open();
+
             serverSocketChannel.configureBlocking(false);
+
             selectionKey = serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
+
             if (selectorWorkaround) {
                 acceptLoopWithSelectorFix();
             } else {
@@ -163,16 +177,65 @@ public class SocketAcceptorThread extends Thread {
         selectionKey = serverSocketChannel.register(newSelector, SelectionKey.OP_ACCEPT);
     }
 
-    private void handleSelectionKeys(Iterator<SelectionKey> it) {
+    private void handleSelectionKeys(Iterator<SelectionKey> it) throws IOException {
         lastSelectTimeMs = currentTimeMillis();
         while (it.hasNext()) {
             SelectionKey sk = it.next();
             it.remove();
             // of course it is acceptable!
+
             if (sk.isValid() && sk.isAcceptable()) {
                 eventCount.inc();
-                acceptSocket();
+                handleAccept();
             }
+
+            if (sk.isValid() && sk.isReadable()) {
+                eventCount.inc();
+                handleRead(sk);
+            }
+        }
+    }
+
+    private class SocketHandshake {
+
+        private final ByteBuffer protocolBuffer = ByteBuffer.allocate(3);
+        private String protocol;
+
+        public boolean complete(SocketChannel socketChannel) throws IOException {
+            int readBytes = socketChannel.read(protocolBuffer);
+
+            System.out.println("protocol buffers read:"+readBytes);
+
+            if (readBytes == -1) {
+                throw new EOFException("Could not read protocol type!");
+            }
+
+
+            if (protocolBuffer.hasRemaining()) {
+                return false;
+            } else {
+                protocolBuffer.flip();
+
+                this.protocol = bytesToString(protocolBuffer.array());
+                return true;
+            }
+        }
+
+        public String protocol() {
+            return protocol;
+        }
+    }
+
+    private void handleRead(SelectionKey sk) throws IOException {
+        SocketChannel socketChannel = (SocketChannel) sk.channel();
+        SocketHandshake handshake = (SocketHandshake) sk.attachment();
+
+        if (handshake.complete(socketChannel)) {
+            System.out.println("handshake complete");
+            sk.cancel();
+            connectionManager.newConnection(socketChannel, null, handshake.protocol);
+        } else {
+            System.out.println("handshake not complete");
         }
     }
 
@@ -192,28 +255,33 @@ public class SocketAcceptorThread extends Thread {
         }
     }
 
-    private void acceptSocket() {
-
+    private void handleAccept() {
         try {
             final SocketChannel socketChannel = serverSocketChannel.accept();
             if (socketChannel == null) {
                 return;
             }
 
-            connectionManager.register(socketChannel);
+            //connectionManager.register(socketChannel);
 
             logger.info("Accepting socket connection from " + socketChannel.socket().getRemoteSocketAddress());
 
-            if (connectionManager.isSocketInterceptorEnabled()) {
-                configureAndAssignSocket(socketChannel);
-            } else {
-                ioService.executeAsync(new Runnable() {
-                    @Override
-                    public void run() {
-                        configureAndAssignSocket(socketChannel);
-                    }
-                });
-            }
+            //if (connectionManager.isSocketInterceptorEnabled()) {
+            //    configureAndAssignSocket(socketChannel);
+            //} else {
+            // ioService.executeAsync(new Runnable() {
+            //     @Override
+            //     public void run() {
+            configureAndAssignSocket(socketChannel);
+            //    }
+            //});
+            //}
+
+
+            SocketHandshake handshake = new SocketHandshake();
+            selectionKey = socketChannel.register(selector, OP_READ, handshake);
+
+            System.out.println("OP_READ "+socketChannel);
         } catch (Exception e) {
             exceptionCount.inc();
 
@@ -238,9 +306,10 @@ public class SocketAcceptorThread extends Thread {
     private void configureAndAssignSocket(SocketChannel socketChannel) {
         try {
             connectionManager.initSocket(socketChannel.socket());
-            connectionManager.interceptSocket(socketChannel.socket(), true);
-            socketChannel.configureBlocking(connectionManager.getIoThreadingModel().isBlocking());
-            connectionManager.newConnection(socketChannel, null);
+            //connectionManager.interceptSocket(socketChannel.socket(), true);
+            socketChannel.configureBlocking(false);
+            //socketChannel.configureBlocking(ioThreadingModel.isBlocking());
+            //connectionManager.newConnection(socketChannel, null);
         } catch (Exception e) {
             exceptionCount.inc();
             logger.warning(e.getClass().getName() + ": " + e.getMessage(), e);

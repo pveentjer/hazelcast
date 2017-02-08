@@ -47,11 +47,10 @@ public class FirewallingTcpIpConnectionManager extends TcpIpConnectionManager {
                         metricsRegistry,
                         threadGroup,
                         ioService.getIoOutOfMemoryHandler(),
-                        ioService.getInputSelectorThreadCount(),
-                        ioService.getOutputSelectorThreadCount(),
+                        ioService.getInputThreadCount(),
+                        ioService.getOutputThreadCount(),
                         ioService.getBalancerIntervalSeconds(),
-                        new SocketWriterInitializerImpl(loggingService.getLogger(SocketWriterInitializerImpl.class)),
-                        new SocketReaderInitializerImpl(loggingService.getLogger(SocketReaderInitializerImpl.class))));
+                        null,null,null,null));
     }
 
     @Override

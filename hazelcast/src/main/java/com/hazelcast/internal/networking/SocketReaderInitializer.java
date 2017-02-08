@@ -18,8 +18,6 @@ package com.hazelcast.internal.networking;
 
 import com.hazelcast.nio.Connection;
 
-import java.io.IOException;
-
 public interface SocketReaderInitializer<C extends Connection> {
-    void init(C connection, SocketReader reader) throws IOException;
+   // void init(C connection, SocketReader reader, String protocol) throws IOException;
 }

@@ -21,7 +21,6 @@ import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
 import com.hazelcast.internal.networking.ReadHandler;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.internal.networking.SocketReader;
-import com.hazelcast.internal.networking.SocketReaderInitializer;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 
@@ -40,33 +39,18 @@ public class SpinningSocketReader extends AbstractHandler implements SocketReade
     private final SwCounter normalFramesRead = newSwCounter();
     @Probe(name = "priorityFramesRead")
     private final SwCounter priorityFramesRead = newSwCounter();
-    private final SocketReaderInitializer initializer;
+    private final ReadHandler readHandler;
+    private final ByteBuffer inputBuffer;
     private volatile long lastReadTime;
-    private ReadHandler readHandler;
-    private ByteBuffer inputBuffer;
-    private final ByteBuffer protocolBuffer = ByteBuffer.allocate(3);
 
     public SpinningSocketReader(SocketConnection connection,
                                 ILogger logger,
                                 IOOutOfMemoryHandler oomeHandler,
-                                SocketReaderInitializer initializer) {
+                                ReadHandler readHandler,
+                                ByteBuffer inputBuffer) {
         super(connection, logger, oomeHandler);
-        this.initializer = initializer;
-    }
-
-    @Override
-    public ByteBuffer getProtocolBuffer() {
-        return protocolBuffer;
-    }
-
-    @Override
-    public void initInputBuffer(ByteBuffer inputBuffer) {
-        this.inputBuffer = inputBuffer;
-    }
-
-    @Override
-    public void initReadHandler(ReadHandler readHandler) {
         this.readHandler = readHandler;
+        this.inputBuffer = inputBuffer;
     }
 
     @Override
@@ -103,14 +87,6 @@ public class SpinningSocketReader extends AbstractHandler implements SocketReade
         if (!connection.isAlive()) {
             //socketChannel.closeInbound();
             return;
-        }
-
-        if (readHandler == null) {
-            initializer.init(connection, this);
-            if (readHandler == null) {
-                // when using SSL, we can read 0 bytes since data read from socket can be handshake frames.
-                return;
-            }
         }
 
         int readBytes = socketChannel.read(inputBuffer);

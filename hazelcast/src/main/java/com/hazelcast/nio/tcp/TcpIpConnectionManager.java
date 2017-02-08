@@ -337,7 +337,36 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
      //   return wrapper;
     }
 
-    synchronized TcpIpConnection newConnection(SocketChannel channel, Address endpoint) {
+//    synchronized TcpIpConnection newConnection(SocketChannel channel, Address endpoint) {
+//        try {
+//            if (!live) {
+//                throw new IllegalStateException("connection manager is not live!");
+//            }
+//
+//            TcpIpConnection connection = new TcpIpConnection(
+//                    this,
+//                    connectionIdGen.incrementAndGet(),
+//                    channel,
+//                    ioThreadingModel);
+//
+//            connection.setEndPoint(endpoint);
+//            activeConnections.add(connection);
+//
+//            connection.start();
+//            ioThreadingModel.onConnectionAdded(connection);
+//
+//            logger.info("Established socket connection between "
+//                    + channel.socket().getLocalSocketAddress() + " and " + channel.socket().getRemoteSocketAddress());
+//            openedCount.inc();
+//
+//            metricsRegistry.collectMetrics(connection);
+//            return connection;
+//        } finally {
+//            acceptedSockets.remove(channel);
+//        }
+//    }
+
+    synchronized TcpIpConnection newConnection(SocketChannel channel, Address endpoint, String protocol) {
         try {
             if (!live) {
                 throw new IllegalStateException("connection manager is not live!");
@@ -347,7 +376,8 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
                     this,
                     connectionIdGen.incrementAndGet(),
                     channel,
-                    ioThreadingModel);
+                    ioThreadingModel,
+                    protocol);
 
             connection.setEndPoint(endpoint);
             activeConnections.add(connection);
@@ -482,7 +512,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
                 ioService.getHazelcastThreadGroup().getInternalThreadGroup(),
                 ioService.getHazelcastThreadGroup().getThreadPoolNamePrefix("IO") + "Acceptor",
                 serverSocketChannel,
-                this);
+                this, false);
         acceptorThread.start();
         metricsRegistry.scanAndRegister(acceptorThread, "tcp." + acceptorThread.getName());
     }

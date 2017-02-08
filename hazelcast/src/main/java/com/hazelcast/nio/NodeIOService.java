@@ -246,12 +246,12 @@ public class NodeIOService implements IOService {
     }
 
     @Override
-    public int getInputSelectorThreadCount() {
+    public int getInputThreadCount() {
         return node.getProperties().getInteger(GroupProperty.IO_INPUT_THREAD_COUNT);
     }
 
     @Override
-    public int getOutputSelectorThreadCount() {
+    public int getOutputThreadCount() {
         return node.getProperties().getInteger(GroupProperty.IO_OUTPUT_THREAD_COUNT);
     }
 

@@ -25,7 +25,6 @@ import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.metrics.ProbeLevel;
 import com.hazelcast.internal.networking.IOThreadingModel;
-import com.hazelcast.internal.networking.SocketChannelWrapper;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.internal.networking.SocketReader;
 import com.hazelcast.internal.networking.SocketWriter;
@@ -92,8 +91,8 @@ public class ClientConnection implements SocketConnection, DiscardableMetricsPro
         this.socketChannel = socketChannel;
         this.connectionId = connectionId;
         this.logger = client.getLoggingService().getLogger(ClientConnection.class);
-        this.reader = ioThreadingModel.newSocketReader(this);
-        this.writer = ioThreadingModel.newSocketWriter(this);
+        this.reader = ioThreadingModel.newSocketReader(this, Protocols.CLIENT_BINARY_NEW);
+        this.writer = ioThreadingModel.newSocketWriter(this, Protocols.CLIENT_BINARY_NEW);
     }
 
     public ClientConnection(HazelcastClientInstanceImpl client,
