@@ -204,18 +204,14 @@ public class SocketAcceptorThread extends Thread {
         public boolean complete(SocketChannel socketChannel) throws IOException {
             int readBytes = socketChannel.read(protocolBuffer);
 
-            System.out.println("protocol buffers read:"+readBytes);
-
             if (readBytes == -1) {
                 throw new EOFException("Could not read protocol type!");
             }
-
 
             if (protocolBuffer.hasRemaining()) {
                 return false;
             } else {
                 protocolBuffer.flip();
-
                 this.protocol = bytesToString(protocolBuffer.array());
                 return true;
             }
@@ -227,15 +223,16 @@ public class SocketAcceptorThread extends Thread {
     }
 
     private void handleRead(SelectionKey sk) throws IOException {
-        SocketChannel socketChannel = (SocketChannel) sk.channel();
-        SocketHandshake handshake = (SocketHandshake) sk.attachment();
+        try {
+            SocketChannel socketChannel = (SocketChannel) sk.channel();
+            SocketHandshake handshake = (SocketHandshake) sk.attachment();
 
-        if (handshake.complete(socketChannel)) {
-            System.out.println("handshake complete");
-            sk.cancel();
-            connectionManager.newConnection(socketChannel, null, handshake.protocol);
-        } else {
-            System.out.println("handshake not complete");
+            if (handshake.complete(socketChannel)) {
+                sk.cancel();
+                connectionManager.newConnection(socketChannel, null, handshake.protocol);
+            }
+        } catch (Exception e) {
+            logger.severe(e);
         }
     }
 
@@ -281,7 +278,7 @@ public class SocketAcceptorThread extends Thread {
             SocketHandshake handshake = new SocketHandshake();
             selectionKey = socketChannel.register(selector, OP_READ, handshake);
 
-            System.out.println("OP_READ "+socketChannel);
+            System.out.println("OP_READ " + socketChannel);
         } catch (Exception e) {
             exceptionCount.inc();
 

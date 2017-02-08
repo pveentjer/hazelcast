@@ -138,22 +138,19 @@ public final class NonBlockingSocketWriter
     // accessed from ReadHandler and SocketConnector
     @Override
     public void setProtocol(final String protocol) {
-        System.out.println("protocol about to be written: "+protocol);
-
         final CountDownLatch latch = new CountDownLatch(1);
         ioThread.addTaskAndWakeup(new Runnable() {
             @Override
             public void run() {
                 try {
-
                     ByteBuffer bb = ByteBuffer.wrap(Protocols.CLUSTER.getBytes());
                     socketChannel.write(bb);
-                   // registerOp(OP_WRITE);
+                    // registerOp(OP_WRITE);
 //                    if (writeHandler == null) {
 //                        initializer.init(connection, NonBlockingSocketWriter.this, protocol);
 //                    }
 
-                    System.out.println("protocol written");
+                    System.out.println("protocol " + protocol + " written");
 
                 } catch (Throwable t) {
                     onFailure(t);
