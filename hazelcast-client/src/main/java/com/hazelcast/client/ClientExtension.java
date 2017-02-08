@@ -22,11 +22,10 @@ import com.hazelcast.client.spi.ClientProxyFactory;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.nio.SocketInterceptor;
-import com.hazelcast.internal.networking.SocketChannelWrapperFactory;
 
 /**
  * ClientExtension is a client extension mechanism to be able to plug different implementations of
- * some modules, like; {@link InternalSerializationService}, {@link SocketChannelWrapperFactory} etc.
+ * some modules, like; {@link InternalSerializationService} etc.
  */
 public interface ClientExtension {
 
@@ -57,13 +56,6 @@ public interface ClientExtension {
      * +          otherwise <code>null</code>
      */
     SocketInterceptor createSocketInterceptor();
-
-    /**
-     * Creates a {@link SocketChannelWrapperFactory} instance to be used by this client.
-     *
-     * @return the created {@link SocketChannelWrapperFactory} instance
-     */
-    SocketChannelWrapperFactory createSocketChannelWrapperFactory();
 
     /**
      * Creates a {@link NearCacheManager} instance to be used by this client.

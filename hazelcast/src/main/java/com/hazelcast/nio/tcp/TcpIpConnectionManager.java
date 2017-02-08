@@ -21,7 +21,6 @@ import com.hazelcast.internal.cluster.impl.BindMessage;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.networking.IOThreadingModel;
-import com.hazelcast.internal.networking.SocketChannelWrapperFactory;
 import com.hazelcast.internal.networking.nonblocking.NonBlockingIOThreadingModel;
 import com.hazelcast.internal.networking.nonblocking.iobalancer.IOBalancer;
 import com.hazelcast.internal.util.concurrent.ThreadFactoryImpl;
@@ -114,8 +113,6 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
 
     private final ServerSocketChannel serverSocketChannel;
 
-    private final SocketChannelWrapperFactory socketChannelWrapperFactory;
-
     private final int outboundPortCount;
 
     // accessed only in synchronized block
@@ -145,7 +142,6 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         final Collection<Integer> ports = ioService.getOutboundPorts();
         this.outboundPortCount = ports.size();
         this.outboundPorts.addAll(ports);
-        this.socketChannelWrapperFactory = ioService.getSocketChannelWrapperFactory();
         this.metricsRegistry = metricsRegistry;
         metricsRegistry.scanAndRegister(this, "tcp.connection");
     }
@@ -206,7 +202,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
     }
 
     public boolean isSSLEnabled() {
-        return socketChannelWrapperFactory.isSSlEnabled();
+        return ioService.getSSLConfig().isEnabled();
     }
 
     public void incrementTextConnections() {

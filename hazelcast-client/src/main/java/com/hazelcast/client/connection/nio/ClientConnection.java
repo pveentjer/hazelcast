@@ -91,8 +91,13 @@ public class ClientConnection implements SocketConnection, DiscardableMetricsPro
         this.socketChannel = socketChannel;
         this.connectionId = connectionId;
         this.logger = client.getLoggingService().getLogger(ClientConnection.class);
-        this.reader = ioThreadingModel.newSocketReader(this, Protocols.CLIENT_BINARY_NEW);
-        this.writer = ioThreadingModel.newSocketWriter(this, Protocols.CLIENT_BINARY_NEW);
+        this.reader = ioThreadingModel.newSocketReader(this);
+        this.writer = ioThreadingModel.newSocketWriter(this);
+    }
+
+    @Override
+    public String getProtocol() {
+        return Protocols.CLIENT_BINARY_NEW;
     }
 
     public ClientConnection(HazelcastClientInstanceImpl client,

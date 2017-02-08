@@ -22,7 +22,6 @@ import com.hazelcast.hotrestart.InternalHotRestartService;
 import com.hazelcast.internal.cluster.impl.JoinMessage;
 import com.hazelcast.internal.cluster.impl.JoinRequest;
 import com.hazelcast.internal.networking.ReadHandler;
-import com.hazelcast.internal.networking.SocketChannelWrapperFactory;
 import com.hazelcast.internal.networking.WriteHandler;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.memory.MemoryStats;
@@ -120,13 +119,6 @@ public interface NodeExtension {
      * @return MemberSocketInterceptor
      */
     MemberSocketInterceptor getMemberSocketInterceptor();
-
-    /**
-     * Returns <tt>SocketChannelWrapperFactory</tt> instance to be used by this <tt>Node</tt>.
-     *
-     * @return SocketChannelWrapperFactory
-     */
-    SocketChannelWrapperFactory getSocketChannelWrapperFactory();
 
     /**
      * Creates a <tt>ReadHandler</tt> for given <tt>Connection</tt> instance.

@@ -46,7 +46,6 @@ import com.hazelcast.core.HazelcastException;
 import com.hazelcast.instance.BuildInfoProvider;
 import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
-import com.hazelcast.internal.networking.SocketChannelWrapperFactory;
 import com.hazelcast.internal.networking.nonblocking.NonBlockingIOThreadingModel;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.logging.ILogger;
@@ -81,7 +80,6 @@ import static com.hazelcast.client.config.SocketOptions.DEFAULT_BUFFER_SIZE_BYTE
 import static com.hazelcast.client.config.SocketOptions.KILO_BYTE;
 import static com.hazelcast.client.spi.properties.ClientProperty.HEARTBEAT_INTERVAL;
 import static com.hazelcast.client.spi.properties.ClientProperty.HEARTBEAT_TIMEOUT;
-import static com.hazelcast.spi.properties.GroupProperty.SOCKET_CLIENT_BUFFER_DIRECT;
 
 /**
  * Implementation of {@link ClientConnectionManager}.
@@ -109,7 +107,6 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
     private final HazelcastClientInstanceImpl client;
     private final SocketInterceptor socketInterceptor;
     private final SocketOptions socketOptions;
-    private final SocketChannelWrapperFactory socketChannelWrapperFactory;
 
     private final ClientExecutionServiceImpl executionService;
     private final AddressTranslator addressTranslator;
@@ -148,17 +145,13 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
 
         initIOThreads(client);
 
-        ClientExtension clientExtension = client.getClientExtension();
-        this.socketChannelWrapperFactory = clientExtension.createSocketChannelWrapperFactory();
         this.socketInterceptor = initSocketInterceptor(networkConfig.getSocketInterceptorConfig());
-
         this.credentials = client.getCredentials();
     }
 
     protected void initIOThreads(HazelcastClientInstanceImpl client) {
         HazelcastProperties properties = client.getProperties();
-        boolean directBuffer = properties.getBoolean(SOCKET_CLIENT_BUFFER_DIRECT);
-
+       
         SSLConfig sslConfig = client.getClientConfig().getNetworkConfig().getSSLConfig();
         boolean sslEnabled = sslConfig != null && sslConfig.isEnabled();
 
