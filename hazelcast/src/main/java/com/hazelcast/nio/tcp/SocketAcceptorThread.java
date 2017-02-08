@@ -18,7 +18,6 @@ package com.hazelcast.nio.tcp;
 
 import com.hazelcast.instance.OutOfMemoryErrorDispatcher;
 import com.hazelcast.internal.metrics.Probe;
-import com.hazelcast.internal.networking.SocketChannelWrapper;
 import com.hazelcast.internal.networking.nonblocking.SelectorMode;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
@@ -42,6 +41,7 @@ public class SocketAcceptorThread extends Thread {
     private static final long SHUTDOWN_TIMEOUT_MILLIS = SECONDS.toMillis(10);
     private static final long SELECT_TIMEOUT_MILLIS = SECONDS.toMillis(60);
     private static final int SELECT_IDLE_COUNT_THRESHOLD = 10;
+    public static final boolean IS_CLIENT = false;
 
     private final ServerSocketChannel serverSocketChannel;
     private final TcpIpConnectionManager connectionManager;
@@ -193,11 +193,26 @@ public class SocketAcceptorThread extends Thread {
     }
 
     private void acceptSocket() {
-        SocketChannelWrapper socketChannelWrapper = null;
+
         try {
             final SocketChannel socketChannel = serverSocketChannel.accept();
-            if (socketChannel != null) {
-                socketChannelWrapper = connectionManager.wrapSocketChannel(socketChannel, false);
+            if (socketChannel == null) {
+                return;
+            }
+
+            connectionManager.register(socketChannel);
+
+            logger.info("Accepting socket connection from " + socketChannel.socket().getRemoteSocketAddress());
+
+            if (connectionManager.isSocketInterceptorEnabled()) {
+                configureAndAssignSocket(socketChannel);
+            } else {
+                ioService.executeAsync(new Runnable() {
+                    @Override
+                    public void run() {
+                        configureAndAssignSocket(socketChannel);
+                    }
+                });
             }
         } catch (Exception e) {
             exceptionCount.inc();
@@ -218,24 +233,9 @@ public class SocketAcceptorThread extends Thread {
                 ioService.onFatalError(e);
             }
         }
-
-        if (socketChannelWrapper != null) {
-            final SocketChannelWrapper socketChannel = socketChannelWrapper;
-            logger.info("Accepting socket connection from " + socketChannel.socket().getRemoteSocketAddress());
-            if (connectionManager.isSocketInterceptorEnabled()) {
-                configureAndAssignSocket(socketChannel);
-            } else {
-                ioService.executeAsync(new Runnable() {
-                    @Override
-                    public void run() {
-                        configureAndAssignSocket(socketChannel);
-                    }
-                });
-            }
-        }
     }
 
-    private void configureAndAssignSocket(SocketChannelWrapper socketChannel) {
+    private void configureAndAssignSocket(SocketChannel socketChannel) {
         try {
             connectionManager.initSocket(socketChannel.socket());
             connectionManager.interceptSocket(socketChannel.socket(), true);

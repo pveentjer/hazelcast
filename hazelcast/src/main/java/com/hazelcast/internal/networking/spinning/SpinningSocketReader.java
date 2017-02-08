@@ -101,7 +101,7 @@ public class SpinningSocketReader extends AbstractHandler implements SocketReade
 
     public void read() throws Exception {
         if (!connection.isAlive()) {
-            socketChannel.closeInbound();
+            //socketChannel.closeInbound();
             return;
         }
 

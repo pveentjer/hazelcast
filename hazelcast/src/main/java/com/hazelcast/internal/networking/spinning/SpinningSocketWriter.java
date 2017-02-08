@@ -28,7 +28,6 @@ import com.hazelcast.nio.OutboundFrame;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.util.EmptyStatement;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -296,13 +295,13 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
 
         @Override
         public void run() {
-            try {
-                socketChannel.closeOutbound();
-            } catch (IOException e) {
-                logger.finest("Error while closing outbound", e);
-            } finally {
-                latch.countDown();
-            }
+//            try {
+//             //   socketChannel.closeOutbound();
+//            } catch (IOException e) {
+//                logger.finest("Error while closing outbound", e);
+//            } finally {
+//                latch.countDown();
+//            }
         }
 
         void awaitCompletion() {

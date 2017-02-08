@@ -21,7 +21,6 @@ import com.hazelcast.internal.metrics.MetricsProvider;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.networking.IOThreadingModel;
-import com.hazelcast.internal.networking.SocketChannelWrapper;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.internal.networking.SocketReader;
 import com.hazelcast.internal.networking.SocketWriter;
@@ -38,6 +37,7 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.net.SocketException;
 import java.nio.channels.CancelledKeyException;
+import java.nio.channels.SocketChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -54,7 +54,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @SuppressWarnings("checkstyle:methodcount")
 public final class TcpIpConnection implements SocketConnection, MetricsProvider, DiscardableMetricsProvider {
 
-    private final SocketChannelWrapper socketChannel;
+    private final SocketChannel socketChannel;
 
     private final SocketReader socketReader;
 
@@ -82,7 +82,7 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
 
     public TcpIpConnection(TcpIpConnectionManager connectionManager,
                            int connectionId,
-                           SocketChannelWrapper socketChannel,
+                           SocketChannel socketChannel,
                            IOThreadingModel ioThreadingModel) {
         this.connectionId = connectionId;
         this.connectionManager = connectionManager;
@@ -118,7 +118,7 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
     }
 
     @Override
-    public SocketChannelWrapper getSocketChannel() {
+    public SocketChannel getSocketChannel() {
         return socketChannel;
     }
 

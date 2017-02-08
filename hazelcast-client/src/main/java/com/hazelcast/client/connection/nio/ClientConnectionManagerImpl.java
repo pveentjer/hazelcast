@@ -372,11 +372,10 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
             socket.setReceiveBufferSize(bufferSize);
             InetSocketAddress inetSocketAddress = address.getInetSocketAddress();
             socketChannel.socket().connect(inetSocketAddress, connectionTimeout);
-            SocketChannelWrapper socketChannelWrapper =
-                    socketChannelWrapperFactory.wrapSocketChannel(socketChannel, true);
+
 
             final ClientConnection clientConnection = new ClientConnection(
-                    client, ioThreadingModel, connectionIdGen.incrementAndGet(), socketChannelWrapper);
+                    client, ioThreadingModel, connectionIdGen.incrementAndGet(), socketChannel);
             socketChannel.configureBlocking(true);
             if (socketInterceptor != null) {
                 socketInterceptor.onConnect(socket);

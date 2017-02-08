@@ -17,7 +17,6 @@
 package com.hazelcast.nio.tcp;
 
 import com.hazelcast.internal.networking.ReadHandler;
-import com.hazelcast.internal.networking.SocketChannelWrapper;
 import com.hazelcast.internal.networking.SocketReader;
 import com.hazelcast.internal.networking.SocketReaderInitializer;
 import com.hazelcast.internal.networking.SocketWriter;
@@ -29,6 +28,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 
 import static com.hazelcast.nio.ConnectionType.MEMBER;
 import static com.hazelcast.nio.IOService.KILO_BYTE;
@@ -52,7 +52,7 @@ public class SocketReaderInitializerImpl implements SocketReaderInitializer<TcpI
         IOService ioService = connectionManager.getIoService();
 
         ByteBuffer protocolBuffer = reader.getProtocolBuffer();
-        SocketChannelWrapper socketChannel = reader.getSocketChannel();
+        SocketChannel socketChannel = reader.getSocketChannel();
 
         int readBytes = socketChannel.read(protocolBuffer);
 

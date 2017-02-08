@@ -18,11 +18,13 @@ package com.hazelcast.internal.networking;
 
 import com.hazelcast.nio.Connection;
 
+import java.nio.channels.SocketChannel;
+
 public interface SocketConnection extends Connection {
 
     SocketReader getSocketReader();
 
     SocketWriter getSocketWriter();
 
-    SocketChannelWrapper getSocketChannel();
+    SocketChannel getSocketChannel();
 }

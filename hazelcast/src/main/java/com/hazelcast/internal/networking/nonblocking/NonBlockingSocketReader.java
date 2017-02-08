@@ -26,7 +26,6 @@ import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 
 import java.io.EOFException;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
@@ -179,11 +178,11 @@ public final class NonBlockingSocketReader
                     return;
                 }
 
-                try {
-                    socketChannel.closeInbound();
-                } catch (IOException e) {
-                    logger.finest("Error while closing inbound", e);
-                }
+//                try {
+//                    socketChannel.closeInbound();
+//                } catch (IOException e) {
+//                    logger.finest("Error while closing inbound", e);
+//                }
             }
         });
     }

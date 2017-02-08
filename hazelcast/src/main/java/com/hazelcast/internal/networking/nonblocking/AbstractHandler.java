@@ -17,7 +17,6 @@
 package com.hazelcast.internal.networking.nonblocking;
 
 import com.hazelcast.internal.metrics.Probe;
-import com.hazelcast.internal.networking.SocketChannelWrapper;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.internal.networking.nonblocking.iobalancer.IOBalancer;
 import com.hazelcast.internal.util.counters.SwCounter;
@@ -26,6 +25,7 @@ import com.hazelcast.logging.ILogger;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
+import java.nio.channels.SocketChannel;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.DEBUG;
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
@@ -36,7 +36,7 @@ public abstract class AbstractHandler
     @Probe(name = "eventCount")
     protected final SwCounter eventCount = newSwCounter();
     protected final ILogger logger;
-    protected final SocketChannelWrapper socketChannel;
+    protected final SocketChannel socketChannel;
     protected final SocketConnection connection;
     protected NonBlockingIOThread ioThread;
     protected SelectionKey selectionKey;
@@ -65,7 +65,7 @@ public abstract class AbstractHandler
         this.ioBalancer = ioBalancer;
     }
 
-    public SocketChannelWrapper getSocketChannel() {
+    public SocketChannel getSocketChannel() {
         return socketChannel;
     }
 

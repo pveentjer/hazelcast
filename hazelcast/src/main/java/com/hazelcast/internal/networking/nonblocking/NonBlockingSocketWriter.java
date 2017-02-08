@@ -458,13 +458,13 @@ public final class NonBlockingSocketWriter
 
         @Override
         public void run() {
-            try {
-                socketChannel.closeOutbound();
-            } catch (IOException e) {
-                logger.finest("Error while closing outbound", e);
-            } finally {
-                latch.countDown();
-            }
+//            try {
+//                socketChannel.closeOutbound();
+//            } catch (IOException e) {
+//                logger.finest("Error while closing outbound", e);
+//            } finally {
+//                latch.countDown();
+//            }
         }
 
         void awaitCompletion() {

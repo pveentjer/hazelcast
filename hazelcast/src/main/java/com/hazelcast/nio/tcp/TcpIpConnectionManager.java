@@ -21,7 +21,6 @@ import com.hazelcast.internal.cluster.impl.BindMessage;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.networking.IOThreadingModel;
-import com.hazelcast.internal.networking.SocketChannelWrapper;
 import com.hazelcast.internal.networking.SocketChannelWrapperFactory;
 import com.hazelcast.internal.networking.nonblocking.NonBlockingIOThreadingModel;
 import com.hazelcast.internal.networking.nonblocking.iobalancer.IOBalancer;
@@ -96,8 +95,8 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
             Collections.newSetFromMap(new ConcurrentHashMap<Address, Boolean>());
 
     @Probe(name = "acceptedSocketCount", level = MANDATORY)
-    private final Set<SocketChannelWrapper> acceptedSockets =
-            Collections.newSetFromMap(new ConcurrentHashMap<SocketChannelWrapper, Boolean>());
+    private final Set<SocketChannel> acceptedSockets =
+            Collections.newSetFromMap(new ConcurrentHashMap<SocketChannel, Boolean>());
 
     @Probe(name = "activeCount", level = MANDATORY)
     private final Set<TcpIpConnection> activeConnections =
@@ -332,13 +331,13 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         //now you can send anything...
     }
 
-    SocketChannelWrapper wrapSocketChannel(SocketChannel socketChannel, boolean client) throws Exception {
-        SocketChannelWrapper wrapper = socketChannelWrapperFactory.wrapSocketChannel(socketChannel, client);
-        acceptedSockets.add(wrapper);
-        return wrapper;
+    void register(SocketChannel socketChannel) throws Exception {
+        //SocketChannelWrapper wrapper = socketChannelWrapperFactory.register(socketChannel, client);
+        acceptedSockets.add(socketChannel);
+     //   return wrapper;
     }
 
-    synchronized TcpIpConnection newConnection(SocketChannelWrapper channel, Address endpoint) {
+    synchronized TcpIpConnection newConnection(SocketChannel channel, Address endpoint) {
         try {
             if (!live) {
                 throw new IllegalStateException("connection manager is not live!");
@@ -498,7 +497,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
 
         shutdownAcceptorThread();
 
-        for (SocketChannelWrapper socketChannel : acceptedSockets) {
+        for (SocketChannel socketChannel : acceptedSockets) {
             closeResource(socketChannel);
         }
         for (Connection conn : connectionsMap.values()) {

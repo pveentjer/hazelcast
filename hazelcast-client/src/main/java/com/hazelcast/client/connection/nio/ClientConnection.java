@@ -43,6 +43,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -62,7 +63,7 @@ public class ClientConnection implements SocketConnection, DiscardableMetricsPro
     private final AtomicInteger pendingPacketCount = new AtomicInteger(0);
     private final SocketWriter writer;
     private final SocketReader reader;
-    private final SocketChannelWrapper socketChannel;
+    private final SocketChannel socketChannel;
     private final ClientConnectionManagerImpl connectionManager;
     private final LifecycleService lifecycleService;
     private final HazelcastClientInstanceImpl client;
@@ -84,7 +85,7 @@ public class ClientConnection implements SocketConnection, DiscardableMetricsPro
     public ClientConnection(HazelcastClientInstanceImpl client,
                             IOThreadingModel ioThreadingModel,
                             int connectionId,
-                            SocketChannelWrapper socketChannel) throws IOException {
+                            SocketChannel socketChannel) throws IOException {
         this.client = client;
         this.connectionManager = (ClientConnectionManagerImpl) client.getConnectionManager();
         this.lifecycleService = client.getLifecycleService();
@@ -135,7 +136,7 @@ public class ClientConnection implements SocketConnection, DiscardableMetricsPro
     }
 
     @Override
-    public SocketChannelWrapper getSocketChannel() {
+    public SocketChannel getSocketChannel() {
         return socketChannel;
     }
 

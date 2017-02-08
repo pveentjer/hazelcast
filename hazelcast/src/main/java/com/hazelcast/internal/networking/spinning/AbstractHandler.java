@@ -17,17 +17,17 @@
 package com.hazelcast.internal.networking.spinning;
 
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
-import com.hazelcast.internal.networking.SocketChannelWrapper;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.logging.ILogger;
 
 import java.io.EOFException;
+import java.nio.channels.SocketChannel;
 
 public abstract class AbstractHandler {
 
     protected final SocketConnection connection;
     protected final ILogger logger;
-    protected final SocketChannelWrapper socketChannel;
+    protected final SocketChannel socketChannel;
     private final IOOutOfMemoryHandler oomeHandler;
 
     public AbstractHandler(SocketConnection connection, ILogger logger, IOOutOfMemoryHandler oomeHandler) {
@@ -37,7 +37,7 @@ public abstract class AbstractHandler {
         this.socketChannel = connection.getSocketChannel();
     }
 
-    public SocketChannelWrapper getSocketChannel() {
+    public SocketChannel getSocketChannel() {
         return socketChannel;
     }
 
