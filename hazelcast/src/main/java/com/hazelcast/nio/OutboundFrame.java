@@ -49,4 +49,6 @@ public interface OutboundFrame {
      * @return true if urgent, false otherwise.
      */
     boolean isUrgent();
+
+    int partition();
 }
