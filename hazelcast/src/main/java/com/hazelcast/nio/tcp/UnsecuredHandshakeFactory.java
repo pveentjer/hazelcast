@@ -14,9 +14,15 @@
  * limitations under the License.
  */
 
-package com.hazelcast.internal.networking;
+package com.hazelcast.nio.tcp;
 
-public interface ProtocolBasedFactory<E> {
+/**
+ * A {@link HandshakeFactory} for unsecured {@link Handshake}.
+ */
+public class UnsecuredHandshakeFactory implements HandshakeFactory {
 
-    E create(SocketConnection connection);
+    @Override
+    public Handshake create() {
+        return new UnsecuredHandshake();
+    }
 }

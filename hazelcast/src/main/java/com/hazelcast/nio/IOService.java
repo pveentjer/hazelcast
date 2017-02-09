@@ -27,7 +27,7 @@ import com.hazelcast.internal.networking.ReadHandler;
 import com.hazelcast.internal.networking.WriteHandler;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.logging.LoggingService;
-import com.hazelcast.nio.tcp.TcpIpConnectionHandshakeFactory;
+import com.hazelcast.nio.tcp.HandshakeFactory;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 import com.hazelcast.spi.EventService;
 import com.hazelcast.spi.annotation.PrivateApi;
@@ -53,7 +53,7 @@ public interface IOService {
 
     SocketInterceptorConfig getSocketInterceptorConfig();
 
-    TcpIpConnectionHandshakeFactory getTcpIpConnectionHandshakeFactory();
+    HandshakeFactory getHandshakeFactory();
 
     SymmetricEncryptionConfig getSymmetricEncryptionConfig();
 

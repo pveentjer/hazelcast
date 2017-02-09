@@ -119,7 +119,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
     private final LinkedList<Integer> outboundPorts = new LinkedList<Integer>();
 
     // accessed only in synchronized block
-    private volatile SocketAcceptorThread acceptorThread;
+    private volatile TcpIpConnectionConnector connector;
 
     @Probe
     private final MwCounter openedCount = newMwCounter();
@@ -462,23 +462,24 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         logger.finest("Starting ConnectionManager and IO selectors.");
 
         ioThreadingModel.start();
-        startAcceptorThread();
+        startConnector();
     }
 
-    private void startAcceptorThread() {
-        if (acceptorThread != null) {
+    private void startConnector() {
+        if (connector != null) {
             logger.warning("SocketAcceptor thread is already live! Shutting down old acceptor...");
-            shutdownAcceptorThread();
+            shutdownConnector();
         }
 
-        acceptorThread = new SocketAcceptorThread(
+        String threadName = ioService.getHazelcastThreadGroup().getThreadPoolNamePrefix("IO") + "Acceptor";
+        connector = new TcpIpConnectionConnector(
                 ioService.getHazelcastThreadGroup().getInternalThreadGroup(),
-                ioService.getHazelcastThreadGroup().getThreadPoolNamePrefix("IO") + "Acceptor",
+                threadName,
                 serverSocketChannel,
                 this,
-                ioService.getTcpIpConnectionHandshakeFactory());
-        acceptorThread.start();
-        metricsRegistry.scanAndRegister(acceptorThread, "tcp." + acceptorThread.getName());
+                ioService.getHandshakeFactory());
+        connector.start();
+        metricsRegistry.scanAndRegister(connector, "tcp." + threadName);
     }
 
     @Override
@@ -489,7 +490,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         live = false;
         logger.finest("Stopping ConnectionManager");
 
-        shutdownAcceptorThread();
+        shutdownConnector();
 
         for (SocketChannel socketChannel : acceptedSockets) {
             closeResource(socketChannel);
@@ -522,18 +523,18 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
 
     @Override
     public synchronized void shutdown() {
-        shutdownAcceptorThread();
+        shutdownConnector();
         closeServerSocket();
         stop();
         scheduler.shutdownNow();
         connectionListeners.clear();
     }
 
-    private void shutdownAcceptorThread() {
-        if (acceptorThread != null) {
-            acceptorThread.shutdown();
-            metricsRegistry.deregister(acceptorThread);
-            acceptorThread = null;
+    private void shutdownConnector() {
+        if (connector != null) {
+            connector.shutdown();
+            metricsRegistry.deregister(connector);
+            connector = null;
         }
     }
 

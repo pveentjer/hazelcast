@@ -14,9 +14,17 @@
  * limitations under the License.
  */
 
-package com.hazelcast.internal.networking;
+package com.hazelcast.nio.tcp;
 
-public interface ProtocolBasedFactory<E> {
+/**
+ * A factory for creating a {@link Handshake}.
+ *
+ * The idea behind the factory is that for SSL, a different {@link HandshakeFactory} can be provided.
+ */
+public interface HandshakeFactory {
 
-    E create(SocketConnection connection);
+    /**
+     * @return a shiny new Handshake
+     */
+    Handshake create();
 }

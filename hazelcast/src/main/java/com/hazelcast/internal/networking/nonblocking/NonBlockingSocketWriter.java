@@ -25,7 +25,6 @@ import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.OutboundFrame;
 import com.hazelcast.nio.Packet;
-import com.hazelcast.nio.Protocols;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 
 import java.io.IOException;

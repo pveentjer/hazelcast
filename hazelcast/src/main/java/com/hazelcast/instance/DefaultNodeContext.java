@@ -81,39 +81,39 @@ public class DefaultNodeContext implements NodeContext {
 //                    socketWriterInitializer,
 //                    socketReaderInitializer);
 //        } else {
-            return new NonBlockingIOThreadingModel(
-                    loggingService,
-                    node.nodeEngine.getMetricsRegistry(),
-                    node.getHazelcastThreadGroup(),
-                    ioService.getIoOutOfMemoryHandler(),
-                    ioService.getInputThreadCount(),
-                    ioService.getOutputThreadCount(),
-                    ioService.getBalancerIntervalSeconds(),
-                    new ProtocolBasedFactory<ByteBuffer>() {
-                        @Override
-                        public ByteBuffer create(SocketConnection connection) {
-                            return ByteBuffer.allocate(ioService.getSocketReceiveBufferSize());
-                        }
-                    },
-                    new ProtocolBasedFactory<ReadHandler>() {
-                        @Override
-                        public ReadHandler create(SocketConnection connection) {
-                            return ioService.createReadHandler((TcpIpConnection)connection);
-                        }
-                    },
-                    new ProtocolBasedFactory<ByteBuffer>() {
-                        @Override
-                        public ByteBuffer create(SocketConnection connection) {
-                            return ByteBuffer.allocate(ioService.getSocketSendBufferSize());
-                        }
-                    },
-                    new ProtocolBasedFactory<WriteHandler>() {
-                        @Override
-                        public WriteHandler create(SocketConnection connection) {
-                            return ioService.createWriteHandler((TcpIpConnection)connection);
-                        }
-                    });
-           // );
+        return new NonBlockingIOThreadingModel(
+                loggingService,
+                node.nodeEngine.getMetricsRegistry(),
+                node.getHazelcastThreadGroup(),
+                ioService.getIoOutOfMemoryHandler(),
+                ioService.getInputThreadCount(),
+                ioService.getOutputThreadCount(),
+                ioService.getBalancerIntervalSeconds(),
+                new ProtocolBasedFactory<ByteBuffer>() {
+                    @Override
+                    public ByteBuffer create(SocketConnection connection) {
+                        return ByteBuffer.allocate(ioService.getSocketReceiveBufferSize());
+                    }
+                },
+                new ProtocolBasedFactory<ReadHandler>() {
+                    @Override
+                    public ReadHandler create(SocketConnection connection) {
+                        return ioService.createReadHandler((TcpIpConnection) connection);
+                    }
+                },
+                new ProtocolBasedFactory<ByteBuffer>() {
+                    @Override
+                    public ByteBuffer create(SocketConnection connection) {
+                        return ByteBuffer.allocate(ioService.getSocketSendBufferSize());
+                    }
+                },
+                new ProtocolBasedFactory<WriteHandler>() {
+                    @Override
+                    public WriteHandler create(SocketConnection connection) {
+                        return ioService.createWriteHandler((TcpIpConnection) connection);
+                    }
+                });
+        // );
         //}
     }
 }
