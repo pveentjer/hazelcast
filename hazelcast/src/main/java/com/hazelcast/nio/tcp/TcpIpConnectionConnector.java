@@ -29,7 +29,9 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedList;
 
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
 import static com.hazelcast.nio.IOUtil.closeResource;
@@ -74,6 +76,11 @@ public final class TcpIpConnectionConnector {
     private volatile boolean live = true;
     private volatile Selector selector;
     private SelectionKey selectionKey;
+    private final int outboundPortCount;
+
+    // accessed only in synchronized block
+    private final LinkedList<Integer> outboundPorts = new LinkedList<Integer>();
+
 
     public TcpIpConnectionConnector(
             ThreadGroup threadGroup,
@@ -87,6 +94,9 @@ public final class TcpIpConnectionConnector {
         this.ioService = connectionManager.getIoService();
         this.logger = ioService.getLoggingService().getLogger(getClass());
         this.handshakeFactory = handshakeFactory;
+        final Collection<Integer> ports = ioService.getOutboundPorts();
+        this.outboundPortCount = ports.size();
+        this.outboundPorts.addAll(ports);
     }
 
     public void start() {
@@ -102,7 +112,24 @@ public final class TcpIpConnectionConnector {
     private long idleTimeMs() {
         return max(currentTimeMillis() - lastSelectTimeMs, 0);
     }
+    boolean useAnyOutboundPort() {
+        return outboundPortCount == 0;
+    }
 
+    int getOutboundPortCount() {
+        return outboundPortCount;
+    }
+
+    int acquireOutboundPort() {
+        if (useAnyOutboundPort()) {
+            return 0;
+        }
+        synchronized (outboundPorts) {
+            final Integer port = outboundPorts.removeFirst();
+            outboundPorts.addLast(port);
+            return port;
+        }
+    }
     public synchronized void shutdown() {
         if (!live) {
             return;

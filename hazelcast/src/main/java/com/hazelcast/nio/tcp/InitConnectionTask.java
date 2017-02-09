@@ -48,9 +48,11 @@ public class InitConnectionTask implements Runnable {
     private final ILogger logger;
     private final boolean silent;
     private final IOService ioService;
+    private final TcpIpConnectionConnector connector;
 
-    public InitConnectionTask(TcpIpConnectionManager connectionManager, Address address, boolean silent) {
+    public InitConnectionTask(TcpIpConnectionManager connectionManager, TcpIpConnectionConnector connector, Address address, boolean silent) {
         this.connectionManager = connectionManager;
+        this.connector = connector;
         this.ioService = connectionManager.getIoService();
         this.address = address;
         this.logger = ioService.getLoggingService().getLogger(getClass());
@@ -175,14 +177,14 @@ public class InitConnectionTask implements Runnable {
     private void bindSocket(SocketChannel socketChannel) throws IOException {
         InetAddress inetAddress = getInetAddress();
         Socket socket = socketChannel.socket();
-        if (connectionManager.useAnyOutboundPort()) {
+        if (connector.useAnyOutboundPort()) {
             SocketAddress socketAddress = new InetSocketAddress(inetAddress, 0);
             socket.bind(socketAddress);
         } else {
             IOException ex = null;
-            int retryCount = connectionManager.getOutboundPortCount() * 2;
+            int retryCount = connector.getOutboundPortCount() * 2;
             for (int i = 0; i < retryCount; i++) {
-                int port = connectionManager.acquireOutboundPort();
+                int port = connector.acquireOutboundPort();
                 SocketAddress socketAddress = new InetSocketAddress(inetAddress, port);
                 try {
                     socket.bind(socketAddress);

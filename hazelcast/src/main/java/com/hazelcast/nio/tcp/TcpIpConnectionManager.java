@@ -113,12 +113,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
 
     private final ServerSocketChannel serverSocketChannel;
 
-    private final int outboundPortCount;
-
-    // accessed only in synchronized block
-    private final LinkedList<Integer> outboundPorts = new LinkedList<Integer>();
-
-    // accessed only in synchronized block
+      // accessed only in synchronized block
     private volatile TcpIpConnectionConnector connector;
 
     @Probe
@@ -139,10 +134,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         this.serverSocketChannel = serverSocketChannel;
         this.loggingService = loggingService;
         this.logger = loggingService.getLogger(TcpIpConnectionManager.class);
-        final Collection<Integer> ports = ioService.getOutboundPorts();
-        this.outboundPortCount = ports.size();
-        this.outboundPorts.addAll(ports);
-        this.metricsRegistry = metricsRegistry;
+          this.metricsRegistry = metricsRegistry;
         metricsRegistry.scanAndRegister(this, "tcp.connection");
     }
 
@@ -383,7 +375,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         if (connection == null && live) {
             if (connectionsInProgress.add(address)) {
                 ioService.shouldConnectTo(address);
-                ioService.executeAsync(new InitConnectionTask(this, address, silent));
+                ioService.executeAsync(new InitConnectionTask(this, connector, address, silent));
             }
         }
         return connection;
@@ -564,26 +556,6 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
     public boolean isLive() {
         return live;
     }
-
-    boolean useAnyOutboundPort() {
-        return outboundPortCount == 0;
-    }
-
-    int getOutboundPortCount() {
-        return outboundPortCount;
-    }
-
-    int acquireOutboundPort() {
-        if (useAnyOutboundPort()) {
-            return 0;
-        }
-        synchronized (outboundPorts) {
-            final Integer port = outboundPorts.removeFirst();
-            outboundPorts.addLast(port);
-            return port;
-        }
-    }
-
 
     @Override
     public boolean transmit(Packet packet, Connection connection) {
