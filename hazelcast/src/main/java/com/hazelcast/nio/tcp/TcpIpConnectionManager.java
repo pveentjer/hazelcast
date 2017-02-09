@@ -93,8 +93,6 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
     @Probe(name = "inProgressCount")
     private final Set<Address> connectionsInProgress = newSetFromMap(new ConcurrentHashMap<Address, Boolean>());
 
-    @Probe(name = "acceptedSocketCount", level = MANDATORY)
-    private final Set<SocketChannel> acceptedSockets = newSetFromMap(new ConcurrentHashMap<SocketChannel, Boolean>());
 
     @Probe(name = "activeCount", level = MANDATORY)
     private final Set<TcpIpConnection> activeConnections = newSetFromMap(new ConcurrentHashMap<TcpIpConnection, Boolean>());
@@ -141,26 +139,6 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
 
     public IOThreadingModel getIOThreadingModel() {
         return ioThreadingModel;
-    }
-
-    public void interceptSocket(Socket socket, boolean onAccept) throws IOException {
-        if (!isSocketInterceptorEnabled()) {
-            return;
-        }
-        MemberSocketInterceptor memberSocketInterceptor = ioService.getMemberSocketInterceptor();
-        if (memberSocketInterceptor == null) {
-            return;
-        }
-        if (onAccept) {
-            memberSocketInterceptor.onAccept(socket);
-        } else {
-            memberSocketInterceptor.onConnect(socket);
-        }
-    }
-
-    public boolean isSocketInterceptorEnabled() {
-        SocketInterceptorConfig socketInterceptorConfig = ioService.getSocketInterceptorConfig();
-        return socketInterceptorConfig != null && socketInterceptorConfig.isEnabled();
     }
 
     // just for testing
@@ -304,13 +282,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         //now you can send anything...
     }
 
-    void register(SocketChannel socketChannel) throws Exception {
-        //SocketChannelWrapper wrapper = socketChannelWrapperFactory.register(socketChannel, client);
-        acceptedSockets.add(socketChannel);
-     //   return wrapper;
-    }
-
-    synchronized TcpIpConnection newConnection(SocketChannel channel, Address endpoint, String protocol) {
+     synchronized TcpIpConnection newConnection(SocketChannel channel, Address endpoint, String protocol) {
         try {
             if (!live) {
                 throw new IllegalStateException("connection manager is not live!");
@@ -336,7 +308,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
             metricsRegistry.collectMetrics(connection);
             return connection;
         } finally {
-            acceptedSockets.remove(channel);
+            connector.unregister(channel);
         }
     }
 
@@ -463,9 +435,6 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
 
         shutdownConnector();
 
-        for (SocketChannel socketChannel : acceptedSockets) {
-            closeResource(socketChannel);
-        }
         for (Connection conn : connectionsMap.values()) {
             destroySilently(conn, "TcpIpConnectionManager is stopping");
         }
@@ -473,7 +442,6 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
             destroySilently(conn, "TcpIpConnectionManager is stopping");
         }
         ioThreadingModel.shutdown();
-        acceptedSockets.clear();
         connectionsInProgress.clear();
         connectionsMap.clear();
         monitors.clear();

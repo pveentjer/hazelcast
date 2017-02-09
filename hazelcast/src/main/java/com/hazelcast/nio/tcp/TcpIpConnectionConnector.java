@@ -16,12 +16,14 @@
 
 package com.hazelcast.nio.tcp;
 
+import com.hazelcast.config.SocketInterceptorConfig;
 import com.hazelcast.instance.OutOfMemoryErrorDispatcher;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.networking.nonblocking.SelectorMode;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.IOService;
+import com.hazelcast.nio.MemberSocketInterceptor;
 
 import java.io.IOException;
 import java.net.Socket;
@@ -33,7 +35,10 @@ import java.nio.channels.SocketChannel;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
+import static com.hazelcast.internal.metrics.ProbeLevel.MANDATORY;
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
 import static com.hazelcast.nio.IOService.KILO_BYTE;
 import static com.hazelcast.nio.IOUtil.closeResource;
@@ -41,6 +46,7 @@ import static java.lang.Math.max;
 import static java.lang.System.currentTimeMillis;
 import static java.nio.channels.SelectionKey.OP_ACCEPT;
 import static java.nio.channels.SelectionKey.OP_READ;
+import static java.util.Collections.newSetFromMap;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
@@ -82,6 +88,8 @@ public final class TcpIpConnectionConnector {
 
     // accessed only in synchronized block
     private final LinkedList<Integer> outboundPorts = new LinkedList<Integer>();
+    @Probe(name = "acceptedSocketCount", level = MANDATORY)
+    private final Set<SocketChannel> acceptedSockets = newSetFromMap(new ConcurrentHashMap<SocketChannel, Boolean>());
 
 
     public TcpIpConnectionConnector(
@@ -114,6 +122,29 @@ public final class TcpIpConnectionConnector {
     private long idleTimeMs() {
         return max(currentTimeMillis() - lastSelectTimeMs, 0);
     }
+
+
+    public void interceptSocket(Socket socket, boolean onAccept) throws IOException {
+        if (!isSocketInterceptorEnabled()) {
+            return;
+        }
+        MemberSocketInterceptor memberSocketInterceptor = ioService.getMemberSocketInterceptor();
+        if (memberSocketInterceptor == null) {
+            return;
+        }
+        if (onAccept) {
+            memberSocketInterceptor.onAccept(socket);
+        } else {
+            memberSocketInterceptor.onConnect(socket);
+        }
+    }
+
+    public boolean isSocketInterceptorEnabled() {
+        SocketInterceptorConfig socketInterceptorConfig = ioService.getSocketInterceptorConfig();
+        return socketInterceptorConfig != null && socketInterceptorConfig.isEnabled();
+    }
+
+
     boolean useAnyOutboundPort() {
         return outboundPortCount == 0;
     }
@@ -150,6 +181,13 @@ public final class TcpIpConnectionConnector {
 
         logger.finest("Shutting down SocketAcceptor thread.");
         live = false;
+
+        for (SocketChannel socketChannel : acceptedSockets) {
+            closeResource(socketChannel);
+        }
+        acceptedSockets.clear();
+
+
         Selector sel = selector;
         if (sel != null) {
             sel.wakeup();
@@ -160,6 +198,16 @@ public final class TcpIpConnectionConnector {
             logger.finest(e);
         }
     }
+    void register(SocketChannel socketChannel) throws Exception {
+        //SocketChannelWrapper wrapper = socketChannelWrapperFactory.register(socketChannel, client);
+        acceptedSockets.add(socketChannel);
+        //   return wrapper;
+    }
+
+    public void unregister(SocketChannel channel) {
+        acceptedSockets.remove(channel);
+    }
+
 
     private class ConnectorThread extends Thread {
 

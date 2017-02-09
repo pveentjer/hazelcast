@@ -144,8 +144,8 @@ public class InitConnectionTask implements Runnable {
             if (logger.isFinestEnabled()) {
                 logger.finest("Successfully connected to: " + address + " using socket " + socketChannel.socket());
             }
-            connectionManager.register(socketChannel);
-            connectionManager.interceptSocket(socketChannel.socket(), false);
+            connector.register(socketChannel);
+            connector.interceptSocket(socketChannel.socket(), false);
 
             socketChannel.configureBlocking(false);
             TcpIpConnection connection = connectionManager.newConnection(socketChannel, address, Protocols.CLUSTER);
