@@ -46,6 +46,8 @@ import com.hazelcast.nio.IOService;
 import com.hazelcast.nio.MemberSocketInterceptor;
 import com.hazelcast.nio.tcp.MemberReadHandler;
 import com.hazelcast.nio.tcp.MemberWriteHandler;
+import com.hazelcast.nio.tcp.SocketHandshakeFactory;
+import com.hazelcast.nio.tcp.SocketHandshakeFactoryImpl;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 import com.hazelcast.partition.strategy.DefaultPartitioningStrategy;
 import com.hazelcast.security.SecurityContext;
@@ -294,6 +296,11 @@ public class DefaultNodeExtension implements NodeExtension {
     @Override
     public String createMemberUuid(Address address) {
         return UuidUtil.createMemberUuid(address);
+    }
+
+    @Override
+    public SocketHandshakeFactory getSocketHandshakeFactory() {
+        return new SocketHandshakeFactoryImpl();
     }
 
     // obtain cluster version, if already initialized (not null)

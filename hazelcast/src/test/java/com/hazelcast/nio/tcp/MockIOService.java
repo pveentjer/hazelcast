@@ -42,6 +42,7 @@ public class MockIOService implements IOService {
     public final HazelcastThreadGroup hazelcastThreadGroup;
     public final ConcurrentHashMap<Long, DummyPayload> payloads = new ConcurrentHashMap<Long, DummyPayload>();
     public volatile PacketHandler packetHandler;
+    public final SocketHandshakeFactory socketHandshakeFactory = new SocketHandshakeFactoryImpl();
 
     public MockIOService(int port) throws Exception {
         loggingService = new LoggingServiceImpl("somegroup", "log4j2", BuildInfoProvider.getBuildInfo());
@@ -59,6 +60,11 @@ public class MockIOService implements IOService {
         this.serializationService = new DefaultSerializationServiceBuilder()
                 .addDataSerializableFactory(TestDataFactory.FACTORY_ID, new TestDataFactory())
                 .build();
+    }
+
+    @Override
+    public SocketHandshakeFactory getSocketHandshakeFactory() {
+        return socketHandshakeFactory;
     }
 
     @Override

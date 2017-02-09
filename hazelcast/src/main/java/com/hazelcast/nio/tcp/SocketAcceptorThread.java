@@ -24,9 +24,7 @@ import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.IOService;
 
-import java.io.EOFException;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -59,12 +57,12 @@ public class SocketAcceptorThread extends Thread {
     // count number of times the selector was recreated (if selectWorkaround is enabled)
     @Probe
     private final SwCounter selectorRecreateCount = newSwCounter();
-    private final boolean sslEnabled;
     private final IOThreadingModel ioThreadingModel;
+    private final SocketHandshakeFactory sockketHandshakeFactory;
     // last time select returned
     private volatile long lastSelectTimeMs;
 
-    // When true, enables workaround for bug occuring when SelectorImpl.select returns immediately
+    // When true, enables workaround for bug occurring when SelectorImpl.select returns immediately
     // with no channels selected, resulting in 100% CPU usage while doing no progress.
     // See issue: https://github.com/hazelcast/hazelcast/issues/7943
     private final boolean selectorWorkaround = (SelectorMode.getConfiguredValue() == SelectorMode.SELECT_WITH_FIX);
@@ -78,15 +76,14 @@ public class SocketAcceptorThread extends Thread {
             String name,
             ServerSocketChannel serverSocketChannel,
             TcpIpConnectionManager connectionManager,
-            boolean sslEnabled) {
+            SocketHandshakeFactory socketHandshakeFactory) {
         super(threadGroup, name);
         this.serverSocketChannel = serverSocketChannel;
         this.connectionManager = connectionManager;
         this.ioService = connectionManager.getIoService();
         this.logger = ioService.getLoggingService().getLogger(getClass());
-        this.sslEnabled = sslEnabled;
+        this.sockketHandshakeFactory = socketHandshakeFactory;
         this.ioThreadingModel = connectionManager.getIoThreadingModel();
-
     }
 
     /**
@@ -182,7 +179,6 @@ public class SocketAcceptorThread extends Thread {
         while (it.hasNext()) {
             SelectionKey sk = it.next();
             it.remove();
-            // of course it is acceptable!
 
             if (sk.isValid() && sk.isAcceptable()) {
                 eventCount.inc();
@@ -196,32 +192,6 @@ public class SocketAcceptorThread extends Thread {
         }
     }
 
-    private class SocketHandshake {
-
-        private final ByteBuffer protocolBuffer = ByteBuffer.allocate(3);
-        private String protocol;
-
-        public boolean complete(SocketChannel socketChannel) throws IOException {
-            int readBytes = socketChannel.read(protocolBuffer);
-
-            if (readBytes == -1) {
-                throw new EOFException("Could not read protocol type!");
-            }
-
-            if (protocolBuffer.hasRemaining()) {
-                return false;
-            } else {
-                protocolBuffer.flip();
-                this.protocol = bytesToString(protocolBuffer.array());
-                return true;
-            }
-        }
-
-        public String protocol() {
-            return protocol;
-        }
-    }
-
     private void handleRead(SelectionKey sk) throws IOException {
         try {
             SocketChannel socketChannel = (SocketChannel) sk.channel();
@@ -229,7 +199,7 @@ public class SocketAcceptorThread extends Thread {
 
             if (handshake.complete(socketChannel)) {
                 sk.cancel();
-                connectionManager.newConnection(socketChannel, null, handshake.protocol);
+                connectionManager.newConnection(socketChannel, null, handshake.getProtocol());
             }
         } catch (Exception e) {
             logger.severe(e);
@@ -275,10 +245,8 @@ public class SocketAcceptorThread extends Thread {
             //}
 
 
-            SocketHandshake handshake = new SocketHandshake();
+            SocketHandshake handshake = sockketHandshakeFactory.create();
             selectionKey = socketChannel.register(selector, OP_READ, handshake);
-
-            System.out.println("OP_READ " + socketChannel);
         } catch (Exception e) {
             exceptionCount.inc();
 

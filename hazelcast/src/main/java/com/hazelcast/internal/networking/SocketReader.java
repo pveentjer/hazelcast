@@ -18,6 +18,8 @@ package com.hazelcast.internal.networking;
 
 import com.hazelcast.internal.util.counters.SwCounter;
 
+import java.io.Closeable;
+
 /**
  * The SocketReader is responsible for reading data from the socket, on behalf of a connection, into a
  * {@link java.nio.ByteBuffer}. Once the data is read into the ByteBuffer, this ByteBuffer is passed to the {@link ReadHandler}
@@ -42,7 +44,7 @@ import com.hazelcast.internal.util.counters.SwCounter;
  * @see SocketWriter
  * @see IOThreadingModel
  */
-public interface SocketReader {
+public interface SocketReader extends Closeable {
 
     /**
      * Returns the last {@link com.hazelcast.util.Clock#currentTimeMillis()} a read of the socket was done.
@@ -71,14 +73,4 @@ public interface SocketReader {
      * This method is called from an arbitrary thread and is only called once.
      */
     void init();
-
-    /**
-     * Closes this SocketReader.
-     *
-     * This method can be called from an arbitrary thread, and should only be called once. This should be coordinated
-     * through the {@link com.hazelcast.nio.Connection#close(String, Throwable)} method.
-     */
-    void close();
-
-    //SocketChannel getSocketChannel();
 }

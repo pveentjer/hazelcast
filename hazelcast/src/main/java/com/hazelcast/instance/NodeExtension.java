@@ -29,6 +29,7 @@ import com.hazelcast.nio.Address;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.IOService;
 import com.hazelcast.nio.MemberSocketInterceptor;
+import com.hazelcast.nio.tcp.SocketHandshakeFactory;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 import com.hazelcast.security.SecurityContext;
 import com.hazelcast.spi.annotation.PrivateApi;
@@ -216,4 +217,6 @@ public interface NodeExtension {
      * @return new uuid
      */
     String createMemberUuid(Address address);
+
+    SocketHandshakeFactory getSocketHandshakeFactory();
 }

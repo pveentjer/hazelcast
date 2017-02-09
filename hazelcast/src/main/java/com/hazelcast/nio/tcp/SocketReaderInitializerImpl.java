@@ -36,15 +36,15 @@ public class SocketReaderInitializerImpl implements SocketReaderInitializer<TcpI
 //        if (CLUSTER.equals(protocol)) {
 //            initInputBuffer(connection, reader, ioService.getSocketReceiveBufferSize());
 //            connection.setType(MEMBER);
-//            socketWriter.setProtocol(CLUSTER);
+//            socketWriter.handshake(CLUSTER);
 //            readHandler = ioService.createReadHandler(connection);
 //        } else if (CLIENT_BINARY_NEW.equals(protocol)) {
 //            initInputBuffer(connection, reader, ioService.getSocketClientReceiveBufferSize());
-//            socketWriter.setProtocol(CLIENT_BINARY_NEW);
+//            socketWriter.handshake(CLIENT_BINARY_NEW);
 //            readHandler = new ClientReadHandler(reader.getNormalFramesReadCounter(), connection, ioService);
 //        } else {
 //            ByteBuffer inputBuffer = initInputBuffer(connection, reader, ioService.getSocketReceiveBufferSize());
-//            socketWriter.setProtocol(TEXT);
+//            socketWriter.handshake(TEXT);
 //           // inputBuffer.put(protocolBuffer.array());
 //            readHandler = new TextReadHandler(connection);
 //            connectionManager.incrementTextConnections();

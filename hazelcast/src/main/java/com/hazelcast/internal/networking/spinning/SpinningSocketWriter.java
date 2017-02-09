@@ -120,12 +120,12 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
 
     // accessed from ReadHandler and SocketConnector
     @Override
-    public void setProtocol(final String protocol) {
+    public void handshake() {
         final CountDownLatch latch = new CountDownLatch(1);
         urgentWriteQueue.add(new TaskFrame(new Runnable() {
             @Override
             public void run() {
-                logger.info("Setting protocol: " + protocol);
+                logger.info("Setting protocol: " + connection.getProtocol());
 //                if (writeHandler == null) {
 //                    initializer.init(connection, SpinningSocketWriter.this, protocol);
 //                }

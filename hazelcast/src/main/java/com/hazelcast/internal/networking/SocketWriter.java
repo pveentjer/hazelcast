@@ -19,6 +19,8 @@ package com.hazelcast.internal.networking;
 import com.hazelcast.nio.OutboundFrame;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 
+import java.io.Closeable;
+
 /**
  * Each {@link TcpIpConnection} has a {@link SocketWriter} and it writes {@link OutboundFrame} instances to the socket. Copying
  * the Frame instances to the byte-buffer is done using the {@link WriteHandler}.
@@ -31,7 +33,7 @@ import com.hazelcast.nio.tcp.TcpIpConnection;
  * @see ReadHandler
  * @see IOThreadingModel
  */
-public interface SocketWriter {
+public interface SocketWriter extends Closeable {
 
     /**
      * Returns the total number of packets (urgent and non normal priority) pending to be written to the socket.
@@ -69,21 +71,8 @@ public interface SocketWriter {
     WriteHandler getWriteHandler();
 
     /**
-     * Sets the protocol this SocketWriter should use.
-     *
-     * This should be called only once at the beginning of the connection.
-     *
-     * See {@link com.hazelcast.nio.Protocols}
-     *
-     * @param protocol the protocol
+     * Does the handshake. This initializes the connection to start sending/receiving data. This method is only called
+     * on the side that initiates the connection.
      */
-    void setProtocol(String protocol);
-
-    /**
-     * Closes this SocketWriter.
-     *
-     * This method can be called from an arbitrary thread, and should only be called once. This should be coordinated
-     * through the {@link TcpIpConnection#close(String, Throwable)} method.
-     */
-    void close();
+    void handshake();
 }

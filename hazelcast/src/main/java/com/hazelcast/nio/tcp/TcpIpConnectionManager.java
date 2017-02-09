@@ -201,10 +201,6 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         return connectionsMap.size();
     }
 
-    public boolean isSSLEnabled() {
-        return ioService.getSSLConfig().isEnabled();
-    }
-
     public void incrementTextConnections() {
         allTextConnections.incrementAndGet();
     }
@@ -332,35 +328,6 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         acceptedSockets.add(socketChannel);
      //   return wrapper;
     }
-
-//    synchronized TcpIpConnection newConnection(SocketChannel channel, Address endpoint) {
-//        try {
-//            if (!live) {
-//                throw new IllegalStateException("connection manager is not live!");
-//            }
-//
-//            TcpIpConnection connection = new TcpIpConnection(
-//                    this,
-//                    connectionIdGen.incrementAndGet(),
-//                    channel,
-//                    ioThreadingModel);
-//
-//            connection.setEndPoint(endpoint);
-//            activeConnections.add(connection);
-//
-//            connection.start();
-//            ioThreadingModel.onConnectionAdded(connection);
-//
-//            logger.info("Established socket connection between "
-//                    + channel.socket().getLocalSocketAddress() + " and " + channel.socket().getRemoteSocketAddress());
-//            openedCount.inc();
-//
-//            metricsRegistry.collectMetrics(connection);
-//            return connection;
-//        } finally {
-//            acceptedSockets.remove(channel);
-//        }
-//    }
 
     synchronized TcpIpConnection newConnection(SocketChannel channel, Address endpoint, String protocol) {
         try {
@@ -508,7 +475,8 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
                 ioService.getHazelcastThreadGroup().getInternalThreadGroup(),
                 ioService.getHazelcastThreadGroup().getThreadPoolNamePrefix("IO") + "Acceptor",
                 serverSocketChannel,
-                this, false);
+                this,
+                ioService.getSocketHandshakeFactory());
         acceptorThread.start();
         metricsRegistry.scanAndRegister(acceptorThread, "tcp." + acceptorThread.getName());
     }

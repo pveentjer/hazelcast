@@ -137,13 +137,14 @@ public final class NonBlockingSocketWriter
 
     // accessed from ReadHandler and SocketConnector
     @Override
-    public void setProtocol(final String protocol) {
+    public void handshake() {
         final CountDownLatch latch = new CountDownLatch(1);
         ioThread.addTaskAndWakeup(new Runnable() {
             @Override
             public void run() {
                 try {
-                    ByteBuffer bb = ByteBuffer.wrap(Protocols.CLUSTER.getBytes());
+                    String protocol = connection.getProtocol();
+                    ByteBuffer bb = ByteBuffer.wrap(protocol.getBytes());
                     socketChannel.write(bb);
                     // registerOp(OP_WRITE);
 //                    if (writeHandler == null) {
@@ -151,7 +152,6 @@ public final class NonBlockingSocketWriter
 //                    }
 
                     System.out.println("protocol " + protocol + " written");
-
                 } catch (Throwable t) {
                     onFailure(t);
                 } finally {

@@ -27,6 +27,7 @@ import com.hazelcast.internal.networking.ReadHandler;
 import com.hazelcast.internal.networking.WriteHandler;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.logging.LoggingService;
+import com.hazelcast.nio.tcp.SocketHandshakeFactory;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 import com.hazelcast.spi.EventService;
 import com.hazelcast.spi.annotation.PrivateApi;
@@ -51,6 +52,8 @@ public interface IOService {
     void onFatalError(Exception e);
 
     SocketInterceptorConfig getSocketInterceptorConfig();
+
+    SocketHandshakeFactory getSocketHandshakeFactory();
 
     SymmetricEncryptionConfig getSymmetricEncryptionConfig();
 
