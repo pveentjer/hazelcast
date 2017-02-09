@@ -20,7 +20,7 @@ import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
 import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.SocketConnection;
-import com.hazelcast.internal.networking.SocketReader;
+import com.hazelcast.internal.networking.ChannelReader;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 
@@ -31,7 +31,7 @@ import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
 import static java.lang.Math.max;
 import static java.lang.System.currentTimeMillis;
 
-public class SpinningSocketReader extends AbstractHandler implements SocketReader {
+public class SpinningChannelReader extends AbstractHandler implements ChannelReader {
 
     @Probe(name = "bytesRead")
     private final SwCounter bytesRead = newSwCounter();
@@ -43,11 +43,11 @@ public class SpinningSocketReader extends AbstractHandler implements SocketReade
     private final ByteBuffer inputBuffer;
     private volatile long lastReadTime;
 
-    public SpinningSocketReader(SocketConnection connection,
-                                ILogger logger,
-                                IOOutOfMemoryHandler oomeHandler,
-                                ChannelInboundHandler readHandler,
-                                ByteBuffer inputBuffer) {
+    public SpinningChannelReader(SocketConnection connection,
+                                 ILogger logger,
+                                 IOOutOfMemoryHandler oomeHandler,
+                                 ChannelInboundHandler readHandler,
+                                 ByteBuffer inputBuffer) {
         super(connection, logger, oomeHandler);
         this.readHandler = readHandler;
         this.inputBuffer = inputBuffer;

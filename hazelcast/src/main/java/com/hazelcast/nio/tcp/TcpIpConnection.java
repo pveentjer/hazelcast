@@ -20,10 +20,10 @@ import com.hazelcast.internal.metrics.DiscardableMetricsProvider;
 import com.hazelcast.internal.metrics.MetricsProvider;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
+import com.hazelcast.internal.networking.ChannelReader;
+import com.hazelcast.internal.networking.ChannelWriter;
 import com.hazelcast.internal.networking.IOThreadingModel;
 import com.hazelcast.internal.networking.SocketConnection;
-import com.hazelcast.internal.networking.SocketReader;
-import com.hazelcast.internal.networking.SocketWriter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Address;
 import com.hazelcast.nio.ConnectionType;
@@ -45,8 +45,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>
  * A {@link TcpIpConnection} is not responsible for reading or writing data to a socket, this is done through:
  * <ol>
- * <li>{@link SocketReader}: which care of reading from the socket and feeding it into the system/li>
- * <li>{@link SocketWriter}: which care of writing data to the socket.</li>
+ * <li>{@link ChannelReader}: which care of reading from the socket and feeding it into the system/li>
+ * <li>{@link ChannelWriter}: which care of writing data to the socket.</li>
  * </ol>
  *
  * @see IOThreadingModel
@@ -56,9 +56,9 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
 
     private final SocketChannel socketChannel;
 
-    private final SocketReader socketReader;
+    private final ChannelReader channelReader;
 
-    private final SocketWriter socketWriter;
+    private final ChannelWriter channelWriter;
 
     private final TcpIpConnectionManager connectionManager;
 
@@ -92,8 +92,8 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
         this.ioService = connectionManager.getIoService();
         this.logger = ioService.getLoggingService().getLogger(TcpIpConnection.class);
         this.socketChannel = socketChannel;
-        this.socketWriter = ioThreadingModel.newSocketWriter(this);
-        this.socketReader = ioThreadingModel.newSocketReader(this);
+        this.channelWriter = ioThreadingModel.newSocketWriter(this);
+        this.channelReader = ioThreadingModel.newSocketReader(this);
     }
 
 
@@ -108,22 +108,22 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
         SocketAddress localSocketAddress = socket != null ? socket.getLocalSocketAddress() : null;
         SocketAddress remoteSocketAddress = socket != null ? socket.getRemoteSocketAddress() : null;
         String metricsId = localSocketAddress + "->" + remoteSocketAddress;
-        registry.scanAndRegister(socketWriter, "tcp.connection[" + metricsId + "].out");
-        registry.scanAndRegister(socketReader, "tcp.connection[" + metricsId + "].in");
+        registry.scanAndRegister(channelWriter, "tcp.connection[" + metricsId + "].out");
+        registry.scanAndRegister(channelReader, "tcp.connection[" + metricsId + "].in");
     }
 
     @Override
     public void discardMetrics(MetricsRegistry registry) {
-        registry.deregister(socketReader);
-        registry.deregister(socketWriter);
+        registry.deregister(channelReader);
+        registry.deregister(channelWriter);
     }
 
-    public SocketReader getSocketReader() {
-        return socketReader;
+    public ChannelReader getChannelReader() {
+        return channelReader;
     }
 
-    public SocketWriter getSocketWriter() {
-        return socketWriter;
+    public ChannelWriter getChannelWriter() {
+        return channelWriter;
     }
 
     @Override
@@ -175,12 +175,12 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
 
     @Override
     public long lastWriteTimeMillis() {
-        return socketWriter.lastWriteTimeMillis();
+        return channelWriter.lastWriteTimeMillis();
     }
 
     @Override
     public long lastReadTimeMillis() {
-        return socketReader.lastReadTimeMillis();
+        return channelReader.lastReadTimeMillis();
     }
 
     @Override
@@ -225,7 +225,7 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
      * Starting means that the connection is going to register itself to listen to incoming traffic.
      */
     public void start() {
-        socketReader.init();
+        channelReader.init();
     }
 
     @Override
@@ -236,7 +236,7 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
             }
             return false;
         }
-        socketWriter.write(frame);
+        channelWriter.write(frame);
         return true;
     }
 
@@ -271,8 +271,8 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
 
         try {
             if (socketChannel != null && socketChannel.isOpen()) {
-                socketReader.close();
-                socketWriter.close();
+                channelReader.close();
+                channelWriter.close();
                 socketChannel.close();
             }
         } catch (Exception e) {

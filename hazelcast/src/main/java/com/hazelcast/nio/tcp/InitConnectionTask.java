@@ -149,7 +149,7 @@ public class InitConnectionTask implements Runnable {
 
             socketChannel.configureBlocking(false);
             TcpIpConnection connection = connectionManager.newConnection(socketChannel, address, Protocols.CLUSTER);
-            connection.getSocketWriter().handshake();
+            connection.getChannelWriter().handshake();
             connectionManager.sendBindRequest(connection, address, true);
         } catch (Exception e) {
             closeSocket(socketChannel);

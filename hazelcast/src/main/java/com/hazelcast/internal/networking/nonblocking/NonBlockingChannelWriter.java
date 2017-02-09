@@ -18,8 +18,8 @@ package com.hazelcast.internal.networking.nonblocking;
 
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.networking.ChannelOutboundHandler;
+import com.hazelcast.internal.networking.ChannelWriter;
 import com.hazelcast.internal.networking.SocketConnection;
-import com.hazelcast.internal.networking.SocketWriter;
 import com.hazelcast.internal.networking.nonblocking.iobalancer.IOBalancer;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
@@ -45,9 +45,9 @@ import static java.nio.channels.SelectionKey.OP_WRITE;
 /**
  * The writing side of the {@link TcpIpConnection}.
  */
-public final class NonBlockingSocketWriter
+public final class NonBlockingChannelWriter
         extends AbstractHandler
-        implements Runnable, SocketWriter {
+        implements Runnable, ChannelWriter {
 
     private static final long TIMEOUT = 3;
 
@@ -78,12 +78,12 @@ public final class NonBlockingSocketWriter
     // This prevents running into an NonBlockingIOThread that is migrating.
     private NonBlockingIOThread newOwner;
 
-    public NonBlockingSocketWriter(SocketConnection connection,
-                                   NonBlockingIOThread ioThread,
-                                   ILogger logger,
-                                   IOBalancer balancer,
-                                   ChannelOutboundHandler writeHandler,
-                                   ByteBuffer outputBuffer) {
+    public NonBlockingChannelWriter(SocketConnection connection,
+                                    NonBlockingIOThread ioThread,
+                                    ILogger logger,
+                                    IOBalancer balancer,
+                                    ChannelOutboundHandler writeHandler,
+                                    ByteBuffer outputBuffer) {
         super(connection, ioThread, OP_WRITE, logger, balancer);
         this.writeHandler = writeHandler;
         this.outputBuffer = outputBuffer;
@@ -100,7 +100,7 @@ public final class NonBlockingSocketWriter
     }
 
     @Override
-    public ChannelOutboundHandler getWriteHandler() {
+    public ChannelOutboundHandler getChannelOutboundHandler() {
         return writeHandler;
     }
 
@@ -147,7 +147,7 @@ public final class NonBlockingSocketWriter
                     socketChannel.write(bb);
                     // registerOp(OP_WRITE);
 //                    if (writeHandler == null) {
-//                        initializer.init(connection, NonBlockingSocketWriter.this, protocol);
+//                        initializer.init(connection, NonBlockingChannelWriter.this, protocol);
 //                    }
 
                     System.out.println("protocol " + protocol + " written");
@@ -399,8 +399,8 @@ public final class NonBlockingSocketWriter
     /**
      * The TaskFrame is not really a Frame. It is a way to put a task on one of the frame-queues. Using this approach we
      * can lift on top of the Frame scheduling mechanism and we can prevent having:
-     * - multiple NonBlockingIOThread-tasks for a SocketWriter on multiple NonBlockingIOThread
-     * - multiple NonBlockingIOThread-tasks for a SocketWriter on the same NonBlockingIOThread.
+     * - multiple NonBlockingIOThread-tasks for a ChannelWriter on multiple NonBlockingIOThread
+     * - multiple NonBlockingIOThread-tasks for a ChannelWriter on the same NonBlockingIOThread.
      */
     private static final class TaskFrame implements OutboundFrame {
 
@@ -417,7 +417,7 @@ public final class NonBlockingSocketWriter
     }
 
     /**
-     * Triggers the migration when executed by setting the SocketWriter.newOwner field. When the handle method completes, it
+     * Triggers the migration when executed by setting the ChannelWriter.newOwner field. When the handle method completes, it
      * checks if this field if set, if so, the migration starts.
      *
      * If the current ioThread is the same as 'theNewOwner' then the call is ignored.

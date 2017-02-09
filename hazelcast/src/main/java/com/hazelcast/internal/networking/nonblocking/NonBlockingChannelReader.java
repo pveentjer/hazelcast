@@ -18,8 +18,8 @@ package com.hazelcast.internal.networking.nonblocking;
 
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.networking.ChannelInboundHandler;
+import com.hazelcast.internal.networking.ChannelReader;
 import com.hazelcast.internal.networking.SocketConnection;
-import com.hazelcast.internal.networking.SocketReader;
 import com.hazelcast.internal.networking.nonblocking.iobalancer.IOBalancer;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
@@ -32,15 +32,15 @@ import static java.lang.System.currentTimeMillis;
 import static java.nio.channels.SelectionKey.OP_READ;
 
 /**
- * A {@link SocketReader} tailored for non blocking IO.
+ * A {@link ChannelReader} tailored for non blocking IO.
  *
  * When the {@link NonBlockingIOThread} receives a read event from the {@link java.nio.channels.Selector}, then the
  * {@link #handle()} is called to read out the data from the socket into a bytebuffer and hand it over to the
  * {@link ChannelInboundHandler} to get processed.
  */
-public final class NonBlockingSocketReader
+public final class NonBlockingChannelReader
         extends AbstractHandler
-        implements SocketReader {
+        implements ChannelReader {
 
     protected final ByteBuffer inputBuffer;
 
@@ -54,7 +54,7 @@ public final class NonBlockingSocketReader
     private final ChannelInboundHandler readHandler;
     private volatile long lastReadTime;
 
-    public NonBlockingSocketReader(
+    public NonBlockingChannelReader(
             SocketConnection connection,
             NonBlockingIOThread ioThread,
             ILogger logger,
@@ -147,7 +147,7 @@ public final class NonBlockingSocketReader
             @Override
             public void run() {
                 if (ioThread != Thread.currentThread()) {
-                    // the NonBlockingSocketReader has migrated to a different IOThread after the close got called.
+                    // the NonBlockingChannelReader has migrated to a different IOThread after the close got called.
                     // so we need to send the task to the right ioThread. Otherwise multiple ioThreads could be accessing
                     // the same socketChannel.
                     ioThread.addTaskAndWakeup(this);

@@ -27,14 +27,14 @@ public class SocketWriterInitializerImpl implements SocketWriterInitializer<TcpI
 //    }
 //
 //    @Override
-//    public void init(TcpIpConnection connection, SocketWriter writer, String protocol) {
-//        logger.fine("Initializing SocketWriter ChannelOutboundHandler with " + Protocols.toUserFriendlyString(protocol));
+//    public void init(TcpIpConnection connection, ChannelWriter writer, String protocol) {
+//        logger.fine("Initializing ChannelWriter ChannelOutboundHandler with " + Protocols.toUserFriendlyString(protocol));
 //
 //        initHandler(connection, writer, protocol);
 //        initOutputBuffer(connection, writer, protocol);
 //    }
 //
-//    private void initHandler(TcpIpConnection connection, SocketWriter writer, String protocol) {
+//    private void initHandler(TcpIpConnection connection, ChannelWriter writer, String protocol) {
 //        ChannelOutboundHandler handler;
 //        if (CLUSTER.equals(protocol)) {
 //            IOService ioService = connection.getConnectionManager().getIoService();
@@ -47,7 +47,7 @@ public class SocketWriterInitializerImpl implements SocketWriterInitializer<TcpI
 //        writer.initWriteHandler(handler);
 //    }
 //
-//    private void initOutputBuffer(TcpIpConnection connection, SocketWriter writer, String protocol) {
+//    private void initOutputBuffer(TcpIpConnection connection, ChannelWriter writer, String protocol) {
 //        IOService ioService = connection.getConnectionManager().getIoService();
 //        int sizeKb = CLUSTER.equals(protocol)
 //                ? ioService.getSocketSendBufferSize()

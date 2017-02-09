@@ -19,13 +19,13 @@ package com.hazelcast.internal.networking.nonblocking;
 import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.networking.ChannelOutboundHandler;
+import com.hazelcast.internal.networking.ChannelWriter;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
 import com.hazelcast.internal.networking.IOThreadingModel;
 import com.hazelcast.internal.networking.ProtocolBasedFactory;
 import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.SocketConnection;
-import com.hazelcast.internal.networking.SocketReader;
-import com.hazelcast.internal.networking.SocketWriter;
+import com.hazelcast.internal.networking.ChannelReader;
 import com.hazelcast.internal.networking.nonblocking.iobalancer.IOBalancer;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
@@ -185,15 +185,15 @@ public class NonBlockingIOThreadingModel
 
     @Override
     public void onConnectionAdded(SocketConnection connection) {
-        MigratableHandler reader = (MigratableHandler) connection.getSocketReader();
-        MigratableHandler writer = (MigratableHandler) connection.getSocketWriter();
+        MigratableHandler reader = (MigratableHandler) connection.getChannelReader();
+        MigratableHandler writer = (MigratableHandler) connection.getChannelWriter();
         ioBalancer.connectionAdded(reader, writer);
     }
 
     @Override
     public void onConnectionRemoved(SocketConnection connection) {
-        MigratableHandler reader = (MigratableHandler) connection.getSocketReader();
-        MigratableHandler writer = (MigratableHandler) connection.getSocketWriter();
+        MigratableHandler reader = (MigratableHandler) connection.getChannelReader();
+        MigratableHandler writer = (MigratableHandler) connection.getChannelWriter();
         ioBalancer.connectionRemoved(reader, writer);
     }
 
@@ -227,34 +227,34 @@ public class NonBlockingIOThreadingModel
     }
 
     @Override
-    public SocketWriter newSocketWriter(SocketConnection connection) {
+    public ChannelWriter newSocketWriter(SocketConnection connection) {
         int index = hashToIndex(nextOutputThreadIndex.getAndIncrement(), outputThreads.length);
         NonBlockingIOThread outputThread = outputThreads[index];
         if (outputThread == null) {
             throw new IllegalStateException("IO thread is closed!");
         }
 
-        return new NonBlockingSocketWriter(
+        return new NonBlockingChannelWriter(
                 connection,
                 outputThread,
-                loggingService.getLogger(NonBlockingSocketWriter.class),
+                loggingService.getLogger(NonBlockingChannelWriter.class),
                 ioBalancer,
                 writeHandlerFactory.create(connection),
                 outputBufferFactory.create(connection));
     }
 
     @Override
-    public SocketReader newSocketReader(SocketConnection connection) {
+    public ChannelReader newSocketReader(SocketConnection connection) {
         int index = hashToIndex(nextInputThreadIndex.getAndIncrement(), inputThreads.length);
         NonBlockingIOThread inputThread = inputThreads[index];
         if (inputThread == null) {
             throw new IllegalStateException("IO thread is closed!");
         }
 
-        return new NonBlockingSocketReader(
+        return new NonBlockingChannelReader(
                 connection,
                 inputThread,
-                loggingService.getLogger(NonBlockingSocketReader.class),
+                loggingService.getLogger(NonBlockingChannelReader.class),
                 ioBalancer,
                 readHandlerFactory.create(connection),
                 inputBufferFactory.create(connection));

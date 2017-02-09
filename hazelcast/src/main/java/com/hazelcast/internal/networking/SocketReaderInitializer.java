@@ -19,5 +19,5 @@ package com.hazelcast.internal.networking;
 import com.hazelcast.nio.Connection;
 
 public interface SocketReaderInitializer<C extends Connection> {
-   // void init(C connection, SocketReader reader, String protocol) throws IOException;
+   // void init(C connection, ChannelReader reader, String protocol) throws IOException;
 }

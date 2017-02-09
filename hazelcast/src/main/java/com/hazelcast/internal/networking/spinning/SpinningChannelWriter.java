@@ -20,7 +20,7 @@ import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.networking.ChannelOutboundHandler;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
 import com.hazelcast.internal.networking.SocketConnection;
-import com.hazelcast.internal.networking.SocketWriter;
+import com.hazelcast.internal.networking.ChannelWriter;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.OutboundFrame;
@@ -36,7 +36,7 @@ import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
 import static java.lang.System.currentTimeMillis;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-public class SpinningSocketWriter extends AbstractHandler implements SocketWriter {
+public class SpinningChannelWriter extends AbstractHandler implements ChannelWriter {
 
     private static final long TIMEOUT = 3;
 
@@ -59,11 +59,11 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
     private final ChannelOutboundHandler writeHandler;
     private volatile OutboundFrame currentFrame;
 
-    public SpinningSocketWriter(SocketConnection connection,
-                                ILogger logger,
-                                IOOutOfMemoryHandler oomeHandler,
-                                ChannelOutboundHandler writeHandler,
-                                ByteBuffer outputBuffer) {
+    public SpinningChannelWriter(SocketConnection connection,
+                                 ILogger logger,
+                                 IOOutOfMemoryHandler oomeHandler,
+                                 ChannelOutboundHandler writeHandler,
+                                 ByteBuffer outputBuffer) {
         super(connection, logger, oomeHandler);
         this.writeHandler = writeHandler;
         this.outputBuffer = outputBuffer;
@@ -114,7 +114,7 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
     }
 
     @Override
-    public ChannelOutboundHandler getWriteHandler() {
+    public ChannelOutboundHandler getChannelOutboundHandler() {
         return writeHandler;
     }
 
@@ -127,7 +127,7 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
             public void run() {
                 logger.info("Setting protocol: " + connection.getProtocol());
 //                if (writeHandler == null) {
-//                    initializer.init(connection, SpinningSocketWriter.this, protocol);
+//                    initializer.init(connection, SpinningChannelWriter.this, protocol);
 //                }
                 latch.countDown();
             }

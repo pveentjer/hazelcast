@@ -29,7 +29,7 @@ class ClientSocketWriterInitializer implements SocketWriterInitializer<ClientCon
 //    }
 //
 //    @Override
-//    public void init(ClientConnection connection, SocketWriter writer, String protocol) {
+//    public void init(ClientConnection connection, ChannelWriter writer, String protocol) {
 //        Logger.getLogger(getClass())
 //              .fine("Initializing ClientSocketWriter ChannelOutboundHandler with " + Protocols.toUserFriendlyString(protocol));
 //

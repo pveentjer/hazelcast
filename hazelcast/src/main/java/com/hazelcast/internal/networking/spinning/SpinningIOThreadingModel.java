@@ -22,8 +22,8 @@ import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
 import com.hazelcast.internal.networking.IOThreadingModel;
 import com.hazelcast.internal.networking.ProtocolBasedFactory;
 import com.hazelcast.internal.networking.SocketConnection;
-import com.hazelcast.internal.networking.SocketReader;
-import com.hazelcast.internal.networking.SocketWriter;
+import com.hazelcast.internal.networking.ChannelReader;
+import com.hazelcast.internal.networking.ChannelWriter;
 import com.hazelcast.internal.networking.ChannelOutboundHandler;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
@@ -81,9 +81,9 @@ public class SpinningIOThreadingModel implements IOThreadingModel {
     }
 
     @Override
-    public SocketWriter newSocketWriter(SocketConnection connection) {
-        ILogger logger = loggingService.getLogger(SpinningSocketWriter.class);
-        return new SpinningSocketWriter(
+    public ChannelWriter newSocketWriter(SocketConnection connection) {
+        ILogger logger = loggingService.getLogger(SpinningChannelWriter.class);
+        return new SpinningChannelWriter(
                 connection,
                 logger,
                 oomeHandler,
@@ -92,9 +92,9 @@ public class SpinningIOThreadingModel implements IOThreadingModel {
     }
 
     @Override
-    public SocketReader newSocketReader(SocketConnection connection) {
-        ILogger logger = loggingService.getLogger(SpinningSocketReader.class);
-        return new SpinningSocketReader(
+    public ChannelReader newSocketReader(SocketConnection connection) {
+        ILogger logger = loggingService.getLogger(SpinningChannelReader.class);
+        return new SpinningChannelReader(
                 connection,
                 logger,
                 oomeHandler,

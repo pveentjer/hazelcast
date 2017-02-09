@@ -42,7 +42,7 @@ public class MemberChannelInboundHandler implements ChannelInboundHandler {
     public MemberChannelInboundHandler(TcpIpConnection connection, PacketDispatcher packetDispatcher) {
         this.connection = connection;
         this.packetDispatcher = packetDispatcher;
-//        SocketReader socketReader = connection.getSocketReader();
+//        ChannelReader socketReader = connection.getChannelReader();
 //        if(socketReader == null){
 //            throw new NullPointerException();
 //        }

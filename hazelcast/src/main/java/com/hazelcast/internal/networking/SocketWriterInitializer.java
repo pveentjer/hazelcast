@@ -22,5 +22,5 @@ public interface SocketWriterInitializer<C extends Connection> {
 
 //    ByteBuffer newByteBuffer(String protocol);
 //
-//    SocketWriter socketWriter(String protocol);
+//    ChannelWriter socketWriter(String protocol);
 }

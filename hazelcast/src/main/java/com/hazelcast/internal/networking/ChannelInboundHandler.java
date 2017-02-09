@@ -22,48 +22,17 @@ import com.hazelcast.nio.tcp.TcpIpConnection;
 import java.nio.ByteBuffer;
 
 /**
- * Reads content from a {@link ByteBuffer} and processes it. The ChannelInboundHandler is invoked by the {@link SocketReader} after
- * it has read data from the socket.
+ * Reads content from a {@link ByteBuffer} and processes it. The ChannelInboundHandler is invoked by the
+ * {@link ChannelReader} after it has read data from the socket.
  *
  * A typical example is that Packet instances are created from the buffered data and handing them over the the
- * {@link com.hazelcast.spi.impl.packetdispatcher.PacketDispatcher}. See {@link MemberChannelInboundHandler} for more information.
+ * {@link com.hazelcast.spi.impl.packetdispatcher.PacketDispatcher}. See {@link MemberChannelInboundHandler}
+ * for more information.
  *
- * Each {@link SocketReader} will have its own {@link ChannelInboundHandler} instance. Therefor it doesn't need to be thread-safe.
- *
- * <h1>Pipelining & Encryption</h1>
- * The ChannelInboundHandler/ChannelOutboundHandler can also form a pipeline. For example for SSL there could be a initial ChannelInboundHandler that decryption
- * the ByteBuffer and passes the decrypted ByteBuffer to the next ChannelInboundHandler; which could be a {@link MemberChannelInboundHandler}
- * that reads out any Packet from the decrypted ByteBuffer. Using this approach encryption can easily be added to any type of
- * communication, not only member 2 member communication.
- *
- * Currently security is added by using a {@link SocketChannelWrapper}, but this is not needed if the handlers form a pipeline.
- * Netty follows a similar approach with pipelining and adding encryption.
- *
- * There is no explicit support for setting up a 'pipeline' of ChannelInboundHandler/WriterHandlers but t can easily be realized by setting
- * up the chain and let a handler explicitly forward to the next. Since it isn't a common practice for the handler so far, isn't
- * needed to add additional complexity to the system; just set up a chain manually.
- *
- * pseudo code:
- * <pre>
- *     public class DecryptingReadHandler implements ChannelInboundHandler {
- *         private final ChannelInboundHandler next;
- *
- *         public DecryptingReadHandler(ChannelInboundHandler next) {
- *             this.next = next;
- *         }
- *
- *         public void read(ByteBuffer src) {
- *             decrypt(src, decryptedSrc);
- *             next.read(decryptedSrc)
- *         }
- *     }
- * </pre>
- * The <code>next</code> ChannelInboundHandler is the next item in the pipeline.
- *
- * For encryption is similar approach can be followed where the DecryptingWriteHandler is the last ChannelOutboundHandler in the pipeline.
+ * Each {@link ChannelReader} will have its own {@link ChannelInboundHandler} instance. Therefor it doesn't need to be thread-safe.
  *
  * @see ChannelOutboundHandler
- * @see SocketReader
+ * @see ChannelReader
  * @see TcpIpConnection
  * @see IOThreadingModel
  */
@@ -73,7 +42,7 @@ public interface ChannelInboundHandler {
      * A callback to indicate that data is available in the ByteBuffer to be processed.
      *
      * @param src the ByteBuffer containing the data to read. The ByteBuffer is already in reading mode and when completed,
-     *            should not be converted to write-mode using clear/compact. That is a task of the {@link SocketReader}.
+     *            should not be converted to write-mode using clear/compact. That is a task of the {@link ChannelReader}.
      * @throws Exception if something fails while reading data from the ByteBuffer or processing the data
      *                   (e.g. when a Packet fails to get processed). When an exception is thrown, the TcpIpConnection
      *                   is closed. There is no point continuing with a potentially corrupted stream.

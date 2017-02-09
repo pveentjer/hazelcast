@@ -27,12 +27,12 @@ public class SocketReaderInitializerImpl implements SocketReaderInitializer<TcpI
 //    }
 //
 //    @Override
-//    public void init(TcpIpConnection connection, SocketReader reader, String protocol) throws IOException {
+//    public void init(TcpIpConnection connection, ChannelReader reader, String protocol) throws IOException {
 //        TcpIpConnectionManager connectionManager = connection.getConnectionManager();
 //        IOService ioService = connectionManager.getIoService();
 //
 //        ChannelInboundHandler readHandler;
-//        SocketWriter socketWriter = connection.getSocketWriter();
+//        ChannelWriter socketWriter = connection.getChannelWriter();
 //        if (CLUSTER.equals(protocol)) {
 //            initInputBuffer(connection, reader, ioService.getSocketReceiveBufferSize());
 //            connection.setType(MEMBER);
@@ -57,7 +57,7 @@ public class SocketReaderInitializerImpl implements SocketReaderInitializer<TcpI
 //        reader.initReadHandler(readHandler);
 //    }
 //
-//    private ByteBuffer initInputBuffer(TcpIpConnection connection, SocketReader reader, int sizeKb) {
+//    private ByteBuffer initInputBuffer(TcpIpConnection connection, ChannelReader reader, int sizeKb) {
 //        boolean directBuffer = connection.getConnectionManager().getIoService().isSocketBufferDirect();
 //        int sizeBytes = sizeKb * KILO_BYTE;
 //

@@ -23,19 +23,19 @@ import com.hazelcast.nio.tcp.TcpIpConnection;
 import java.io.Closeable;
 
 /**
- * Each {@link TcpIpConnection} has a {@link SocketWriter} and it writes {@link OutboundFrame} instances to the socket. Copying
+ * Each {@link TcpIpConnection} has a {@link ChannelWriter} and it writes {@link OutboundFrame} instances to the socket. Copying
  * the Frame instances to the byte-buffer is done using the {@link ChannelOutboundHandler}.
  *
- * Each {@link TcpIpConnection} has its own {@link SocketWriter} instance.
+ * Each {@link TcpIpConnection} has its own {@link ChannelWriter} instance.
  *
  * Before Hazelcast 3.6 the name of this interface was ChannelOutboundHandler.
  *
- * @see SocketReader
+ * @see ChannelReader
  * @see ChannelInboundHandler
  * @see IOThreadingModel
  */
 //todo: rename this class to ChannelOutboundHandler
-public interface SocketWriter extends Closeable {
+public interface ChannelWriter extends Closeable {
 
     /**
      * Returns the total number of packets (urgent and non normal priority) pending to be written to the socket.
@@ -65,13 +65,13 @@ public interface SocketWriter extends Closeable {
     void write(OutboundFrame frame);
 
     /**
-     * Gets the {@link ChannelOutboundHandler} that belongs to this SocketWriter.
+     * Gets the {@link ChannelOutboundHandler} that belongs to this ChannelWriter.
      *
      * This method exists for the {@link TextChannelInboundHandler}, but probably should be deleted.
      *
      * @return the ChannelOutboundHandler
      */
-    ChannelOutboundHandler getWriteHandler();
+    ChannelOutboundHandler getChannelOutboundHandler();
 
     /**
      * Does the handshake. This initializes the connection to start sending/receiving data. This method is only called

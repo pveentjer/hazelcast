@@ -24,9 +24,9 @@ public interface SocketConnection extends Connection {
 
     String getProtocol();
 
-    SocketReader getSocketReader();
+    ChannelReader getChannelReader();
 
-    SocketWriter getSocketWriter();
+    ChannelWriter getChannelWriter();
 
     SocketChannel getSocketChannel();
 }
