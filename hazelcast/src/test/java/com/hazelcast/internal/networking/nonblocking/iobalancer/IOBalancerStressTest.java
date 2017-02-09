@@ -100,7 +100,7 @@ public class IOBalancerStressTest extends HazelcastTestSupport {
     }
 
     public String debug(TcpIpConnectionManager connectionManager) {
-        NonBlockingIOThreadingModel threadingModel = (NonBlockingIOThreadingModel) connectionManager.getIoThreadingModel();
+        NonBlockingIOThreadingModel threadingModel = (NonBlockingIOThreadingModel) connectionManager.getIOThreadingModel();
 
         StringBuffer sb = new StringBuffer();
         sb.append("in selectors\n");

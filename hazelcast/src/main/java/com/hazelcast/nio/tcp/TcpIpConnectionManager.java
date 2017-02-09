@@ -134,7 +134,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         this.serverSocketChannel = serverSocketChannel;
         this.loggingService = loggingService;
         this.logger = loggingService.getLogger(TcpIpConnectionManager.class);
-          this.metricsRegistry = metricsRegistry;
+        this.metricsRegistry = metricsRegistry;
         metricsRegistry.scanAndRegister(this, "tcp.connection");
     }
 
@@ -142,7 +142,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         return ioService;
     }
 
-    public IOThreadingModel getIoThreadingModel() {
+    public IOThreadingModel getIOThreadingModel() {
         return ioThreadingModel;
     }
 

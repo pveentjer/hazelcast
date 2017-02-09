@@ -21,6 +21,7 @@ import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.instance.HazelcastInstanceFactory;
 import com.hazelcast.internal.ascii.HTTPCommunicator;
+import com.hazelcast.internal.networking.nonblocking.NonBlockingIOThreadingModel;
 import com.hazelcast.nio.Address;
 import com.hazelcast.nio.Protocols;
 import com.hazelcast.nio.tcp.TcpIpConnectionManager;
@@ -62,7 +63,8 @@ public class IOBalancerMemoryLeakTest extends HazelcastTestSupport {
         for (int i = 0; i < 100; i++) {
             communicator.getClusterInfo();
         }
-        final IOBalancer ioBalancer = connectionManager.getIoBalancer();
+        NonBlockingIOThreadingModel threadingModel = (NonBlockingIOThreadingModel)connectionManager.getIOThreadingModel();
+        final IOBalancer ioBalancer = threadingModel.getIOBalancer();
         assertTrueEventually(new AssertTask() {
             @Override
             public void run() throws Exception {
