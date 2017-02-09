@@ -8,8 +8,8 @@ import com.hazelcast.instance.BuildInfoProvider;
 import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.internal.ascii.TextCommandService;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
-import com.hazelcast.internal.networking.ReadHandler;
-import com.hazelcast.internal.networking.WriteHandler;
+import com.hazelcast.internal.networking.ChannelInboundHandler;
+import com.hazelcast.internal.networking.ChannelOutboundHandler;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.internal.serialization.impl.DefaultSerializationServiceBuilder;
 import com.hazelcast.logging.ILogger;
@@ -360,8 +360,8 @@ public class MockIOService implements IOService {
     }
 
     @Override
-    public ReadHandler createReadHandler(final TcpIpConnection connection) {
-        return new MemberReadHandler(connection, new PacketDispatcher() {
+    public ChannelInboundHandler createReadHandler(final TcpIpConnection connection) {
+        return new MemberChannelInboundHandler(connection, new PacketDispatcher() {
             private ILogger logger = loggingService.getLogger("MockIOService");
 
             @Override
@@ -383,8 +383,8 @@ public class MockIOService implements IOService {
     }
 
     @Override
-    public WriteHandler createWriteHandler(TcpIpConnection connection) {
-        return new MemberWriteHandler();
+    public ChannelOutboundHandler createWriteHandler(TcpIpConnection connection) {
+        return new MemberChannelOutboundHandler();
     }
 
 }

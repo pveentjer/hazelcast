@@ -17,7 +17,7 @@
 package com.hazelcast.internal.networking.nonblocking;
 
 import com.hazelcast.internal.metrics.Probe;
-import com.hazelcast.internal.networking.ReadHandler;
+import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.internal.networking.SocketReader;
 import com.hazelcast.internal.networking.nonblocking.iobalancer.IOBalancer;
@@ -36,7 +36,7 @@ import static java.nio.channels.SelectionKey.OP_READ;
  *
  * When the {@link NonBlockingIOThread} receives a read event from the {@link java.nio.channels.Selector}, then the
  * {@link #handle()} is called to read out the data from the socket into a bytebuffer and hand it over to the
- * {@link ReadHandler} to get processed.
+ * {@link ChannelInboundHandler} to get processed.
  */
 public final class NonBlockingSocketReader
         extends AbstractHandler
@@ -51,7 +51,7 @@ public final class NonBlockingSocketReader
     @Probe(name = "priorityFramesRead")
     private final SwCounter priorityFramesRead = newSwCounter();
 
-    private final ReadHandler readHandler;
+    private final ChannelInboundHandler readHandler;
     private volatile long lastReadTime;
 
     public NonBlockingSocketReader(
@@ -59,7 +59,7 @@ public final class NonBlockingSocketReader
             NonBlockingIOThread ioThread,
             ILogger logger,
             IOBalancer balancer,
-            ReadHandler readHandler,
+            ChannelInboundHandler readHandler,
             ByteBuffer inputBuffer) {
         super(connection, ioThread, OP_READ, logger, balancer);
         this.readHandler = readHandler;

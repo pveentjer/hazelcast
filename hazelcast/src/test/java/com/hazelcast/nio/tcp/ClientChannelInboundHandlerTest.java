@@ -22,9 +22,9 @@ import static org.mockito.Mockito.verify;
 
 @RunWith(HazelcastParallelClassRunner.class)
 @Category({QuickTest.class, ParallelTest.class})
-public class ClientReadHandlerTest {
+public class ClientChannelInboundHandlerTest {
 
-    private ClientReadHandler readHandler;
+    private ClientChannelInboundHandler readHandler;
     private IOService ioService;
     private Connection connection;
     private SwCounter counter;
@@ -34,7 +34,7 @@ public class ClientReadHandlerTest {
         ioService = mock(IOService.class);
         connection = mock(Connection.class);
         counter = SwCounter.newSwCounter();
-        readHandler = new ClientReadHandler(counter, connection, ioService);
+        readHandler = new ClientChannelInboundHandler(counter, connection, ioService);
     }
 
     @Test

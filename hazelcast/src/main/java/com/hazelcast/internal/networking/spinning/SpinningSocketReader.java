@@ -18,7 +18,7 @@ package com.hazelcast.internal.networking.spinning;
 
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
-import com.hazelcast.internal.networking.ReadHandler;
+import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.internal.networking.SocketReader;
 import com.hazelcast.internal.util.counters.SwCounter;
@@ -39,14 +39,14 @@ public class SpinningSocketReader extends AbstractHandler implements SocketReade
     private final SwCounter normalFramesRead = newSwCounter();
     @Probe(name = "priorityFramesRead")
     private final SwCounter priorityFramesRead = newSwCounter();
-    private final ReadHandler readHandler;
+    private final ChannelInboundHandler readHandler;
     private final ByteBuffer inputBuffer;
     private volatile long lastReadTime;
 
     public SpinningSocketReader(SocketConnection connection,
                                 ILogger logger,
                                 IOOutOfMemoryHandler oomeHandler,
-                                ReadHandler readHandler,
+                                ChannelInboundHandler readHandler,
                                 ByteBuffer inputBuffer) {
         super(connection, logger, oomeHandler);
         this.readHandler = readHandler;

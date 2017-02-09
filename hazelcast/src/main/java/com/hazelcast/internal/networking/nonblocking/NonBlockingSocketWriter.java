@@ -17,9 +17,9 @@
 package com.hazelcast.internal.networking.nonblocking;
 
 import com.hazelcast.internal.metrics.Probe;
+import com.hazelcast.internal.networking.ChannelOutboundHandler;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.internal.networking.SocketWriter;
-import com.hazelcast.internal.networking.WriteHandler;
 import com.hazelcast.internal.networking.nonblocking.iobalancer.IOBalancer;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
@@ -68,7 +68,7 @@ public final class NonBlockingSocketWriter
     private final SwCounter normalFramesWritten = newSwCounter();
     @Probe(name = "priorityFramesWritten")
     private final SwCounter priorityFramesWritten = newSwCounter();
-    private final WriteHandler writeHandler;
+    private final ChannelOutboundHandler writeHandler;
 
     private volatile OutboundFrame currentFrame;
     private volatile long lastWriteTime;
@@ -82,7 +82,7 @@ public final class NonBlockingSocketWriter
                                    NonBlockingIOThread ioThread,
                                    ILogger logger,
                                    IOBalancer balancer,
-                                   WriteHandler writeHandler,
+                                   ChannelOutboundHandler writeHandler,
                                    ByteBuffer outputBuffer) {
         super(connection, ioThread, OP_WRITE, logger, balancer);
         this.writeHandler = writeHandler;
@@ -100,7 +100,7 @@ public final class NonBlockingSocketWriter
     }
 
     @Override
-    public WriteHandler getWriteHandler() {
+    public ChannelOutboundHandler getWriteHandler() {
         return writeHandler;
     }
 
@@ -134,7 +134,7 @@ public final class NonBlockingSocketWriter
         return scheduled.get() ? 1 : 0;
     }
 
-    // accessed from ReadHandler and SocketConnector
+    // accessed from ChannelInboundHandler and SocketConnector
     @Override
     public void handshake() {
         final CountDownLatch latch = new CountDownLatch(1);
@@ -208,32 +208,32 @@ public final class NonBlockingSocketWriter
     }
 
     /**
-     * Makes sure this WriteHandler is scheduled to be executed by the IO thread.
+     * Makes sure this ChannelOutboundHandler is scheduled to be executed by the IO thread.
      * <p/>
      * This call is made by 'outside' threads that interact with the connection. For example when a frame is placed
      * on the connection to be written. It will never be made by an IO thread.
      * <p/>
-     * If the WriteHandler already is scheduled, the call is ignored.
+     * If the ChannelOutboundHandler already is scheduled, the call is ignored.
      */
     private void schedule() {
         if (scheduled.get()) {
-            // So this WriteHandler is still scheduled, we don't need to schedule it again
+            // So this ChannelOutboundHandler is still scheduled, we don't need to schedule it again
             return;
         }
 
         if (!scheduled.compareAndSet(false, true)) {
-            // Another thread already has scheduled this WriteHandler, we are done. It
+            // Another thread already has scheduled this ChannelOutboundHandler, we are done. It
             // doesn't matter which thread does the scheduling, as long as it happens.
             return;
         }
 
-        // We managed to schedule this WriteHandler. This means we need to add a task to
+        // We managed to schedule this ChannelOutboundHandler. This means we need to add a task to
         // the ioThread and give it a kick so that it processes our frames.
         ioThread.addTaskAndWakeup(this);
     }
 
     /**
-     * Tries to unschedule this WriteHandler.
+     * Tries to unschedule this ChannelOutboundHandler.
      * <p/>
      * It will only be unscheduled if:
      * - the outputBuffer is empty
@@ -253,7 +253,7 @@ public final class NonBlockingSocketWriter
             registerOp(OP_WRITE);
 
             // If the outputBuffer is not empty, we don't need to unschedule ourselves. This is because the
-            // WriteHandler will be triggered by a nio write event to continue sending data.
+            // ChannelOutboundHandler will be triggered by a nio write event to continue sending data.
             return;
         }
 
@@ -270,7 +270,7 @@ public final class NonBlockingSocketWriter
         // So there are frames, but we just unscheduled ourselves. If we don't try to reschedule, then these
         // Frames are at risk not to be send.
         if (!scheduled.compareAndSet(false, true)) {
-            //someone else managed to schedule this WriteHandler, so we are done.
+            //someone else managed to schedule this ChannelOutboundHandler, so we are done.
             return;
         }
 
@@ -424,7 +424,7 @@ public final class NonBlockingSocketWriter
      */
     private final class StartMigrationTask implements Runnable {
         // field is called 'theNewOwner' to prevent any ambiguity problems with the writeHandler.newOwner.
-        // Else you get a lot of ugly WriteHandler.this.newOwner is ...
+        // Else you get a lot of ugly ChannelOutboundHandler.this.newOwner is ...
         private final NonBlockingIOThread theNewOwner;
 
         StartMigrationTask(NonBlockingIOThread theNewOwner) {

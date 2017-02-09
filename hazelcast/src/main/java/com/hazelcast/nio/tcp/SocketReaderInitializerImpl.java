@@ -31,7 +31,7 @@ public class SocketReaderInitializerImpl implements SocketReaderInitializer<TcpI
 //        TcpIpConnectionManager connectionManager = connection.getConnectionManager();
 //        IOService ioService = connectionManager.getIoService();
 //
-//        ReadHandler readHandler;
+//        ChannelInboundHandler readHandler;
 //        SocketWriter socketWriter = connection.getSocketWriter();
 //        if (CLUSTER.equals(protocol)) {
 //            initInputBuffer(connection, reader, ioService.getSocketReceiveBufferSize());
@@ -41,17 +41,17 @@ public class SocketReaderInitializerImpl implements SocketReaderInitializer<TcpI
 //        } else if (CLIENT_BINARY_NEW.equals(protocol)) {
 //            initInputBuffer(connection, reader, ioService.getSocketClientReceiveBufferSize());
 //            socketWriter.handshake(CLIENT_BINARY_NEW);
-//            readHandler = new ClientReadHandler(reader.getNormalFramesReadCounter(), connection, ioService);
+//            readHandler = new ClientChannelInboundHandler(reader.getNormalFramesReadCounter(), connection, ioService);
 //        } else {
 //            ByteBuffer inputBuffer = initInputBuffer(connection, reader, ioService.getSocketReceiveBufferSize());
 //            socketWriter.handshake(TEXT);
 //           // inputBuffer.put(protocolBuffer.array());
-//            readHandler = new TextReadHandler(connection);
+//            readHandler = new TextChannelInboundHandler(connection);
 //            connectionManager.incrementTextConnections();
 //        }
 //
 //        if (readHandler == null) {
-//            throw new IOException("Could not initialize ReadHandler!");
+//            throw new IOException("Could not initialize ChannelInboundHandler!");
 //        }
 //
 //        reader.initReadHandler(readHandler);

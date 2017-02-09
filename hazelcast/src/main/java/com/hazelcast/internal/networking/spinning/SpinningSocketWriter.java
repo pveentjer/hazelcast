@@ -17,10 +17,10 @@
 package com.hazelcast.internal.networking.spinning;
 
 import com.hazelcast.internal.metrics.Probe;
+import com.hazelcast.internal.networking.ChannelOutboundHandler;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.internal.networking.SocketWriter;
-import com.hazelcast.internal.networking.WriteHandler;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.OutboundFrame;
@@ -56,13 +56,13 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
     @Probe(name = "priorityFramesWritten")
     private final SwCounter priorityFramesWritten = newSwCounter();
     private volatile long lastWriteTime;
-    private final WriteHandler writeHandler;
+    private final ChannelOutboundHandler writeHandler;
     private volatile OutboundFrame currentFrame;
 
     public SpinningSocketWriter(SocketConnection connection,
                                 ILogger logger,
                                 IOOutOfMemoryHandler oomeHandler,
-                                WriteHandler writeHandler,
+                                ChannelOutboundHandler writeHandler,
                                 ByteBuffer outputBuffer) {
         super(connection, logger, oomeHandler);
         this.writeHandler = writeHandler;
@@ -114,11 +114,11 @@ public class SpinningSocketWriter extends AbstractHandler implements SocketWrite
     }
 
     @Override
-    public WriteHandler getWriteHandler() {
+    public ChannelOutboundHandler getWriteHandler() {
         return writeHandler;
     }
 
-    // accessed from ReadHandler and SocketConnector
+    // accessed from ChannelInboundHandler and SocketConnector
     @Override
     public void handshake() {
         final CountDownLatch latch = new CountDownLatch(1);

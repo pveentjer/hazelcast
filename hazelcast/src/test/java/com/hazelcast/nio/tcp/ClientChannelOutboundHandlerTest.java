@@ -18,13 +18,13 @@ import static org.junit.Assert.assertTrue;
 
 @RunWith(HazelcastParallelClassRunner.class)
 @Category({QuickTest.class, ParallelTest.class})
-public class ClientWriteHandlerTest extends HazelcastTestSupport {
+public class ClientChannelOutboundHandlerTest extends HazelcastTestSupport {
 
-    private ClientWriteHandler writeHandler;
+    private ClientChannelOutboundHandler writeHandler;
 
     @Before
     public void setup() {
-        writeHandler = new ClientWriteHandler();
+        writeHandler = new ClientChannelOutboundHandler();
     }
 
     @Test

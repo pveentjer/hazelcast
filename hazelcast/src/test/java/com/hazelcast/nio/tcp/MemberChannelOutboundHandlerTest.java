@@ -19,15 +19,15 @@ import static org.junit.Assert.assertTrue;
 
 @RunWith(HazelcastParallelClassRunner.class)
 @Category({QuickTest.class, ParallelTest.class})
-public class MemberWriteHandlerTest extends HazelcastTestSupport {
+public class MemberChannelOutboundHandlerTest extends HazelcastTestSupport {
 
     private InternalSerializationService serializationService;
-    private MemberWriteHandler writeHandler;
+    private MemberChannelOutboundHandler writeHandler;
 
     @Before
     public void setup() {
         serializationService = new DefaultSerializationServiceBuilder().build();
-        writeHandler = new MemberWriteHandler();
+        writeHandler = new MemberChannelOutboundHandler();
     }
 
     @Test

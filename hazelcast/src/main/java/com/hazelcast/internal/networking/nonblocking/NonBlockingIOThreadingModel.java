@@ -18,14 +18,14 @@ package com.hazelcast.internal.networking.nonblocking;
 
 import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.internal.metrics.MetricsRegistry;
+import com.hazelcast.internal.networking.ChannelOutboundHandler;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
 import com.hazelcast.internal.networking.IOThreadingModel;
 import com.hazelcast.internal.networking.ProtocolBasedFactory;
-import com.hazelcast.internal.networking.ReadHandler;
+import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.internal.networking.SocketReader;
 import com.hazelcast.internal.networking.SocketWriter;
-import com.hazelcast.internal.networking.WriteHandler;
 import com.hazelcast.internal.networking.nonblocking.iobalancer.IOBalancer;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
@@ -60,9 +60,9 @@ public class NonBlockingIOThreadingModel
     private final IOOutOfMemoryHandler oomeHandler;
     private final int balanceIntervalSeconds;
     private final ProtocolBasedFactory<ByteBuffer> inputBufferFactory;
-    private final ProtocolBasedFactory<ReadHandler> readHandlerFactory;
+    private final ProtocolBasedFactory<ChannelInboundHandler> readHandlerFactory;
     private final ProtocolBasedFactory<ByteBuffer> outputBufferFactory;
-    private final ProtocolBasedFactory<WriteHandler> writeHandlerFactory;
+    private final ProtocolBasedFactory<ChannelOutboundHandler> writeHandlerFactory;
 
     // The selector mode determines how IO threads will block (or not) on the Selector:
     //  select:         this is the default mode, uses Selector.select(long timeout)
@@ -85,9 +85,9 @@ public class NonBlockingIOThreadingModel
             int outputThreadCount,
             int balanceIntervalSeconds,
             ProtocolBasedFactory<ByteBuffer> inputBufferFactory,
-            ProtocolBasedFactory<ReadHandler> readHandlerFactory,
+            ProtocolBasedFactory<ChannelInboundHandler> readHandlerFactory,
             ProtocolBasedFactory<ByteBuffer> outputBufferFactory,
-            ProtocolBasedFactory<WriteHandler> writeHandlerFactory) {
+            ProtocolBasedFactory<ChannelOutboundHandler> writeHandlerFactory) {
         this.hazelcastThreadGroup = hazelcastThreadGroup;
         this.metricsRegistry = metricsRegistry;
         this.loggingService = loggingService;

@@ -28,21 +28,21 @@ public class SocketWriterInitializerImpl implements SocketWriterInitializer<TcpI
 //
 //    @Override
 //    public void init(TcpIpConnection connection, SocketWriter writer, String protocol) {
-//        logger.fine("Initializing SocketWriter WriteHandler with " + Protocols.toUserFriendlyString(protocol));
+//        logger.fine("Initializing SocketWriter ChannelOutboundHandler with " + Protocols.toUserFriendlyString(protocol));
 //
 //        initHandler(connection, writer, protocol);
 //        initOutputBuffer(connection, writer, protocol);
 //    }
 //
 //    private void initHandler(TcpIpConnection connection, SocketWriter writer, String protocol) {
-//        WriteHandler handler;
+//        ChannelOutboundHandler handler;
 //        if (CLUSTER.equals(protocol)) {
 //            IOService ioService = connection.getConnectionManager().getIoService();
 //            handler = ioService.createWriteHandler(connection);
 //        } else if (CLIENT_BINARY_NEW.equals(protocol)) {
-//            handler = new ClientWriteHandler();
+//            handler = new ClientChannelOutboundHandler();
 //        } else {
-//            handler = new TextWriteHandler(connection);
+//            handler = new TextChannelOutboundHandler(connection);
 //        }
 //        writer.initWriteHandler(handler);
 //    }

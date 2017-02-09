@@ -17,20 +17,21 @@
 package com.hazelcast.internal.networking;
 
 import com.hazelcast.nio.OutboundFrame;
+import com.hazelcast.nio.ascii.TextChannelInboundHandler;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 
 import java.io.Closeable;
 
 /**
  * Each {@link TcpIpConnection} has a {@link SocketWriter} and it writes {@link OutboundFrame} instances to the socket. Copying
- * the Frame instances to the byte-buffer is done using the {@link WriteHandler}.
+ * the Frame instances to the byte-buffer is done using the {@link ChannelOutboundHandler}.
  *
  * Each {@link TcpIpConnection} has its own {@link SocketWriter} instance.
  *
- * Before Hazelcast 3.6 the name of this interface was WriteHandler.
+ * Before Hazelcast 3.6 the name of this interface was ChannelOutboundHandler.
  *
  * @see SocketReader
- * @see ReadHandler
+ * @see ChannelInboundHandler
  * @see IOThreadingModel
  */
 //todo: rename this class to ChannelOutboundHandler
@@ -64,13 +65,13 @@ public interface SocketWriter extends Closeable {
     void write(OutboundFrame frame);
 
     /**
-     * Gets the {@link WriteHandler} that belongs to this SocketWriter.
+     * Gets the {@link ChannelOutboundHandler} that belongs to this SocketWriter.
      *
-     * This method exists for the {@link com.hazelcast.nio.ascii.TextReadHandler}, but probably should be deleted.
+     * This method exists for the {@link TextChannelInboundHandler}, but probably should be deleted.
      *
-     * @return the WriteHandler
+     * @return the ChannelOutboundHandler
      */
-    WriteHandler getWriteHandler();
+    ChannelOutboundHandler getWriteHandler();
 
     /**
      * Does the handshake. This initializes the connection to start sending/receiving data. This method is only called

@@ -27,9 +27,9 @@ import com.hazelcast.instance.NodeState;
 import com.hazelcast.instance.OutOfMemoryErrorDispatcher;
 import com.hazelcast.internal.ascii.TextCommandService;
 import com.hazelcast.internal.cluster.impl.ClusterServiceImpl;
+import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
-import com.hazelcast.internal.networking.ReadHandler;
-import com.hazelcast.internal.networking.WriteHandler;
+import com.hazelcast.internal.networking.ChannelOutboundHandler;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.logging.LoggingService;
 import com.hazelcast.nio.tcp.HandshakeFactory;
@@ -300,12 +300,12 @@ public class NodeIOService implements IOService {
     }
 
     @Override
-    public ReadHandler createReadHandler(TcpIpConnection connection) {
+    public ChannelInboundHandler createReadHandler(TcpIpConnection connection) {
         return node.getNodeExtension().createReadHandler(connection, this);
     }
 
     @Override
-    public WriteHandler createWriteHandler(TcpIpConnection connection) {
+    public ChannelOutboundHandler createWriteHandler(TcpIpConnection connection) {
         return node.getNodeExtension().createWriteHandler(connection, this);
     }
 

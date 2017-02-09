@@ -32,8 +32,8 @@ class ClientSocketReaderInitializer implements SocketReaderInitializer<ClientCon
 //    public void init(final ClientConnection connection, SocketReader reader) throws IOException {
 //        reader.initInputBuffer(IOUtil.newByteBuffer(bufferSize, direct));
 //
-//        ReadHandler readHandler = new ClientMessageReadHandler(reader.getNormalFramesReadCounter(),
-//                new ClientMessageReadHandler.MessageHandler() {
+//        ChannelInboundHandler readHandler = new ClientMessageChannelInboundHandler(reader.getNormalFramesReadCounter(),
+//                new ClientMessageChannelInboundHandler.MessageHandler() {
 //                    private final ClientConnectionManager connectionManager = connection.getConnectionManager();
 //                    @Override
 //                    public void handleMessage(ClientMessage message) {

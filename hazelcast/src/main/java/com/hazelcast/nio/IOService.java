@@ -22,9 +22,9 @@ import com.hazelcast.config.SocketInterceptorConfig;
 import com.hazelcast.config.SymmetricEncryptionConfig;
 import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.internal.ascii.TextCommandService;
+import com.hazelcast.internal.networking.ChannelOutboundHandler;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
-import com.hazelcast.internal.networking.ReadHandler;
-import com.hazelcast.internal.networking.WriteHandler;
+import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.logging.LoggingService;
 import com.hazelcast.nio.tcp.HandshakeFactory;
@@ -136,7 +136,7 @@ public interface IOService {
 
     MemberSocketInterceptor getMemberSocketInterceptor();
 
-    ReadHandler createReadHandler(TcpIpConnection connection);
+    ChannelInboundHandler createReadHandler(TcpIpConnection connection);
 
-    WriteHandler createWriteHandler(TcpIpConnection connection);
+    ChannelOutboundHandler createWriteHandler(TcpIpConnection connection);
 }

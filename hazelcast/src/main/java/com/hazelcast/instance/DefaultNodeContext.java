@@ -17,11 +17,11 @@
 package com.hazelcast.instance;
 
 import com.hazelcast.cluster.Joiner;
+import com.hazelcast.internal.networking.ChannelInboundHandler;
+import com.hazelcast.internal.networking.ChannelOutboundHandler;
 import com.hazelcast.internal.networking.IOThreadingModel;
 import com.hazelcast.internal.networking.ProtocolBasedFactory;
-import com.hazelcast.internal.networking.ReadHandler;
 import com.hazelcast.internal.networking.SocketConnection;
-import com.hazelcast.internal.networking.WriteHandler;
 import com.hazelcast.internal.networking.nonblocking.NonBlockingIOThreadingModel;
 import com.hazelcast.logging.LoggingServiceImpl;
 import com.hazelcast.nio.ConnectionManager;
@@ -95,9 +95,9 @@ public class DefaultNodeContext implements NodeContext {
                         return ByteBuffer.allocate(ioService.getSocketReceiveBufferSize());
                     }
                 },
-                new ProtocolBasedFactory<ReadHandler>() {
+                new ProtocolBasedFactory<ChannelInboundHandler>() {
                     @Override
-                    public ReadHandler create(SocketConnection connection) {
+                    public ChannelInboundHandler create(SocketConnection connection) {
                         return ioService.createReadHandler((TcpIpConnection) connection);
                     }
                 },
@@ -107,9 +107,9 @@ public class DefaultNodeContext implements NodeContext {
                         return ByteBuffer.allocate(ioService.getSocketSendBufferSize());
                     }
                 },
-                new ProtocolBasedFactory<WriteHandler>() {
+                new ProtocolBasedFactory<ChannelOutboundHandler>() {
                     @Override
-                    public WriteHandler create(SocketConnection connection) {
+                    public ChannelOutboundHandler create(SocketConnection connection) {
                         return ioService.createWriteHandler((TcpIpConnection) connection);
                     }
                 });

@@ -17,14 +17,14 @@
 package com.hazelcast.internal.networking.spinning;
 
 import com.hazelcast.instance.HazelcastThreadGroup;
+import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
 import com.hazelcast.internal.networking.IOThreadingModel;
 import com.hazelcast.internal.networking.ProtocolBasedFactory;
-import com.hazelcast.internal.networking.ReadHandler;
 import com.hazelcast.internal.networking.SocketConnection;
 import com.hazelcast.internal.networking.SocketReader;
 import com.hazelcast.internal.networking.SocketWriter;
-import com.hazelcast.internal.networking.WriteHandler;
+import com.hazelcast.internal.networking.ChannelOutboundHandler;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
 
@@ -53,17 +53,17 @@ public class SpinningIOThreadingModel implements IOThreadingModel {
     private final SpinningOutputThread outThread;
     private final IOOutOfMemoryHandler oomeHandler;
     private final ProtocolBasedFactory<ByteBuffer> inputBufferFactory;
-    private final ProtocolBasedFactory<ReadHandler> readHandlerFactory;
+    private final ProtocolBasedFactory<ChannelInboundHandler> readHandlerFactory;
     private final ProtocolBasedFactory<ByteBuffer> outputBufferFactory;
-    private final ProtocolBasedFactory<WriteHandler> writeHandlerFactory;
+    private final ProtocolBasedFactory<ChannelOutboundHandler> writeHandlerFactory;
 
     public SpinningIOThreadingModel(LoggingService loggingService,
                                     HazelcastThreadGroup hazelcastThreadGroup,
                                     IOOutOfMemoryHandler oomeHandler,
                                     ProtocolBasedFactory<ByteBuffer> inputBufferFactory,
-                                    ProtocolBasedFactory<ReadHandler> readHandlerFactory,
+                                    ProtocolBasedFactory<ChannelInboundHandler> readHandlerFactory,
                                     ProtocolBasedFactory<ByteBuffer> outputBufferFactory,
-                                    ProtocolBasedFactory<WriteHandler> writeHandlerFactory) {
+                                    ProtocolBasedFactory<ChannelOutboundHandler> writeHandlerFactory) {
         this.logger = loggingService.getLogger(SpinningIOThreadingModel.class);
         this.loggingService = loggingService;
         this.oomeHandler = oomeHandler;
