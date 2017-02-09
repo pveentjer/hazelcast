@@ -24,6 +24,7 @@ import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.IOService;
 
 import java.io.IOException;
+import java.net.Socket;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -34,6 +35,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
+import static com.hazelcast.nio.IOService.KILO_BYTE;
 import static com.hazelcast.nio.IOUtil.closeResource;
 import static java.lang.Math.max;
 import static java.lang.System.currentTimeMillis;
@@ -130,6 +132,17 @@ public final class TcpIpConnectionConnector {
             return port;
         }
     }
+
+    protected void initSocket(Socket socket) throws Exception {
+        if (ioService.getSocketLingerSeconds() > 0) {
+            socket.setSoLinger(true, ioService.getSocketLingerSeconds());
+        }
+        socket.setKeepAlive(ioService.getSocketKeepAlive());
+        socket.setTcpNoDelay(ioService.getSocketNoDelay());
+        socket.setReceiveBufferSize(ioService.getSocketReceiveBufferSize() * KILO_BYTE);
+        socket.setSendBufferSize(ioService.getSocketSendBufferSize() * KILO_BYTE);
+    }
+
     public synchronized void shutdown() {
         if (!live) {
             return;
@@ -329,7 +342,7 @@ public final class TcpIpConnectionConnector {
 
         private void configureAndAssignSocket(SocketChannel socketChannel) {
             try {
-                connectionManager.initSocket(socketChannel.socket());
+                initSocket(socketChannel.socket());
                 //connectionManager.interceptSocket(socketChannel.socket(), true);
                 socketChannel.configureBlocking(false);
                 //socketChannel.configureBlocking(ioThreadingModel.isBlocking());

@@ -40,6 +40,8 @@ import org.junit.runner.RunWith;
 import java.io.IOException;
 import java.net.Socket;
 
+import static org.junit.Assert.assertEquals;
+
 @RunWith(HazelcastSerialClassRunner.class)
 @Category(NightlyTest.class)
 public class IOBalancerMemoryLeakTest extends HazelcastTestSupport {
@@ -70,8 +72,8 @@ public class IOBalancerMemoryLeakTest extends HazelcastTestSupport {
             public void run() throws Exception {
                 int inHandlerSize = ioBalancer.getInLoadTracker().getHandlers().size();
                 int outHandlerSize = ioBalancer.getOutLoadTracker().getHandlers().size();
-                Assert.assertEquals(0, inHandlerSize);
-                Assert.assertEquals(0, outHandlerSize);
+                assertEquals(0, inHandlerSize);
+                assertEquals(0, outHandlerSize);
             }
         });
     }
@@ -111,7 +113,8 @@ public class IOBalancerMemoryLeakTest extends HazelcastTestSupport {
         assertJoinable(threads);
 
         TcpIpConnectionManager connectionManager = (TcpIpConnectionManager) getConnectionManager(instance);
-        final IOBalancer ioBalancer = connectionManager.getIoBalancer();
+        NonBlockingIOThreadingModel threadingModel = (NonBlockingIOThreadingModel)connectionManager.getIOThreadingModel();
+        final IOBalancer ioBalancer = threadingModel.getIOBalancer();
         assertTrueEventually(new AssertTask() {
             @Override
             public void run() throws Exception {
@@ -123,12 +126,12 @@ public class IOBalancerMemoryLeakTest extends HazelcastTestSupport {
                 int outHandlerEventsCount = outLoadTracker.getHandlerEventsCounter().keySet().size();
                 int inLastEventsCount = inLoadTracker.getLastEventCounter().keySet().size();
                 int outLastEventsCount = outLoadTracker.getLastEventCounter().keySet().size();
-                Assert.assertEquals(0, inHandlerSize);
-                Assert.assertEquals(0, outHandlerSize);
-                Assert.assertEquals(0, inHandlerEventsCount);
-                Assert.assertEquals(0, outHandlerEventsCount);
-                Assert.assertEquals(0, inLastEventsCount);
-                Assert.assertEquals(0, outLastEventsCount);
+                assertEquals(0, inHandlerSize);
+                assertEquals(0, outHandlerSize);
+                assertEquals(0, inHandlerEventsCount);
+                assertEquals(0, outHandlerEventsCount);
+                assertEquals(0, inLastEventsCount);
+                assertEquals(0, outLastEventsCount);
             }
         });
     }

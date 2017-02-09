@@ -60,6 +60,7 @@ import static com.hazelcast.internal.util.counters.MwCounter.newMwCounter;
 import static com.hazelcast.nio.IOService.KILO_BYTE;
 import static com.hazelcast.nio.IOUtil.closeResource;
 import static com.hazelcast.util.Preconditions.checkNotNull;
+import static java.util.Collections.newSetFromMap;
 
 public class TcpIpConnectionManager implements ConnectionManager, PacketHandler {
 
@@ -90,16 +91,13 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
             new ConcurrentHashMap<Address, TcpIpConnectionMonitor>(100);
 
     @Probe(name = "inProgressCount")
-    private final Set<Address> connectionsInProgress =
-            Collections.newSetFromMap(new ConcurrentHashMap<Address, Boolean>());
+    private final Set<Address> connectionsInProgress = newSetFromMap(new ConcurrentHashMap<Address, Boolean>());
 
     @Probe(name = "acceptedSocketCount", level = MANDATORY)
-    private final Set<SocketChannel> acceptedSockets =
-            Collections.newSetFromMap(new ConcurrentHashMap<SocketChannel, Boolean>());
+    private final Set<SocketChannel> acceptedSockets = newSetFromMap(new ConcurrentHashMap<SocketChannel, Boolean>());
 
     @Probe(name = "activeCount", level = MANDATORY)
-    private final Set<TcpIpConnection> activeConnections =
-            Collections.newSetFromMap(new ConcurrentHashMap<TcpIpConnection, Boolean>());
+    private final Set<TcpIpConnection> activeConnections = newSetFromMap(new ConcurrentHashMap<TcpIpConnection, Boolean>());
 
     @Probe(name = "textCount", level = MANDATORY)
     private final AtomicInteger allTextConnections = new AtomicInteger();
@@ -113,7 +111,6 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
 
     private final ServerSocketChannel serverSocketChannel;
 
-      // accessed only in synchronized block
     private volatile TcpIpConnectionConnector connector;
 
     @Probe
@@ -150,7 +147,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         if (!isSocketInterceptorEnabled()) {
             return;
         }
-        final MemberSocketInterceptor memberSocketInterceptor = ioService.getMemberSocketInterceptor();
+        MemberSocketInterceptor memberSocketInterceptor = ioService.getMemberSocketInterceptor();
         if (memberSocketInterceptor == null) {
             return;
         }
@@ -162,21 +159,13 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
     }
 
     public boolean isSocketInterceptorEnabled() {
-        final SocketInterceptorConfig socketInterceptorConfig = ioService.getSocketInterceptorConfig();
+        SocketInterceptorConfig socketInterceptorConfig = ioService.getSocketInterceptorConfig();
         return socketInterceptorConfig != null && socketInterceptorConfig.isEnabled();
     }
 
     // just for testing
     public Set<TcpIpConnection> getActiveConnections() {
         return activeConnections;
-    }
-
-    // just for testing
-    public IOBalancer getIoBalancer() {
-        if (ioThreadingModel instanceof NonBlockingIOThreadingModel) {
-            return ((NonBlockingIOThreadingModel) ioThreadingModel).getIOBalancer();
-        }
-        return null;
     }
 
     @Override
@@ -431,17 +420,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         }
     }
 
-    protected void initSocket(Socket socket) throws Exception {
-        if (ioService.getSocketLingerSeconds() > 0) {
-            socket.setSoLinger(true, ioService.getSocketLingerSeconds());
-        }
-        socket.setKeepAlive(ioService.getSocketKeepAlive());
-        socket.setTcpNoDelay(ioService.getSocketNoDelay());
-        socket.setReceiveBufferSize(ioService.getSocketReceiveBufferSize() * KILO_BYTE);
-        socket.setSendBufferSize(ioService.getSocketSendBufferSize() * KILO_BYTE);
-    }
-
-    @Override
+     @Override
     public synchronized void start() {
         if (live) {
             return;

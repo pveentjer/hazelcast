@@ -127,7 +127,7 @@ public class InitConnectionTask implements Runnable {
 
     private void tryToConnect(InetSocketAddress socketAddress, int timeout) throws Exception {
         SocketChannel socketChannel = SocketChannel.open();
-        connectionManager.initSocket(socketChannel.socket());
+        connector.initSocket(socketChannel.socket());
         if (ioService.isSocketBind()) {
             bindSocket(socketChannel);
         }
