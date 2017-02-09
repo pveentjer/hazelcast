@@ -17,6 +17,7 @@
 package com.hazelcast.internal.networking.spinning;
 
 import com.hazelcast.instance.HazelcastThreadGroup;
+import com.hazelcast.internal.networking.BufferingOutboundHandler;
 import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
 import com.hazelcast.internal.networking.IOThreadingModel;
@@ -81,18 +82,18 @@ public class SpinningIOThreadingModel implements IOThreadingModel {
     }
 
     @Override
-    public ChannelWriter newSocketWriter(SocketConnection connection) {
+    public ChannelWriter newChannelWriter(SocketConnection connection) {
         ILogger logger = loggingService.getLogger(SpinningChannelWriter.class);
         return new SpinningChannelWriter(
                 connection,
                 logger,
                 oomeHandler,
-                writeHandlerFactory.create(connection),
+                (BufferingOutboundHandler)writeHandlerFactory.create(connection),
                 outputBufferFactory.create(connection));
     }
 
     @Override
-    public ChannelReader newSocketReader(SocketConnection connection) {
+    public ChannelReader newChannelReader(SocketConnection connection) {
         ILogger logger = loggingService.getLogger(SpinningChannelReader.class);
         return new SpinningChannelReader(
                 connection,

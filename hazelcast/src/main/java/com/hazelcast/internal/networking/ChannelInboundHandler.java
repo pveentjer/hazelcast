@@ -47,5 +47,5 @@ public interface ChannelInboundHandler {
      *                   (e.g. when a Packet fails to get processed). When an exception is thrown, the TcpIpConnection
      *                   is closed. There is no point continuing with a potentially corrupted stream.
      */
-    void onRead(ByteBuffer src) throws Exception;
+    void read(ByteBuffer src) throws Exception;
 }

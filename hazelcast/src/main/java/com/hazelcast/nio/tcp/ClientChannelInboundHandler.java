@@ -50,8 +50,8 @@ public class ClientChannelInboundHandler implements ChannelInboundHandler, Clien
     }
 
     @Override
-    public void onRead(ByteBuffer src) throws Exception {
-        readHandler.onRead(src);
+    public void read(ByteBuffer src) throws Exception {
+        readHandler.read(src);
     }
 
     @Override

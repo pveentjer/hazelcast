@@ -100,7 +100,7 @@ public class SpinningChannelReader extends AbstractHandler implements ChannelRea
         lastReadTime = currentTimeMillis();
         bytesRead.inc(readBytes);
         inputBuffer.flip();
-        readHandler.onRead(inputBuffer);
+        readHandler.read(inputBuffer);
         if (inputBuffer.hasRemaining()) {
             inputBuffer.compact();
         } else {

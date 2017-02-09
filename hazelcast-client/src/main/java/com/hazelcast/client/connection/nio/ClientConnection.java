@@ -91,8 +91,8 @@ public class ClientConnection implements SocketConnection, DiscardableMetricsPro
         this.socketChannel = socketChannel;
         this.connectionId = connectionId;
         this.logger = client.getLoggingService().getLogger(ClientConnection.class);
-        this.reader = ioThreadingModel.newSocketReader(this);
-        this.writer = ioThreadingModel.newSocketWriter(this);
+        this.reader = ioThreadingModel.newChannelReader(this);
+        this.writer = ioThreadingModel.newChannelWriter(this);
     }
 
     @Override
@@ -193,7 +193,7 @@ public class ClientConnection implements SocketConnection, DiscardableMetricsPro
 
     @Override
     public long lastWriteTimeMillis() {
-        return writer.lastWriteTimeMillis();
+        return writer.lastWriteMillis();
     }
 
     @Override

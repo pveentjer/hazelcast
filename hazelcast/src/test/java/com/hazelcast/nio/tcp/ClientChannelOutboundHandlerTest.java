@@ -34,7 +34,7 @@ public class ClientChannelOutboundHandlerTest extends HazelcastTestSupport {
                 .setMessageType(1);
 
         ByteBuffer bb = ByteBuffer.allocate(1000);
-        boolean result = writeHandler.onWrite(message, bb);
+        boolean result = writeHandler.write(message, bb);
 
         assertTrue(result);
         bb.flip();

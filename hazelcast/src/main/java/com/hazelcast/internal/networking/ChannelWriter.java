@@ -17,7 +17,6 @@
 package com.hazelcast.internal.networking;
 
 import com.hazelcast.nio.OutboundFrame;
-import com.hazelcast.nio.ascii.TextChannelInboundHandler;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 
 import java.io.Closeable;
@@ -34,16 +33,7 @@ import java.io.Closeable;
  * @see ChannelInboundHandler
  * @see IOThreadingModel
  */
-//todo: rename this class to ChannelOutboundHandler
 public interface ChannelWriter extends Closeable {
-
-    /**
-     * Returns the total number of packets (urgent and non normal priority) pending to be written to the socket.
-     *
-     * @return total number of pending packets.
-     */
-    // todo: remove
-    int totalFramesPending();
 
     /**
      * Returns the last {@link com.hazelcast.util.Clock#currentTimeMillis()} that a write to the socket completed.
@@ -53,7 +43,7 @@ public interface ChannelWriter extends Closeable {
      *
      * @return the last time something was written to the socket.
      */
-    long lastWriteTimeMillis();
+    long lastWriteMillis();
 
     /**
      * Offers a Frame to be written to the socket.
@@ -63,15 +53,6 @@ public interface ChannelWriter extends Closeable {
      * @param frame the Frame to write.
      */
     void write(OutboundFrame frame);
-
-    /**
-     * Gets the {@link ChannelOutboundHandler} that belongs to this ChannelWriter.
-     *
-     * This method exists for the {@link TextChannelInboundHandler}, but probably should be deleted.
-     *
-     * @return the ChannelOutboundHandler
-     */
-    ChannelOutboundHandler getChannelOutboundHandler();
 
     /**
      * Does the handshake. This initializes the connection to start sending/receiving data. This method is only called

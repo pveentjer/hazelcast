@@ -37,7 +37,7 @@ class ClientSocketWriterInitializer implements SocketWriterInitializer<ClientCon
 //
 //        writer.initWriteHandler(new ChannelOutboundHandler<ClientMessage>() {
 //            @Override
-//            public boolean onWrite(ClientMessage msg, ByteBuffer dst) throws Exception {
+//            public boolean write(ClientMessage msg, ByteBuffer dst) throws Exception {
 //                return msg.writeTo(dst);
 //            }
 //        });

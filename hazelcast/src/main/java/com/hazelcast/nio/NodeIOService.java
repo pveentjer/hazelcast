@@ -305,7 +305,7 @@ public class NodeIOService implements IOService {
     }
 
     @Override
-    public ChannelOutboundHandler createWriteHandler(TcpIpConnection connection) {
+    public ChannelOutboundHandler createOutboundHandler(TcpIpConnection connection) {
         return node.getNodeExtension().createWriteHandler(connection, this);
     }
 

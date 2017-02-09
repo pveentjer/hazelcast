@@ -67,7 +67,7 @@ public interface IOThreadingModel {
      * @param connection the TcpIpConnection to create the ChannelWriter for.
      * @return the created ChannelWriter
      */
-    ChannelWriter newSocketWriter(SocketConnection connection);
+    ChannelWriter newChannelWriter(SocketConnection connection);
 
     /**
      * Creates a new ChannelReader for the given connection.
@@ -75,7 +75,7 @@ public interface IOThreadingModel {
      * @param connection the TcpIpConnection to create the ChannelReader for.
      * @return the created ChannelReader
      */
-    ChannelReader newSocketReader(SocketConnection connection);
+    ChannelReader newChannelReader(SocketConnection connection);
 
     /**
      * Is called when a connection is added.

@@ -133,7 +133,7 @@ public final class NonBlockingChannelReader
         bytesRead.inc(readBytes);
 
         inputBuffer.flip();
-        readHandler.onRead(inputBuffer);
+        readHandler.read(inputBuffer);
         if (inputBuffer.hasRemaining()) {
             inputBuffer.compact();
         } else {

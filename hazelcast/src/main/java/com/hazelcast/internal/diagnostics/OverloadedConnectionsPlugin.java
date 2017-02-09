@@ -16,13 +16,11 @@
 
 package com.hazelcast.internal.diagnostics;
 
-import com.hazelcast.internal.networking.nonblocking.NonBlockingChannelWriter;
 import com.hazelcast.nio.ConnectionManager;
 import com.hazelcast.nio.OutboundFrame;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 import com.hazelcast.nio.tcp.TcpIpConnectionManager;
-import com.hazelcast.internal.networking.spinning.SpinningChannelWriter;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.properties.HazelcastProperties;
@@ -150,15 +148,15 @@ public class OverloadedConnectionsPlugin extends DiagnosticsPlugin {
     }
 
     private Queue<OutboundFrame> getOutboundQueue(TcpIpConnection connection, boolean priority) {
-        if (connection.getChannelWriter() instanceof NonBlockingChannelWriter) {
-            NonBlockingChannelWriter writer = (NonBlockingChannelWriter) connection.getChannelWriter();
-            return priority ? writer.urgentWriteQueue : writer.writeQueue;
-        } else if (connection.getChannelWriter() instanceof SpinningChannelWriter) {
-            SpinningChannelWriter writer = (SpinningChannelWriter) connection.getChannelWriter();
-            return priority ? writer.urgentWriteQueue : writer.writeQueue;
-        } else {
+//        if (connection.getChannelWriter() instanceof NonBlockingChannelWriter) {
+//            NonBlockingChannelWriter writer = (NonBlockingChannelWriter) connection.getChannelWriter();
+//            return priority ? writer.urgentWriteQueue : writer.writeQueue;
+//        } else if (connection.getChannelWriter() instanceof SpinningChannelWriter) {
+//            SpinningChannelWriter writer = (SpinningChannelWriter) connection.getChannelWriter();
+//            return priority ? writer.urgentWriteQueue : writer.writeQueue;
+//        } else {
             return EMPTY_QUEUE;
-        }
+     //   }
     }
 
     private void render(DiagnosticsLogWriter writer, TcpIpConnection connection, boolean priority, int sampleCount) {

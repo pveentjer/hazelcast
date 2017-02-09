@@ -51,7 +51,7 @@ public class MemberChannelInboundHandler implements ChannelInboundHandler {
     }
 
     @Override
-    public void onRead(ByteBuffer src) throws Exception {
+    public void read(ByteBuffer src) throws Exception {
         while (src.hasRemaining()) {
             if (packet == null) {
                 packet = new Packet();

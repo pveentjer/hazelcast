@@ -106,7 +106,7 @@ public class TextChannelInboundHandler implements ChannelInboundHandler {
     public TextChannelInboundHandler(TcpIpConnection connection) {
         IOService ioService = connection.getConnectionManager().getIoService();
         this.textCommandService = ioService.getTextCommandService();
-        this.textWriteHandler = (TextChannelOutboundHandler) connection.getChannelWriter().getChannelOutboundHandler();
+        this.textWriteHandler = null;// (TextChannelOutboundHandler) connection.getChannelWriter().getChannelOutboundHandler();
         this.connection = connection;
         this.memcacheEnabled = ioService.isMemcacheEnabled();
         this.restEnabled = ioService.isRestEnabled();
@@ -119,7 +119,7 @@ public class TextChannelInboundHandler implements ChannelInboundHandler {
     }
 
     @Override
-    public void onRead(ByteBuffer src) throws Exception {
+    public void read(ByteBuffer src) throws Exception {
         while (src.hasRemaining()) {
             doRead(src);
         }

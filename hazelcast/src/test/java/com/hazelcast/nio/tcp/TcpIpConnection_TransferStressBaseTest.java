@@ -103,8 +103,9 @@ public abstract class TcpIpConnection_TransferStressBaseTest extends TcpIpConnec
         assertTrueEventually(new AssertTask() {
             @Override
             public void run() throws Exception {
-                logger.info("writer total frames pending   : " + writer.totalFramesPending());
-                logger.info("writer last write time millis : " + writer.lastWriteTimeMillis());
+
+                //logger.info("writer total frames pending   : " + writer.totalFramesPending());
+                logger.info("writer last write time millis : " + writer.lastWriteMillis());
 
                 logger.info("reader total frames handled   : " + reader.getNormalFramesReadCounter().get()
                         + reader.getPriorityFramesReadCounter().get());
@@ -200,13 +201,14 @@ public abstract class TcpIpConnection_TransferStressBaseTest extends TcpIpConnec
                 }
             }
 
-            logger.info("Finished, normal packets written: " + normalPackets
-                    + " urgent packets written:" + urgentPackets
-                    + " total frames pending:" + writeHandler.totalFramesPending());
+//            logger.info("Finished, normal packets written: " + normalPackets
+//                    + " urgent packets written:" + urgentPackets
+//                    + " total frames pending:" + writeHandler.totalFramesPending());
         }
 
         private double getUsage() {
-            return 100d * writeHandler.totalFramesPending() / maxPendingPacketCount;
+           // return 100d * writeHandler.totalFramesPending() / maxPendingPacketCount;
+            return 0;
         }
 
         public Packet nextPacket() {

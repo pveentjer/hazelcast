@@ -18,14 +18,15 @@ package com.hazelcast.internal.networking.nonblocking;
 
 import com.hazelcast.instance.HazelcastThreadGroup;
 import com.hazelcast.internal.metrics.MetricsRegistry;
+import com.hazelcast.internal.networking.BufferingOutboundHandler;
+import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.ChannelOutboundHandler;
+import com.hazelcast.internal.networking.ChannelReader;
 import com.hazelcast.internal.networking.ChannelWriter;
 import com.hazelcast.internal.networking.IOOutOfMemoryHandler;
 import com.hazelcast.internal.networking.IOThreadingModel;
 import com.hazelcast.internal.networking.ProtocolBasedFactory;
-import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.SocketConnection;
-import com.hazelcast.internal.networking.ChannelReader;
 import com.hazelcast.internal.networking.nonblocking.iobalancer.IOBalancer;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
@@ -60,9 +61,9 @@ public class NonBlockingIOThreadingModel
     private final IOOutOfMemoryHandler oomeHandler;
     private final int balanceIntervalSeconds;
     private final ProtocolBasedFactory<ByteBuffer> inputBufferFactory;
-    private final ProtocolBasedFactory<ChannelInboundHandler> readHandlerFactory;
+    private final ProtocolBasedFactory<ChannelInboundHandler> inboundHandlerFactory;
     private final ProtocolBasedFactory<ByteBuffer> outputBufferFactory;
-    private final ProtocolBasedFactory<ChannelOutboundHandler> writeHandlerFactory;
+    private final ProtocolBasedFactory<ChannelOutboundHandler> outboundHandlerFactory;
 
     // The selector mode determines how IO threads will block (or not) on the Selector:
     //  select:         this is the default mode, uses Selector.select(long timeout)
@@ -85,9 +86,9 @@ public class NonBlockingIOThreadingModel
             int outputThreadCount,
             int balanceIntervalSeconds,
             ProtocolBasedFactory<ByteBuffer> inputBufferFactory,
-            ProtocolBasedFactory<ChannelInboundHandler> readHandlerFactory,
+            ProtocolBasedFactory<ChannelInboundHandler> inboundHandlerFactory,
             ProtocolBasedFactory<ByteBuffer> outputBufferFactory,
-            ProtocolBasedFactory<ChannelOutboundHandler> writeHandlerFactory) {
+            ProtocolBasedFactory<ChannelOutboundHandler> outboundHandlerFactory) {
         this.hazelcastThreadGroup = hazelcastThreadGroup;
         this.metricsRegistry = metricsRegistry;
         this.loggingService = loggingService;
@@ -97,9 +98,9 @@ public class NonBlockingIOThreadingModel
         this.oomeHandler = oomeHandler;
         this.balanceIntervalSeconds = balanceIntervalSeconds;
         this.inputBufferFactory = inputBufferFactory;
-        this.readHandlerFactory = readHandlerFactory;
+        this.inboundHandlerFactory = inboundHandlerFactory;
         this.outputBufferFactory = outputBufferFactory;
-        this.writeHandlerFactory = writeHandlerFactory;
+        this.outboundHandlerFactory = outboundHandlerFactory;
 
     }
 
@@ -227,7 +228,7 @@ public class NonBlockingIOThreadingModel
     }
 
     @Override
-    public ChannelWriter newSocketWriter(SocketConnection connection) {
+    public ChannelWriter newChannelWriter(SocketConnection connection) {
         int index = hashToIndex(nextOutputThreadIndex.getAndIncrement(), outputThreads.length);
         NonBlockingIOThread outputThread = outputThreads[index];
         if (outputThread == null) {
@@ -239,12 +240,12 @@ public class NonBlockingIOThreadingModel
                 outputThread,
                 loggingService.getLogger(NonBlockingChannelWriter.class),
                 ioBalancer,
-                writeHandlerFactory.create(connection),
+                (BufferingOutboundHandler) outboundHandlerFactory.create(connection),
                 outputBufferFactory.create(connection));
     }
 
     @Override
-    public ChannelReader newSocketReader(SocketConnection connection) {
+    public ChannelReader newChannelReader(SocketConnection connection) {
         int index = hashToIndex(nextInputThreadIndex.getAndIncrement(), inputThreads.length);
         NonBlockingIOThread inputThread = inputThreads[index];
         if (inputThread == null) {
@@ -256,7 +257,7 @@ public class NonBlockingIOThreadingModel
                 inputThread,
                 loggingService.getLogger(NonBlockingChannelReader.class),
                 ioBalancer,
-                readHandlerFactory.create(connection),
+                inboundHandlerFactory.create(connection),
                 inputBufferFactory.create(connection));
     }
 }

@@ -44,7 +44,7 @@ public class ClientMessageChannelInboundHandler implements ChannelInboundHandler
     }
 
     @Override
-    public void onRead(ByteBuffer src) throws Exception {
+    public void read(ByteBuffer src) throws Exception {
         int messagesCreated = 0;
         while (src.hasRemaining()) {
             final boolean complete = message.readFrom(src);

@@ -60,7 +60,7 @@ public class ClientMessageSplitAndBuildTest {
                     }
                 });
         for (ClientMessage subFrame : subFrames) {
-            clientMessageReadHandler.onRead(ByteBuffer.wrap(subFrame.buffer().byteArray(), 0, subFrame.getFrameLength()));
+            clientMessageReadHandler.read(ByteBuffer.wrap(subFrame.buffer().byteArray(), 0, subFrame.getFrameLength()));
         }
     }
 
@@ -118,7 +118,7 @@ public class ClientMessageSplitAndBuildTest {
                     break;
                 }
                 ClientMessage subFrame = clientMessageFrames.get(currentFrameIndex[i]);
-                clientMessageReadHandler.onRead(ByteBuffer.wrap(subFrame.buffer().byteArray(), 0, subFrame.getFrameLength()));
+                clientMessageReadHandler.read(ByteBuffer.wrap(subFrame.buffer().byteArray(), 0, subFrame.getFrameLength()));
                 currentFrameIndex[i]++;
             }
         }
@@ -140,7 +140,7 @@ public class ClientMessageSplitAndBuildTest {
             }
         });
         for (ClientMessage subFrame : subFrames) {
-            clientMessageReadHandler.onRead(ByteBuffer.wrap(subFrame.buffer().byteArray(), 0, subFrame.getFrameLength()));
+            clientMessageReadHandler.read(ByteBuffer.wrap(subFrame.buffer().byteArray(), 0, subFrame.getFrameLength()));
         }
     }
 }

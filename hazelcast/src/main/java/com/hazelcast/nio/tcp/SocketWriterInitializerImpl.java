@@ -38,7 +38,7 @@ public class SocketWriterInitializerImpl implements SocketWriterInitializer<TcpI
 //        ChannelOutboundHandler handler;
 //        if (CLUSTER.equals(protocol)) {
 //            IOService ioService = connection.getConnectionManager().getIoService();
-//            handler = ioService.createWriteHandler(connection);
+//            handler = ioService.createOutboundHandler(connection);
 //        } else if (CLIENT_BINARY_NEW.equals(protocol)) {
 //            handler = new ClientChannelOutboundHandler();
 //        } else {

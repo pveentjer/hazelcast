@@ -17,20 +17,18 @@
 package com.hazelcast.internal.networking.nonblocking;
 
 import com.hazelcast.internal.metrics.Probe;
-import com.hazelcast.internal.networking.ChannelOutboundHandler;
+import com.hazelcast.internal.networking.BufferingOutboundHandler;
 import com.hazelcast.internal.networking.ChannelWriter;
 import com.hazelcast.internal.networking.SocketConnection;
+import com.hazelcast.internal.networking.TaskFrame;
 import com.hazelcast.internal.networking.nonblocking.iobalancer.IOBalancer;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.OutboundFrame;
-import com.hazelcast.nio.Packet;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -51,26 +49,13 @@ public final class NonBlockingChannelWriter
 
     private static final long TIMEOUT = 3;
 
-
-    @SuppressWarnings("checkstyle:visibilitymodifier")
-    @Probe(name = "writeQueueSize")
-    public final Queue<OutboundFrame> writeQueue = new ConcurrentLinkedQueue<OutboundFrame>();
-    @SuppressWarnings("checkstyle:visibilitymodifier")
-    @Probe(name = "priorityWriteQueueSize")
-    public final Queue<OutboundFrame> urgentWriteQueue = new ConcurrentLinkedQueue<OutboundFrame>();
-
     private final ByteBuffer outputBuffer;
 
     private final AtomicBoolean scheduled = new AtomicBoolean(false);
     @Probe(name = "bytesWritten")
     private final SwCounter bytesWritten = newSwCounter();
-    @Probe(name = "normalFramesWritten")
-    private final SwCounter normalFramesWritten = newSwCounter();
-    @Probe(name = "priorityFramesWritten")
-    private final SwCounter priorityFramesWritten = newSwCounter();
-    private final ChannelOutboundHandler writeHandler;
+    private final BufferingOutboundHandler outboundHandler;
 
-    private volatile OutboundFrame currentFrame;
     private volatile long lastWriteTime;
 
     // this field will be accessed by the NonBlockingIOThread or
@@ -82,46 +67,16 @@ public final class NonBlockingChannelWriter
                                     NonBlockingIOThread ioThread,
                                     ILogger logger,
                                     IOBalancer balancer,
-                                    ChannelOutboundHandler writeHandler,
+                                    BufferingOutboundHandler outboundHandler,
                                     ByteBuffer outputBuffer) {
         super(connection, ioThread, OP_WRITE, logger, balancer);
-        this.writeHandler = writeHandler;
+        this.outboundHandler = outboundHandler;
         this.outputBuffer = outputBuffer;
     }
 
     @Override
-    public int totalFramesPending() {
-        return writeQueue.size() + urgentWriteQueue.size();
-    }
-
-    @Override
-    public long lastWriteTimeMillis() {
+    public long lastWriteMillis() {
         return lastWriteTime;
-    }
-
-    @Override
-    public ChannelOutboundHandler getChannelOutboundHandler() {
-        return writeHandler;
-    }
-
-    @Probe(name = "writeQueuePendingBytes", level = DEBUG)
-    public long bytesPending() {
-        return bytesPending(writeQueue);
-    }
-
-    @Probe(name = "priorityWriteQueuePendingBytes", level = DEBUG)
-    public long priorityBytesPending() {
-        return bytesPending(urgentWriteQueue);
-    }
-
-    private long bytesPending(Queue<OutboundFrame> writeQueue) {
-        long bytesPending = 0;
-        for (OutboundFrame frame : writeQueue) {
-            if (frame instanceof Packet) {
-                bytesPending += ((Packet) frame).packetSize();
-            }
-        }
-        return bytesPending;
     }
 
     @Probe(name = "idleTimeMs")
@@ -146,7 +101,7 @@ public final class NonBlockingChannelWriter
                     ByteBuffer bb = ByteBuffer.wrap(protocol.getBytes());
                     socketChannel.write(bb);
                     // registerOp(OP_WRITE);
-//                    if (writeHandler == null) {
+//                    if (outboundHandler == null) {
 //                        initializer.init(connection, NonBlockingChannelWriter.this, protocol);
 //                    }
 
@@ -165,46 +120,10 @@ public final class NonBlockingChannelWriter
         }
     }
 
-
     @Override
     public void write(OutboundFrame frame) {
-        if (frame.isUrgent()) {
-            urgentWriteQueue.offer(frame);
-        } else {
-            writeQueue.offer(frame);
-        }
-
+        outboundHandler.offer(frame.isUrgent(), frame);
         schedule();
-    }
-
-    private OutboundFrame poll() {
-        for (; ; ) {
-            boolean urgent = true;
-            OutboundFrame frame = urgentWriteQueue.poll();
-
-            if (frame == null) {
-                urgent = false;
-                frame = writeQueue.poll();
-            }
-
-            if (frame == null) {
-                return null;
-            }
-
-            if (frame.getClass() == TaskFrame.class) {
-                TaskFrame taskFrame = (TaskFrame) frame;
-                taskFrame.task.run();
-                continue;
-            }
-
-            if (urgent) {
-                priorityFramesWritten.inc();
-            } else {
-                normalFramesWritten.inc();
-            }
-
-            return frame;
-        }
     }
 
     /**
@@ -247,22 +166,12 @@ public final class NonBlockingChannelWriter
      * This call is only made by the IO thread.
      */
     private void unschedule() throws IOException {
-        if (dirtyOutputBuffer() || currentFrame != null) {
-            // Because not all data was written to the socket, we need to register for OP_WRITE so we get
-            // notified when the socketChannel is ready for more data.
-            registerOp(OP_WRITE);
-
-            // If the outputBuffer is not empty, we don't need to unschedule ourselves. This is because the
-            // ChannelOutboundHandler will be triggered by a nio write event to continue sending data.
-            return;
-        }
-
         // since everything is written, we are not interested anymore in write-events, so lets unsubscribe
         unregisterOp(OP_WRITE);
         // So the outputBuffer is empty, so we are going to unschedule ourselves.
         scheduled.set(false);
 
-        if (writeQueue.isEmpty() && urgentWriteQueue.isEmpty()) {
+        if (outboundHandler.isEmpty()) {
             // there are no remaining frames, so we are done.
             return;
         }
@@ -286,14 +195,31 @@ public final class NonBlockingChannelWriter
         eventCount.inc();
         lastWriteTime = currentTimeMillis();
 
-        fillOutputBuffer();
+        boolean clean = outboundHandler.write(null, outputBuffer);
 
-        if (dirtyOutputBuffer()) {
-            writeOutputBufferToSocket();
+        if (outputBuffer.position() > 0) {
+            // So there is data for writing, so lets prepare the buffer for writing and then write it to the socketChannel.
+            outputBuffer.flip();
+
+            int written = socketChannel.write(outputBuffer);
+
+            bytesWritten.inc(written);
+
+            if (outputBuffer.hasRemaining()) {
+                outputBuffer.compact();
+            } else {
+                outputBuffer.clear();
+            }
         }
 
         if (newOwner == null) {
-            unschedule();
+            if (clean) {
+                unschedule();
+            } else {
+                // Because not all data was written to the socket, we need to register for OP_WRITE so we get
+                // notified when the socketChannel is ready for more data.
+                registerOp(OP_WRITE);
+            }
         } else {
             startMigration();
         }
@@ -303,68 +229,6 @@ public final class NonBlockingChannelWriter
         NonBlockingIOThread newOwner = this.newOwner;
         this.newOwner = null;
         startMigration(newOwner);
-    }
-
-    /**
-     * Checks of the outputBuffer is dirty.
-     *
-     * @return true if dirty, false otherwise.
-     */
-    private boolean dirtyOutputBuffer() {
-        return outputBuffer.position() > 0;
-    }
-
-    /**
-     * Writes to content of the outputBuffer to the socket.
-     */
-    private void writeOutputBufferToSocket() throws IOException {
-        // So there is data for writing, so lets prepare the buffer for writing and then write it to the socketChannel.
-        outputBuffer.flip();
-        int written = socketChannel.write(outputBuffer);
-
-        bytesWritten.inc(written);
-
-        // Now we verify if all data is written.
-        if (outputBuffer.hasRemaining()) {
-            // We did not manage to write all data to the socket. So lets compact the buffer so new data can be added at the end.
-            outputBuffer.compact();
-        } else {
-            // We managed to fully write the outputBuffer to the socket, so we are done.
-            outputBuffer.clear();
-        }
-    }
-
-    /**
-     * Fills the outBuffer with frames. This is done till there are no more frames or till there is no more space in the
-     * outputBuffer.
-     *
-     * @throws Exception
-     */
-    private void fillOutputBuffer() throws Exception {
-        for (; ; ) {
-            if (!outputBuffer.hasRemaining()) {
-                // The buffer is completely filled, we are done.
-                return;
-            }
-
-            // If there currently is not frame sending, lets try to get one.
-            if (currentFrame == null) {
-                currentFrame = poll();
-                if (currentFrame == null) {
-                    // There is no frames to write, we are done.
-                    return;
-                }
-            }
-
-            // Lets write the currentFrame to the outputBuffer.
-            if (!writeHandler.onWrite(currentFrame, outputBuffer)) {
-                // We are done for this round because not all data of the current frame fits in the outputBuffer
-                return;
-            }
-
-            // The current frame has been written completely. So lets null it and lets try to write another frame.
-            currentFrame = null;
-        }
     }
 
     @Override
@@ -378,9 +242,7 @@ public final class NonBlockingChannelWriter
 
     @Override
     public void close() {
-        writeQueue.clear();
-        urgentWriteQueue.clear();
-
+        outboundHandler.clear();
         CloseTask closeTask = new CloseTask();
         write(new TaskFrame(closeTask));
         closeTask.awaitCompletion();
@@ -397,33 +259,13 @@ public final class NonBlockingChannelWriter
     }
 
     /**
-     * The TaskFrame is not really a Frame. It is a way to put a task on one of the frame-queues. Using this approach we
-     * can lift on top of the Frame scheduling mechanism and we can prevent having:
-     * - multiple NonBlockingIOThread-tasks for a ChannelWriter on multiple NonBlockingIOThread
-     * - multiple NonBlockingIOThread-tasks for a ChannelWriter on the same NonBlockingIOThread.
-     */
-    private static final class TaskFrame implements OutboundFrame {
-
-        private final Runnable task;
-
-        private TaskFrame(Runnable task) {
-            this.task = task;
-        }
-
-        @Override
-        public boolean isUrgent() {
-            return true;
-        }
-    }
-
-    /**
      * Triggers the migration when executed by setting the ChannelWriter.newOwner field. When the handle method completes, it
      * checks if this field if set, if so, the migration starts.
      *
      * If the current ioThread is the same as 'theNewOwner' then the call is ignored.
      */
     private final class StartMigrationTask implements Runnable {
-        // field is called 'theNewOwner' to prevent any ambiguity problems with the writeHandler.newOwner.
+        // field is called 'theNewOwner' to prevent any ambiguity problems with the outboundHandler.newOwner.
         // Else you get a lot of ugly ChannelOutboundHandler.this.newOwner is ...
         private final NonBlockingIOThread theNewOwner;
 

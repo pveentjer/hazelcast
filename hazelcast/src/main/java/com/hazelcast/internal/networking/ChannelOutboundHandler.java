@@ -26,7 +26,8 @@ import java.nio.ByteBuffer;
  * Each {@link ChannelWriter} will have its own {@link ChannelOutboundHandler} instance. Therefor it doesn't need
  * to be thread-safe.
  *
- * For more information about the ChannelOutboundHandler (and handlers in generally), have a look at the {@link ChannelInboundHandler}.
+ * For more information about the ChannelOutboundHandler (and handlers in generally), have a look at the
+ * {@link ChannelInboundHandler}.
  *
  * @param <F>
  * @see IOThreadingModel
@@ -46,5 +47,5 @@ public interface ChannelOutboundHandler<F extends OutboundFrame> {
      * @throws Exception if something fails while writing to ByteBuffer. When an exception is thrown, the TcpIpConnection is
      *                   closed. There is no point continuing with a potentially corrupted stream.
      */
-    boolean onWrite(F frame, ByteBuffer dst) throws Exception;
+    boolean write(F frame, ByteBuffer dst) throws Exception;
 }

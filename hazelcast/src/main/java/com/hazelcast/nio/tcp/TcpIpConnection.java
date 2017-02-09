@@ -92,8 +92,8 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
         this.ioService = connectionManager.getIoService();
         this.logger = ioService.getLoggingService().getLogger(TcpIpConnection.class);
         this.socketChannel = socketChannel;
-        this.channelWriter = ioThreadingModel.newSocketWriter(this);
-        this.channelReader = ioThreadingModel.newSocketReader(this);
+        this.channelWriter = ioThreadingModel.newChannelWriter(this);
+        this.channelReader = ioThreadingModel.newChannelReader(this);
     }
 
 
@@ -175,7 +175,7 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
 
     @Override
     public long lastWriteTimeMillis() {
-        return channelWriter.lastWriteTimeMillis();
+        return channelWriter.lastWriteMillis();
     }
 
     @Override

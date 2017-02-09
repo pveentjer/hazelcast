@@ -34,7 +34,7 @@ public class MemberChannelOutboundHandlerTest extends HazelcastTestSupport {
     public void test() throws Exception {
         Packet packet = new Packet(serializationService.toBytes("foobar"));
         ByteBuffer bb = ByteBuffer.allocate(1000);
-        boolean result = writeHandler.onWrite(packet, bb);
+        boolean result = writeHandler.write(packet, bb);
 
         assertTrue(result);
 

@@ -60,7 +60,7 @@ public class TextChannelOutboundHandler implements ChannelOutboundHandler<TextCo
     }
 
     @Override
-    public boolean onWrite(TextCommand textCommand, ByteBuffer dst) throws Exception {
+    public boolean write(TextCommand textCommand, ByteBuffer dst) throws Exception {
         return textCommand.writeTo(dst);
     }
 }

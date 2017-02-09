@@ -383,7 +383,7 @@ public class MockIOService implements IOService {
     }
 
     @Override
-    public ChannelOutboundHandler createWriteHandler(TcpIpConnection connection) {
+    public ChannelOutboundHandler createOutboundHandler(TcpIpConnection connection) {
         return new MemberChannelOutboundHandler();
     }
 

@@ -36,7 +36,7 @@ import java.io.Closeable;
  * </ol>
  *
  * A ChannelReader is tightly coupled to the threading model; so a ChannelReader instance is created using
- * {@link IOThreadingModel#newSocketReader(SocketConnection)}.
+ * {@link IOThreadingModel#newChannelReader(SocketConnection)}.
  *
  * Before Hazelcast 3.6 the name of this interface was ChannelInboundHandler.
  *

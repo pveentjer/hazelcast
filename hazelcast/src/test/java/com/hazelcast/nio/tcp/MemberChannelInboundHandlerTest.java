@@ -54,7 +54,7 @@ public class MemberChannelInboundHandlerTest extends TcpIpConnection_AbstractTes
         packet.writeTo(buffer);
 
         buffer.flip();
-        readHandler.onRead(buffer);
+        readHandler.read(buffer);
 
         assertEquals(1, dispatcher.packets.size());
         Packet found = dispatcher.packets.get(0);
@@ -70,7 +70,7 @@ public class MemberChannelInboundHandlerTest extends TcpIpConnection_AbstractTes
         packet.writeTo(buffer);
 
         buffer.flip();
-        readHandler.onRead(buffer);
+        readHandler.read(buffer);
 
         assertEquals(1, dispatcher.packets.size());
         Packet found = dispatcher.packets.get(0);
@@ -97,7 +97,7 @@ public class MemberChannelInboundHandlerTest extends TcpIpConnection_AbstractTes
         packet4.writeTo(buffer);
 
         buffer.flip();
-        readHandler.onRead(buffer);
+        readHandler.read(buffer);
 
         assertEquals(asList(packet1, packet2, packet3, packet4), dispatcher.packets);
         assertEquals(oldNormalPacketsRead + 3, channelReader.getNormalFramesReadCounter().get());

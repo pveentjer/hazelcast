@@ -138,5 +138,5 @@ public interface IOService {
 
     ChannelInboundHandler createReadHandler(TcpIpConnection connection);
 
-    ChannelOutboundHandler createWriteHandler(TcpIpConnection connection);
+    ChannelOutboundHandler createOutboundHandler(TcpIpConnection connection);
 }

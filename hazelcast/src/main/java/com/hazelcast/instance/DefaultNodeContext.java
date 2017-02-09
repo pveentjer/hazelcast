@@ -17,6 +17,7 @@
 package com.hazelcast.instance;
 
 import com.hazelcast.cluster.Joiner;
+import com.hazelcast.internal.networking.BufferingOutboundHandlerImpl;
 import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.ChannelOutboundHandler;
 import com.hazelcast.internal.networking.IOThreadingModel;
@@ -110,7 +111,8 @@ public class DefaultNodeContext implements NodeContext {
                 new ProtocolBasedFactory<ChannelOutboundHandler>() {
                     @Override
                     public ChannelOutboundHandler create(SocketConnection connection) {
-                        return ioService.createWriteHandler((TcpIpConnection) connection);
+                        ChannelOutboundHandler outboundHandler =  ioService.createOutboundHandler((TcpIpConnection) connection);
+                        return new BufferingOutboundHandlerImpl(outboundHandler);
                     }
                 });
         // );

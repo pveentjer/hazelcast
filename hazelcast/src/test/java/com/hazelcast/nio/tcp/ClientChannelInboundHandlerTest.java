@@ -49,7 +49,7 @@ public class ClientChannelInboundHandlerTest {
         message.writeTo(bb);
         bb.flip();
 
-        readHandler.onRead(bb);
+        readHandler.read(bb);
 
         verify(ioService).handleClientMessage(any(ClientMessage.class), eq(connection));
     }

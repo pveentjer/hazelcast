@@ -29,7 +29,7 @@ import java.nio.ByteBuffer;
 public class ClientChannelOutboundHandler implements ChannelOutboundHandler<ClientMessage> {
 
     @Override
-    public boolean onWrite(ClientMessage message, ByteBuffer dst) throws Exception {
+    public boolean write(ClientMessage message, ByteBuffer dst) throws Exception {
         return message.writeTo(dst);
     }
 }

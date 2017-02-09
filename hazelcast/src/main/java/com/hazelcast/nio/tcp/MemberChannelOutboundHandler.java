@@ -31,7 +31,7 @@ import java.nio.ByteBuffer;
 public class MemberChannelOutboundHandler implements ChannelOutboundHandler<Packet> {
 
     @Override
-    public boolean onWrite(Packet packet, ByteBuffer dst) {
+    public boolean write(Packet packet, ByteBuffer dst) {
         return packet.writeTo(dst);
     }
 }
