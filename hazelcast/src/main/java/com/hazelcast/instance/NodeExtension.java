@@ -218,5 +218,5 @@ public interface NodeExtension {
      */
     String createMemberUuid(Address address);
 
-    HandshakeFactory getTcpIpConnectionHandshakeFactory();
+    HandshakeFactory getHandshakeFactory();
 }

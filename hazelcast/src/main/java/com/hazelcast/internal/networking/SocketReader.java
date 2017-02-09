@@ -44,6 +44,7 @@ import java.io.Closeable;
  * @see SocketWriter
  * @see IOThreadingModel
  */
+//todo: rename this class to ChannelInboundHandler
 public interface SocketReader extends Closeable {
 
     /**
@@ -56,12 +57,16 @@ public interface SocketReader extends Closeable {
     /**
      * Gets the SwCounter that counts the number of normal packets that have been read.
      *
+     * todo: these should probably not be exposed in api
+     *
      * @return the normal frame counter.
      */
     SwCounter getNormalFramesReadCounter();
 
     /**
      * Gets the SwCounter that counts the number of priority packets that have been read.
+     *
+     * todo: these should probably not be exposed in api
      *
      * @return the priority frame counter.
      */

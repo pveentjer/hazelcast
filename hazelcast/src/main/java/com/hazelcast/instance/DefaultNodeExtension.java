@@ -299,7 +299,7 @@ public class DefaultNodeExtension implements NodeExtension {
     }
 
     @Override
-    public HandshakeFactory getTcpIpConnectionHandshakeFactory() {
+    public HandshakeFactory getHandshakeFactory() {
         return new UnsecuredHandshakeFactory();
     }
 

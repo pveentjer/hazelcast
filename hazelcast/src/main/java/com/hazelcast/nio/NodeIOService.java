@@ -99,7 +99,7 @@ public class NodeIOService implements IOService {
     }
 
     public HandshakeFactory getHandshakeFactory() {
-        return node.getNodeExtension().getTcpIpConnectionHandshakeFactory();
+        return node.getNodeExtension().getHandshakeFactory();
     }
 
     @Override

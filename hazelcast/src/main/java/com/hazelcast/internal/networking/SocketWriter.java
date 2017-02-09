@@ -33,6 +33,7 @@ import java.io.Closeable;
  * @see ReadHandler
  * @see IOThreadingModel
  */
+//todo: rename this class to ChannelOutboundHandler
 public interface SocketWriter extends Closeable {
 
     /**
@@ -40,6 +41,7 @@ public interface SocketWriter extends Closeable {
      *
      * @return total number of pending packets.
      */
+    // todo: remove
     int totalFramesPending();
 
     /**
@@ -73,6 +75,8 @@ public interface SocketWriter extends Closeable {
     /**
      * Does the handshake. This initializes the connection to start sending/receiving data. This method is only called
      * on the side that initiates the connection.
+     *
+     * todo: this method should probably be deleted. Should be integrated in the Connector.
      */
     void handshake();
 }

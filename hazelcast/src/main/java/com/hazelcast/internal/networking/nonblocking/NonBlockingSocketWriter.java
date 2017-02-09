@@ -286,11 +286,6 @@ public final class NonBlockingSocketWriter
         eventCount.inc();
         lastWriteTime = currentTimeMillis();
 
-//        if (writeHandler == null) {
-//            initializer.init(connection, this, CLUSTER);
-//            registerOp(OP_WRITE);
-//        }
-
         fillOutputBuffer();
 
         if (dirtyOutputBuffer()) {
