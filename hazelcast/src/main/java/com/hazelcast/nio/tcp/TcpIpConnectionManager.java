@@ -476,7 +476,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
                 ioService.getHazelcastThreadGroup().getThreadPoolNamePrefix("IO") + "Acceptor",
                 serverSocketChannel,
                 this,
-                ioService.getSocketHandshakeFactory());
+                ioService.getTcpIpConnectionHandshakeFactory());
         acceptorThread.start();
         metricsRegistry.scanAndRegister(acceptorThread, "tcp." + acceptorThread.getName());
     }

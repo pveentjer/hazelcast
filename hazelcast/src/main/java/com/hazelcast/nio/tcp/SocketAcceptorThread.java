@@ -57,8 +57,7 @@ public class SocketAcceptorThread extends Thread {
     // count number of times the selector was recreated (if selectWorkaround is enabled)
     @Probe
     private final SwCounter selectorRecreateCount = newSwCounter();
-    private final IOThreadingModel ioThreadingModel;
-    private final SocketHandshakeFactory sockketHandshakeFactory;
+    private final TcpIpConnectionHandshakeFactory handshakeFactory;
     // last time select returned
     private volatile long lastSelectTimeMs;
 
@@ -76,14 +75,13 @@ public class SocketAcceptorThread extends Thread {
             String name,
             ServerSocketChannel serverSocketChannel,
             TcpIpConnectionManager connectionManager,
-            SocketHandshakeFactory socketHandshakeFactory) {
+            TcpIpConnectionHandshakeFactory handshakeFactory) {
         super(threadGroup, name);
         this.serverSocketChannel = serverSocketChannel;
         this.connectionManager = connectionManager;
         this.ioService = connectionManager.getIoService();
         this.logger = ioService.getLoggingService().getLogger(getClass());
-        this.sockketHandshakeFactory = socketHandshakeFactory;
-        this.ioThreadingModel = connectionManager.getIoThreadingModel();
+        this.handshakeFactory = handshakeFactory;
     }
 
     /**
@@ -195,7 +193,7 @@ public class SocketAcceptorThread extends Thread {
     private void handleRead(SelectionKey sk) throws IOException {
         try {
             SocketChannel socketChannel = (SocketChannel) sk.channel();
-            SocketHandshake handshake = (SocketHandshake) sk.attachment();
+            TcpIpConnectionHandshake handshake = (TcpIpConnectionHandshake) sk.attachment();
 
             if (handshake.complete(socketChannel)) {
                 sk.cancel();
@@ -245,7 +243,7 @@ public class SocketAcceptorThread extends Thread {
             //}
 
 
-            SocketHandshake handshake = sockketHandshakeFactory.create();
+            TcpIpConnectionHandshake handshake = handshakeFactory.create();
             selectionKey = socketChannel.register(selector, OP_READ, handshake);
         } catch (Exception e) {
             exceptionCount.inc();

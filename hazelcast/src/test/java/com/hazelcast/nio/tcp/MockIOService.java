@@ -42,7 +42,7 @@ public class MockIOService implements IOService {
     public final HazelcastThreadGroup hazelcastThreadGroup;
     public final ConcurrentHashMap<Long, DummyPayload> payloads = new ConcurrentHashMap<Long, DummyPayload>();
     public volatile PacketHandler packetHandler;
-    public final SocketHandshakeFactory socketHandshakeFactory = new SocketHandshakeFactoryImpl();
+    public final TcpIpConnectionHandshakeFactory tcpIpConnectionHandshakeFactory = new UnsecuredTcpIpConnectionHandshakeFactory();
 
     public MockIOService(int port) throws Exception {
         loggingService = new LoggingServiceImpl("somegroup", "log4j2", BuildInfoProvider.getBuildInfo());
@@ -62,9 +62,8 @@ public class MockIOService implements IOService {
                 .build();
     }
 
-    @Override
-    public SocketHandshakeFactory getSocketHandshakeFactory() {
-        return socketHandshakeFactory;
+    public TcpIpConnectionHandshakeFactory getTcpIpConnectionHandshakeFactory() {
+        return tcpIpConnectionHandshakeFactory;
     }
 
     @Override

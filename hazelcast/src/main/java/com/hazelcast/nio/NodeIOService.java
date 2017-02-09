@@ -32,7 +32,7 @@ import com.hazelcast.internal.networking.ReadHandler;
 import com.hazelcast.internal.networking.WriteHandler;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.logging.LoggingService;
-import com.hazelcast.nio.tcp.SocketHandshakeFactory;
+import com.hazelcast.nio.tcp.TcpIpConnectionHandshakeFactory;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 import com.hazelcast.spi.EventService;
 import com.hazelcast.spi.ExecutionService;
@@ -98,9 +98,8 @@ public class NodeIOService implements IOService {
         thread.start();
     }
 
-    @Override
-    public SocketHandshakeFactory getSocketHandshakeFactory() {
-        return node.getNodeExtension().getSocketHandshakeFactory();
+    public TcpIpConnectionHandshakeFactory getTcpIpConnectionHandshakeFactory() {
+        return node.getNodeExtension().getTcpIpConnectionHandshakeFactory();
     }
 
     @Override
