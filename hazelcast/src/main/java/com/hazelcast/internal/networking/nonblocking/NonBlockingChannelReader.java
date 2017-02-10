@@ -28,6 +28,7 @@ import java.io.EOFException;
 import java.nio.ByteBuffer;
 
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
+import static com.hazelcast.nio.IOUtil.compactOrClear;
 import static java.lang.System.currentTimeMillis;
 import static java.nio.channels.SelectionKey.OP_READ;
 
@@ -42,16 +43,10 @@ public final class NonBlockingChannelReader
         extends AbstractHandler
         implements ChannelReader {
 
-    protected final ByteBuffer inputBuffer;
-
     @Probe(name = "bytesRead")
     private final SwCounter bytesRead = newSwCounter();
-    @Probe(name = "normalFramesRead")
-    private final SwCounter normalFramesRead = newSwCounter();
-    @Probe(name = "priorityFramesRead")
-    private final SwCounter priorityFramesRead = newSwCounter();
-
-    private final ChannelInboundHandler readHandler;
+    private final ByteBuffer inputBuffer;
+    private final ChannelInboundHandler inboundHandler;
     private volatile long lastReadTime;
 
     public NonBlockingChannelReader(
@@ -59,10 +54,10 @@ public final class NonBlockingChannelReader
             NonBlockingIOThread ioThread,
             ILogger logger,
             IOBalancer balancer,
-            ChannelInboundHandler readHandler,
+            ChannelInboundHandler inboundHandler,
             ByteBuffer inputBuffer) {
         super(connection, ioThread, OP_READ, logger, balancer);
-        this.readHandler = readHandler;
+        this.inboundHandler = inboundHandler;
         this.inputBuffer = inputBuffer;
     }
 
@@ -72,17 +67,7 @@ public final class NonBlockingChannelReader
     }
 
     @Override
-    public SwCounter getNormalFramesReadCounter() {
-        return normalFramesRead;
-    }
-
-    @Override
-    public SwCounter getPriorityFramesReadCounter() {
-        return priorityFramesRead;
-    }
-
-    @Override
-    public long lastReadTimeMillis() {
+    public long lastReadMillis() {
         return lastReadTime;
     }
 
@@ -98,6 +83,30 @@ public final class NonBlockingChannelReader
                 }
             }
         });
+    }
+
+    @Override
+    public void handle() throws Exception {
+        eventCount.inc();
+        // we are going to set the timestamp even if the socketChannel is going to fail reading. In that case
+        // the connection is going to be closed anyway.
+        // todo: volatile write sucks
+        lastReadTime = currentTimeMillis();
+
+        int readBytes = socketChannel.read(inputBuffer);
+        if (readBytes <= 0) {
+            if (readBytes == -1) {
+                throw new EOFException("Remote socket closed!");
+            }
+            return;
+        }
+
+        bytesRead.inc(readBytes);
+
+        inputBuffer.flip();
+        inboundHandler.read(inputBuffer);
+
+        compactOrClear(inputBuffer);
     }
 
     /**
@@ -116,32 +125,6 @@ public final class NonBlockingChannelReader
     }
 
     @Override
-    public void handle() throws Exception {
-        eventCount.inc();
-        // we are going to set the timestamp even if the socketChannel is going to fail reading. In that case
-        // the connection is going to be closed anyway.
-        lastReadTime = currentTimeMillis();
-
-        int readBytes = socketChannel.read(inputBuffer);
-        if (readBytes <= 0) {
-            if (readBytes == -1) {
-                throw new EOFException("Remote socket closed!");
-            }
-            return;
-        }
-
-        bytesRead.inc(readBytes);
-
-        inputBuffer.flip();
-        readHandler.read(inputBuffer);
-        if (inputBuffer.hasRemaining()) {
-            inputBuffer.compact();
-        } else {
-            inputBuffer.clear();
-        }
-    }
-
-    @Override
     public void close() {
         ioThread.addTaskAndWakeup(new Runnable() {
             @Override
@@ -155,7 +138,7 @@ public final class NonBlockingChannelReader
                 }
 
 //                try {
-//                    socketChannel.closeInbound();
+//                    inboundHandler.close();
 //                } catch (IOException e) {
 //                    logger.finest("Error while closing inbound", e);
 //                }

@@ -43,7 +43,6 @@ public class SpinningChannelWriter extends AbstractHandler implements ChannelWri
     private final SwCounter bytesWritten = newSwCounter();
     private volatile long lastWriteTime;
     private final BufferingOutboundHandler outboundHandler;
-    private volatile OutboundFrame currentFrame;
 
     public SpinningChannelWriter(SocketConnection connection,
                                  ILogger logger,
@@ -102,10 +101,6 @@ public class SpinningChannelWriter extends AbstractHandler implements ChannelWri
     }
 
     public void write() throws Exception {
-        if (!connection.isAlive()) {
-            return;
-        }
-
         outboundHandler.write(null, outputBuffer);
 
         if (dirtyOutputBuffer()) {
@@ -119,9 +114,6 @@ public class SpinningChannelWriter extends AbstractHandler implements ChannelWri
      * @return true if dirty, false otherwise.
      */
     private boolean dirtyOutputBuffer() {
-        if (outputBuffer == null) {
-            return false;
-        }
         return outputBuffer.position() > 0;
     }
 

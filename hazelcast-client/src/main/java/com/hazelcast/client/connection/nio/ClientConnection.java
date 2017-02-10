@@ -187,12 +187,12 @@ public class ClientConnection implements SocketConnection, DiscardableMetricsPro
     }
 
     @Override
-    public long lastReadTimeMillis() {
-        return reader.lastReadTimeMillis();
+    public long lastReadMillis() {
+        return reader.lastReadMillis();
     }
 
     @Override
-    public long lastWriteTimeMillis() {
+    public long lastWriteMillis() {
         return writer.lastWriteMillis();
     }
 
@@ -352,8 +352,8 @@ public class ClientConnection implements SocketConnection, DiscardableMetricsPro
                 + ", connectionId=" + connectionId
                 + ", socketChannel=" + socketChannel
                 + ", remoteEndpoint=" + remoteEndpoint
-                + ", lastReadTime=" + timeToStringFriendly(lastReadTimeMillis())
-                + ", lastWriteTime=" + timeToStringFriendly(lastWriteTimeMillis())
+                + ", lastReadTime=" + timeToStringFriendly(lastReadMillis())
+                + ", lastWriteTime=" + timeToStringFriendly(lastWriteMillis())
                 + ", closedTime=" + timeToStringFriendly(closedTime.get())
                 + ", lastHeartbeatRequested=" + timeToStringFriendly(lastHeartbeatRequestedMillis)
                 + ", lastHeartbeatReceived=" + timeToStringFriendly(lastHeartbeatReceivedMillis)

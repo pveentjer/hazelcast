@@ -40,7 +40,7 @@ public class SocketWriterInitializerImpl implements SocketWriterInitializer<TcpI
 //            IOService ioService = connection.getConnectionManager().getIoService();
 //            handler = ioService.createOutboundHandler(connection);
 //        } else if (CLIENT_BINARY_NEW.equals(protocol)) {
-//            handler = new ClientChannelOutboundHandler();
+//            handler = new ClientMessageEncoder();
 //        } else {
 //            handler = new TextChannelOutboundHandler(connection);
 //        }

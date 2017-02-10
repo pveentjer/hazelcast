@@ -268,12 +268,12 @@ class TestClientRegistry {
         }
 
         @Override
-        public long lastReadTimeMillis() {
+        public long lastReadMillis() {
             return lastReadTime;
         }
 
         @Override
-        public long lastWriteTimeMillis() {
+        public long lastWriteMillis() {
             return lastWriteTime;
         }
 
@@ -441,12 +441,12 @@ class TestClientRegistry {
         }
 
         @Override
-        public long lastReadTimeMillis() {
+        public long lastReadMillis() {
             return lastReadTimeMillis;
         }
 
         @Override
-        public long lastWriteTimeMillis() {
+        public long lastWriteMillis() {
             return lastWriteTimeMillis;
         }
 

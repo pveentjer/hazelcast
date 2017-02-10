@@ -50,5 +50,4 @@ public interface OutboundFrame {
      */
     boolean isUrgent();
 
-    int partition();
 }

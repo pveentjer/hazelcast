@@ -101,11 +101,11 @@ public class MockConnection implements Connection {
         return newPacket;
     }
 
-    public long lastReadTimeMillis() {
+    public long lastReadMillis() {
         return System.currentTimeMillis();
     }
 
-    public long lastWriteTimeMillis() {
+    public long lastWriteMillis() {
         return System.currentTimeMillis();
     }
 

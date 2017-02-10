@@ -63,12 +63,12 @@ class DroppingConnection implements Connection {
     }
 
     @Override
-    public long lastReadTimeMillis() {
+    public long lastReadMillis() {
         return timestamp;
     }
 
     @Override
-    public long lastWriteTimeMillis() {
+    public long lastWriteMillis() {
         return timestamp;
     }
 

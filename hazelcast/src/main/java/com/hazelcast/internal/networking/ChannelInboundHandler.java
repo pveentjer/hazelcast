@@ -16,7 +16,7 @@
 
 package com.hazelcast.internal.networking;
 
-import com.hazelcast.nio.tcp.MemberChannelInboundHandler;
+import com.hazelcast.nio.tcp.PacketDecoder;
 import com.hazelcast.nio.tcp.TcpIpConnection;
 
 import java.nio.ByteBuffer;
@@ -26,7 +26,7 @@ import java.nio.ByteBuffer;
  * {@link ChannelReader} after it has read data from the socket.
  *
  * A typical example is that Packet instances are created from the buffered data and handing them over the the
- * {@link com.hazelcast.spi.impl.packetdispatcher.PacketDispatcher}. See {@link MemberChannelInboundHandler}
+ * {@link com.hazelcast.spi.impl.packetdispatcher.PacketDispatcher}. See {@link PacketDecoder}
  * for more information.
  *
  * Each {@link ChannelReader} will have its own {@link ChannelInboundHandler} instance. Therefor it doesn't need to be thread-safe.

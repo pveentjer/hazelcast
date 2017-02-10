@@ -16,14 +16,12 @@
 
 package com.hazelcast.internal.networking;
 
-import com.hazelcast.internal.util.counters.SwCounter;
-
 import java.io.Closeable;
 
 /**
  * The ChannelReader is responsible for reading data from the socket, on behalf of a connection, into a
- * {@link java.nio.ByteBuffer}. Once the data is read into the ByteBuffer, this ByteBuffer is passed to the {@link ChannelInboundHandler}
- * that takes care of the actual processing of the incoming data.
+ * {@link java.nio.ByteBuffer}. Once the data is read into the ByteBuffer, this ByteBuffer is passed to the
+ * {@link ChannelInboundHandler} that takes care of the actual processing of the incoming data.
  *
  * Each {@link SocketConnection} has its own {@link ChannelReader} instance.
  *
@@ -38,13 +36,13 @@ import java.io.Closeable;
  * A ChannelReader is tightly coupled to the threading model; so a ChannelReader instance is created using
  * {@link IOThreadingModel#newChannelReader(SocketConnection)}.
  *
- * Before Hazelcast 3.6 the name of this interface was ChannelInboundHandler.
+ * ChannelReaders can be chained to form a pipeline. There is no explicit infrastructure in place for this,
+ * but it can easily be realized by adding a 'next' ChannelReader to a ChannelReader.
  *
  * @see ChannelInboundHandler
  * @see ChannelWriter
  * @see IOThreadingModel
  */
-//todo: rename this class to ChannelInboundHandler
 public interface ChannelReader extends Closeable {
 
     /**
@@ -52,28 +50,10 @@ public interface ChannelReader extends Closeable {
      *
      * @return the last time a read from the socket was done.
      */
-    long lastReadTimeMillis();
+    long lastReadMillis();
 
     /**
-     * Gets the SwCounter that counts the number of normal packets that have been read.
-     *
-     * todo: these should probably not be exposed in api
-     *
-     * @return the normal frame counter.
-     */
-    SwCounter getNormalFramesReadCounter();
-
-    /**
-     * Gets the SwCounter that counts the number of priority packets that have been read.
-     *
-     * todo: these should probably not be exposed in api
-     *
-     * @return the priority frame counter.
-     */
-    SwCounter getPriorityFramesReadCounter();
-
-    /**
-     * Initializes this ChannelReader.
+     * Initializes this {@link ChannelReader}.
      *
      * This method is called from an arbitrary thread and is only called once.
      */

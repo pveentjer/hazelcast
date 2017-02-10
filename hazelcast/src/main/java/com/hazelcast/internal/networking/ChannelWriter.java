@@ -42,6 +42,8 @@ public interface ChannelWriter extends Closeable {
      * SocketChannel. It could very well be that this data is stuck somewhere in an io-buffer.
      *
      * @return the last time something was written to the socket.
+     *
+     * todo: probably we should get rid of this method.
      */
     long lastWriteMillis();
 

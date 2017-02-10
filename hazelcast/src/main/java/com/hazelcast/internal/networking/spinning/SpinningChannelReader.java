@@ -35,42 +35,28 @@ public class SpinningChannelReader extends AbstractHandler implements ChannelRea
 
     @Probe(name = "bytesRead")
     private final SwCounter bytesRead = newSwCounter();
-    @Probe(name = "normalFramesRead")
-    private final SwCounter normalFramesRead = newSwCounter();
-    @Probe(name = "priorityFramesRead")
-    private final SwCounter priorityFramesRead = newSwCounter();
-    private final ChannelInboundHandler readHandler;
+    private final ChannelInboundHandler inboundHandler;
     private final ByteBuffer inputBuffer;
     private volatile long lastReadTime;
 
     public SpinningChannelReader(SocketConnection connection,
                                  ILogger logger,
                                  IOOutOfMemoryHandler oomeHandler,
-                                 ChannelInboundHandler readHandler,
+                                 ChannelInboundHandler inboundHandler,
                                  ByteBuffer inputBuffer) {
         super(connection, logger, oomeHandler);
-        this.readHandler = readHandler;
+        this.inboundHandler = inboundHandler;
         this.inputBuffer = inputBuffer;
     }
 
     @Override
-    public long lastReadTimeMillis() {
+    public long lastReadMillis() {
         return lastReadTime;
     }
 
     @Probe(name = "idleTimeMs")
     private long idleTimeMs() {
         return max(currentTimeMillis() - lastReadTime, 0);
-    }
-
-    @Override
-    public SwCounter getNormalFramesReadCounter() {
-        return normalFramesRead;
-    }
-
-    @Override
-    public SwCounter getPriorityFramesReadCounter() {
-        return priorityFramesRead;
     }
 
     @Override
@@ -84,12 +70,8 @@ public class SpinningChannelReader extends AbstractHandler implements ChannelRea
     }
 
     public void read() throws Exception {
-        if (!connection.isAlive()) {
-            //socketChannel.closeInbound();
-            return;
-        }
-
         int readBytes = socketChannel.read(inputBuffer);
+
         if (readBytes <= 0) {
             if (readBytes == -1) {
                 throw new EOFException("Remote socket closed!");
@@ -97,10 +79,11 @@ public class SpinningChannelReader extends AbstractHandler implements ChannelRea
             return;
         }
 
+        //todo: volatile write sucks
         lastReadTime = currentTimeMillis();
         bytesRead.inc(readBytes);
         inputBuffer.flip();
-        readHandler.read(inputBuffer);
+        inboundHandler.read(inputBuffer);
         if (inputBuffer.hasRemaining()) {
             inputBuffer.compact();
         } else {

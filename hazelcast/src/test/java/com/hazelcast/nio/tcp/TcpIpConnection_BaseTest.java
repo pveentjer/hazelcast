@@ -102,7 +102,7 @@ public abstract class TcpIpConnection_BaseTest extends TcpIpConnection_AbstractT
             }
         });
 
-        long lastWriteTimeMs = connAB.lastWriteTimeMillis();
+        long lastWriteTimeMs = connAB.lastWriteMillis();
         long nowMs = currentTimeMillis();
 
         // make sure that the lastWrite time is within the given MARGIN_OF_ERROR_MS
@@ -118,13 +118,13 @@ public abstract class TcpIpConnection_BaseTest extends TcpIpConnection_AbstractT
     public void lastWriteTime_whenNothingWritten() {
         TcpIpConnection c = connect(connManagerA, addressB);
 
-        long result1 = c.lastWriteTimeMillis();
-        long result2 = c.lastWriteTimeMillis();
+        long result1 = c.lastWriteMillis();
+        long result2 = c.lastWriteMillis();
 
         assertEquals(result1, result2);
     }
 
-    // we check the lastReadTimeMillis by sending a packet on the local connection, and
+    // we check the lastReadMillis by sending a packet on the local connection, and
     // on the remote side we check the if the lastReadTime is updated
     @Test
     public void lastReadTimeMillis() {
@@ -148,7 +148,7 @@ public abstract class TcpIpConnection_BaseTest extends TcpIpConnection_AbstractT
             }
         });
 
-        long lastReadTimeMs = connBA.lastReadTimeMillis();
+        long lastReadTimeMs = connBA.lastReadMillis();
         long nowMs = currentTimeMillis();
 
         // make sure that the lastRead time is within the given MARGIN_OF_ERROR_MS
@@ -163,8 +163,8 @@ public abstract class TcpIpConnection_BaseTest extends TcpIpConnection_AbstractT
     public void lastReadTime_whenNothingWritten() {
         TcpIpConnection c = connect(connManagerA, addressB);
 
-        long result1 = c.lastReadTimeMillis();
-        long result2 = c.lastReadTimeMillis();
+        long result1 = c.lastReadMillis();
+        long result2 = c.lastReadMillis();
 
         assertEquals(result1, result2);
     }

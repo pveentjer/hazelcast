@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.DEBUG;
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
+import static com.hazelcast.nio.IOUtil.compactOrClear;
 import static com.hazelcast.util.EmptyStatement.ignore;
 import static java.lang.Math.max;
 import static java.lang.System.currentTimeMillis;
@@ -193,9 +194,11 @@ public final class NonBlockingChannelWriter
     @SuppressWarnings("unchecked")
     public void handle() throws Exception {
         eventCount.inc();
+
+        // volatile write sucks
         lastWriteTime = currentTimeMillis();
 
-        boolean clean = outboundHandler.write(null, outputBuffer);
+        boolean outboundHandlerDrained = outboundHandler.write(null, outputBuffer);
 
         if (outputBuffer.position() > 0) {
             // So there is data for writing, so lets prepare the buffer for writing and then write it to the socketChannel.
@@ -205,15 +208,12 @@ public final class NonBlockingChannelWriter
 
             bytesWritten.inc(written);
 
-            if (outputBuffer.hasRemaining()) {
-                outputBuffer.compact();
-            } else {
-                outputBuffer.clear();
-            }
+            compactOrClear(outputBuffer);
         }
 
         if (newOwner == null) {
-            if (clean) {
+            // todo: this is incorrect. If not everything is written to the socket; we still unschedule
+            if (outboundHandlerDrained) {
                 unschedule();
             } else {
                 // Because not all data was written to the socket, we need to register for OP_WRITE so we get

@@ -96,7 +96,6 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
         this.channelReader = ioThreadingModel.newChannelReader(this);
     }
 
-
     @Override
     public String getProtocol() {
         return protocol;
@@ -174,13 +173,13 @@ public final class TcpIpConnection implements SocketConnection, MetricsProvider,
     }
 
     @Override
-    public long lastWriteTimeMillis() {
+    public long lastWriteMillis() {
         return channelWriter.lastWriteMillis();
     }
 
     @Override
-    public long lastReadTimeMillis() {
-        return channelReader.lastReadTimeMillis();
+    public long lastReadMillis() {
+        return channelReader.lastReadMillis();
     }
 
     @Override

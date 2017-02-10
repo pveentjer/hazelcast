@@ -40,14 +40,14 @@ public interface Connection {
      *
      * @return the clock time of the most recent read
      */
-    long lastReadTimeMillis();
+    long lastReadMillis();
 
     /**
      * Returns the clock time in milliseconds of the most recent write using this connection.
      *
      * @return the clock time of the most recent write.
      */
-    long lastWriteTimeMillis();
+    long lastWriteMillis();
 
     /**
      * Returns the {@link ConnectionType} of this Connection.

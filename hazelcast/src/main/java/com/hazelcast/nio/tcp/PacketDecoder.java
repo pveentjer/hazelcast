@@ -27,10 +27,13 @@ import java.nio.ByteBuffer;
  *
  * It reads as many packets from the src ByteBuffer as possible, and each of the Packets is send to the {@link PacketDispatcher}.
  *
+ * todo: currently packet by packet is offered to the PacketDispatcher. This makes batching more complicated.
+ * todo: all state for reading/write a packet should be put in the PacketEncoder/Decoder so the Packet can become stateless.
+ *
  * @see PacketDispatcher
- * @see MemberChannelOutboundHandler
+ * @see PacketEncoder
  */
-public class MemberChannelInboundHandler implements ChannelInboundHandler {
+public class PacketDecoder implements ChannelInboundHandler {
 
     protected final TcpIpConnection connection;
     protected Packet packet;
@@ -39,13 +42,10 @@ public class MemberChannelInboundHandler implements ChannelInboundHandler {
 //    private final Counter normalPacketsRead;
 //    private final Counter priorityPacketsRead;
 
-    public MemberChannelInboundHandler(TcpIpConnection connection, PacketDispatcher packetDispatcher) {
+    public PacketDecoder(TcpIpConnection connection, PacketDispatcher packetDispatcher) {
         this.connection = connection;
         this.packetDispatcher = packetDispatcher;
 //        ChannelReader socketReader = connection.getChannelReader();
-//        if(socketReader == null){
-//            throw new NullPointerException();
-//        }
 //        this.normalPacketsRead = socketReader.getNormalFramesReadCounter();
 //        this.priorityPacketsRead = socketReader.getPriorityFramesReadCounter();
     }

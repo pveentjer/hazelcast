@@ -41,7 +41,7 @@ public class SocketReaderInitializerImpl implements SocketReaderInitializer<TcpI
 //        } else if (CLIENT_BINARY_NEW.equals(protocol)) {
 //            initInputBuffer(connection, reader, ioService.getSocketClientReceiveBufferSize());
 //            socketWriter.handshake(CLIENT_BINARY_NEW);
-//            readHandler = new ClientChannelInboundHandler(reader.getNormalFramesReadCounter(), connection, ioService);
+//            readHandler = new ClientMessageDecoder(reader.getNormalFramesReadCounter(), connection, ioService);
 //        } else {
 //            ByteBuffer inputBuffer = initInputBuffer(connection, reader, ioService.getSocketReceiveBufferSize());
 //            socketWriter.handshake(TEXT);

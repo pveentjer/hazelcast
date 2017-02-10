@@ -16,20 +16,22 @@
 
 package com.hazelcast.nio.tcp;
 
-import com.hazelcast.client.impl.protocol.ClientMessage;
 import com.hazelcast.internal.networking.ChannelOutboundHandler;
+import com.hazelcast.nio.Packet;
 
 import java.nio.ByteBuffer;
 
 /**
- * A {@link ChannelOutboundHandler} for the new-client. It writes ClientMessages to the ByteBuffer.
+ * A {@link ChannelOutboundHandler} that for member to member communication.
  *
- * @see ClientChannelInboundHandler
+ * It writes {@link Packet} instances to the {@link ByteBuffer}.
+ *
+ * @see PacketDecoder
  */
-public class ClientChannelOutboundHandler implements ChannelOutboundHandler<ClientMessage> {
+public class PacketEncoder implements ChannelOutboundHandler<Packet> {
 
     @Override
-    public boolean write(ClientMessage message, ByteBuffer dst) throws Exception {
-        return message.writeTo(dst);
+    public boolean write(Packet packet, ByteBuffer dst) {
+        return packet.writeTo(dst);
     }
 }
