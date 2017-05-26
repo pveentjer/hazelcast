@@ -17,6 +17,8 @@
 package com.hazelcast.nio.tcp;
 
 import com.hazelcast.internal.networking.ChannelOutboundHandler;
+import com.hazelcast.logging.ILogger;
+import com.hazelcast.logging.Logger;
 import com.hazelcast.nio.Packet;
 
 import java.nio.ByteBuffer;
@@ -29,9 +31,18 @@ import java.nio.ByteBuffer;
  * @see MemberChannelInboundHandler
  */
 public class MemberChannelOutboundHandler implements ChannelOutboundHandler<Packet> {
+    ILogger logger = Logger.getLogger(getClass());
 
     @Override
     public boolean onWrite(Packet packet, ByteBuffer dst) {
-        return packet.writeTo(dst);
+        int before = dst.position();
+
+        boolean finished = packet.writeTo(dst);
+
+        int after = dst.position();
+
+        //logger.info("Packet.size:"+(after-before));
+
+        return finished;
     }
 }

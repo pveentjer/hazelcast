@@ -18,6 +18,8 @@ package com.hazelcast.nio.tcp;
 
 import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.nio.ChannelInboundHandlerWithCounters;
+import com.hazelcast.logging.ILogger;
+import com.hazelcast.logging.Logger;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.spi.impl.packetdispatcher.PacketDispatcher;
 
@@ -35,6 +37,7 @@ public class MemberChannelInboundHandler extends ChannelInboundHandlerWithCounte
 
     protected final TcpIpConnection connection;
     protected Packet packet;
+    ILogger logger = Logger.getLogger(getClass());
 
     private final PacketDispatcher packetDispatcher;
 
@@ -60,6 +63,8 @@ public class MemberChannelInboundHandler extends ChannelInboundHandlerWithCounte
     }
 
     protected void handlePacket(Packet packet) {
+       //logger.info("Receiving packet:"+packet);
+
         if (packet.isFlagRaised(Packet.FLAG_URGENT)) {
             priorityPacketsRead.inc();
         } else {

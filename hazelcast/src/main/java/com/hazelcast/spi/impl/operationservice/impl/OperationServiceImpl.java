@@ -396,6 +396,7 @@ public final class OperationServiceImpl implements InternalOperationService, Met
 
     @Override
     public boolean send(Operation op, Address target) {
+        logger.info("Sending op:"+op.getClass().getName()+" target:"+target);
         return outboundOperationHandler.send(op, target);
     }
 

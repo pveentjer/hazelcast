@@ -17,6 +17,7 @@
 package com.hazelcast.internal.networking.nio;
 
 import com.hazelcast.internal.metrics.Probe;
+import com.hazelcast.internal.networking.Channel;
 import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.ChannelInitializer;
 import com.hazelcast.internal.networking.InitResult;
@@ -27,6 +28,7 @@ import com.hazelcast.logging.ILogger;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.SelectableChannel;
 
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
 import static java.lang.System.currentTimeMillis;
@@ -57,12 +59,13 @@ public final class NioChannelReader extends AbstractHandler {
     private long handleCountLastPublish;
 
     public NioChannelReader(
-            NioChannel channel,
+            Channel channel,
+            SelectableChannel selectableChannel,
             NioThread ioThread,
             ILogger logger,
             IOBalancer balancer,
             ChannelInitializer initializer) {
-        super(channel, ioThread, OP_READ, logger, balancer);
+        super(channel, selectableChannel, ioThread, OP_READ, logger, balancer);
         this.initializer = initializer;
     }
 
@@ -124,12 +127,12 @@ public final class NioChannelReader extends AbstractHandler {
         }
 
         int readBytes = channel.read(inputBuffer);
-        if (readBytes <= 0) {
-            if (readBytes == -1) {
-                throw new EOFException("Remote socket closed!");
-            }
-            return;
+        // if (readBytes <= 0) {
+        if (readBytes == -1) {
+            throw new EOFException("Remote socket closed!");
         }
+        //     return;
+        // }
 
         bytesRead.inc(readBytes);
 
@@ -148,6 +151,9 @@ public final class NioChannelReader extends AbstractHandler {
             // we can't initialize yet
             return false;
         }
+
+        logger.info(channel + " reader initialized");
+
         this.inboundHandler = init.getHandler();
         this.inputBuffer = init.getByteBuffer();
 

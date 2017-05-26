@@ -65,13 +65,13 @@ public class NioThread extends Thread implements OperationHostileThread {
     public int id;
 
     @Probe(level = DEBUG)
-    volatile long bytesTransceived;
+    public volatile long bytesTransceived;
     @Probe(level = DEBUG)
-    volatile long framesTransceived;
+    public volatile long framesTransceived;
     @Probe(level = DEBUG)
-    volatile long priorityFramesTransceived;
+    public volatile long priorityFramesTransceived;
     @Probe(level = DEBUG)
-    volatile long handleCount;
+    public volatile long handleCount;
 
     @Probe(name = "taskQueueSize")
     private final Queue<Runnable> taskQueue = new ConcurrentLinkedQueue<Runnable>();
@@ -458,7 +458,7 @@ public class NioThread extends Thread implements OperationHostileThread {
         return getName();
     }
 
-    void setSelectorWorkaroundTest(boolean selectorWorkaroundTest) {
+    public void setSelectorWorkaroundTest(boolean selectorWorkaroundTest) {
         this.selectorWorkaroundTest = selectorWorkaroundTest;
     }
 }

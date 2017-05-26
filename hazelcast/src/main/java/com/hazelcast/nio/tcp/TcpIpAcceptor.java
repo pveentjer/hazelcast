@@ -265,7 +265,7 @@ public class TcpIpAcceptor implements MetricsProvider {
 
             if (channel != null) {
                 final Channel theChannel = channel;
-                logger.info("Accepting socket connection from " + theChannel.socket().getRemoteSocketAddress());
+                logger.info("Accepting socket connection from " + theChannel.getRemoteSocketAddress());
                 if (ioService.isSocketInterceptorEnabled()) {
                     configureAndAssignSocket(theChannel);
                 } else {
@@ -281,8 +281,10 @@ public class TcpIpAcceptor implements MetricsProvider {
 
         private void configureAndAssignSocket(Channel channel) {
             try {
-                ioService.configureSocket(channel.socket());
-                ioService.interceptSocket(channel.socket(), true);
+                if(channel.socket()!=null) {
+                    ioService.configureSocket(channel.socket());
+                    ioService.interceptSocket(channel.socket(), true);
+                }
                 connectionManager.newConnection(channel, null);
             } catch (Exception e) {
                 exceptionCount.inc();

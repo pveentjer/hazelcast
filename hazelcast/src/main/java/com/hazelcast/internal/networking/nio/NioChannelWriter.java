@@ -17,6 +17,7 @@
 package com.hazelcast.internal.networking.nio;
 
 import com.hazelcast.internal.metrics.Probe;
+import com.hazelcast.internal.networking.Channel;
 import com.hazelcast.internal.networking.ChannelInitializer;
 import com.hazelcast.internal.networking.ChannelOutboundHandler;
 import com.hazelcast.internal.networking.InitResult;
@@ -28,6 +29,7 @@ import com.hazelcast.nio.Packet;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.SelectableChannel;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -38,6 +40,7 @@ import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
 import static com.hazelcast.util.EmptyStatement.ignore;
 import static java.lang.Math.max;
 import static java.lang.System.currentTimeMillis;
+import static java.lang.System.setOut;
 import static java.nio.channels.SelectionKey.OP_WRITE;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -77,12 +80,13 @@ public final class NioChannelWriter extends AbstractHandler implements Runnable 
     private long priorityFramesReadLastPublish;
     private long eventsLastPublish;
 
-    public NioChannelWriter(NioChannel channel,
+    public NioChannelWriter(Channel channel,
+                            SelectableChannel selectableChannel,
                             NioThread ioThread,
                             ILogger logger,
                             IOBalancer balancer,
                             ChannelInitializer initializer) {
-        super(channel, ioThread, OP_WRITE, logger, balancer);
+        super(channel, selectableChannel,ioThread, OP_WRITE, logger, balancer);
         this.initializer = initializer;
     }
 
@@ -143,6 +147,8 @@ public final class NioChannelWriter extends AbstractHandler implements Runnable 
     }
 
     public void write(OutboundFrame frame) {
+        //logger.info("writing frame:"+frame);
+
         if (frame.isUrgent()) {
             urgentWriteQueue.offer(frame);
         } else {
@@ -258,6 +264,8 @@ public final class NioChannelWriter extends AbstractHandler implements Runnable 
     @Override
     @SuppressWarnings("unchecked")
     public void handle() throws Exception {
+        //logger.info(channel+" write.handle");
+
         handleCount.inc();
         lastWriteTime = currentTimeMillis();
 
@@ -291,6 +299,8 @@ public final class NioChannelWriter extends AbstractHandler implements Runnable 
             unschedule();
             return false;
         }
+
+        logger.info(channel+ " writer initialized");
 
         this.outputBuffer = init.getByteBuffer();
         this.outboundHandler = init.getHandler();
@@ -344,6 +354,8 @@ public final class NioChannelWriter extends AbstractHandler implements Runnable 
         }
 
         while (currentFrame != null) {
+            //System.out.println(channel+ " writing to channel:"+currentFrame);
+
             // Lets write the currentFrame to the outputBuffer.
             if (!outboundHandler.onWrite(currentFrame, outputBuffer)) {
                 // We are done for this round because not all data of the currentFrame fits in the outputBuffer
@@ -432,7 +444,7 @@ public final class NioChannelWriter extends AbstractHandler implements Runnable 
     }
 
     @Override
-    protected void publish() {
+    public void publish() {
         ioThread.bytesTransceived += bytesWritten.get() - bytesReadLastPublish;
         ioThread.framesTransceived += normalFramesWritten.get() - normalFramesReadLastPublish;
         ioThread.priorityFramesTransceived += priorityFramesWritten.get() - priorityFramesReadLastPublish;

@@ -22,6 +22,7 @@ import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.networking.Channel;
 import com.hazelcast.internal.networking.ChannelFactory;
 import com.hazelcast.internal.networking.EventLoopGroup;
+import com.hazelcast.internal.networking.udpnio.UdpNioChannel;
 import com.hazelcast.internal.util.concurrent.ThreadFactoryImpl;
 import com.hazelcast.internal.util.counters.MwCounter;
 import com.hazelcast.logging.ILogger;
@@ -39,6 +40,8 @@ import com.hazelcast.util.executor.StripedRunnable;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.channels.DatagramChannel;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Collections;
@@ -68,11 +71,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
     private final IOService ioService;
 
     private final ConstructorFunction<Address, TcpIpConnectionErrorHandler> monitorConstructor
-            = new ConstructorFunction<Address, TcpIpConnectionErrorHandler>() {
-        public TcpIpConnectionErrorHandler createNew(Address endpoint) {
-            return new TcpIpConnectionErrorHandler(TcpIpConnectionManager.this, endpoint);
-        }
-    };
+            = endpoint -> new TcpIpConnectionErrorHandler(TcpIpConnectionManager.this, endpoint);
 
     private final ILogger logger;
 
@@ -178,7 +177,9 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
     public void handle(Packet packet) throws Exception {
         assert packet.getPacketType() == Packet.Type.BIND;
 
+
         BindMessage bind = ioService.getSerializationService().toObject(packet);
+        logger.info("Receiving bindRequest:" + bind);
         bind((TcpIpConnection) packet.getConn(), bind.getLocalAddress(), bind.getTargetAddress(), bind.shouldReply());
     }
 
@@ -186,9 +187,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
      * Binding completes the connection and makes it available to be used with the ConnectionManager.
      */
     private synchronized boolean bind(TcpIpConnection connection, Address remoteEndPoint, Address localEndpoint, boolean reply) {
-        if (logger.isFinestEnabled()) {
-            logger.finest("Binding " + connection + " to " + remoteEndPoint + ", reply is " + reply);
-        }
+        logger.info("Binding " + connection + " to " + remoteEndPoint + ", reply is " + reply);
         final Address thisAddress = ioService.getThisAddress();
         if (ioService.isSocketBindAny() && !connection.isClient() && !thisAddress.equals(localEndpoint)) {
             String msg = "Wrong bind request from " + remoteEndPoint
@@ -197,19 +196,30 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
             connection.close(msg, null);
             return false;
         }
+
+        logger.info("set endpoint:"+remoteEndPoint);
         connection.setEndPoint(remoteEndPoint);
+
+        logger.info("onSucces connection:"+remoteEndPoint);
         ioService.onSuccessfulConnection(remoteEndPoint);
         if (reply) {
+            logger.info("sending reply bindrequest:"+remoteEndPoint);
             sendBindRequest(connection, remoteEndPoint, false);
         }
         if (checkAlreadyConnected(connection, remoteEndPoint)) {
+            logger.info("checkAlreadyConnected:"+true);
             return false;
         }
-        return registerConnection(remoteEndPoint, connection);
+
+
+        boolean registered = registerConnection(remoteEndPoint, connection);
+        logger.info("registered:"+registered);
+        return registered;
     }
 
     @Override
     public synchronized boolean registerConnection(final Address remoteEndPoint, final Connection connection) {
+        logger.info("registerConnection");
         try {
             if (remoteEndPoint.equals(ioService.getThisAddress())) {
                 return false;
@@ -273,6 +283,15 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
     }
 
     void sendBindRequest(TcpIpConnection connection, Address remoteEndPoint, boolean reply) {
+//
+
+
+//        try {
+//            Thread.sleep(5000);
+//        } catch (InterruptedException e) {
+//            e.printStackTrace();
+//        }
+
         connection.setEndPoint(remoteEndPoint);
         ioService.onSuccessfulConnection(remoteEndPoint);
         //make sure bind packet is the first packet sent to the end point.
@@ -282,14 +301,54 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         BindMessage bind = new BindMessage(ioService.getThisAddress(), remoteEndPoint, reply);
         byte[] bytes = ioService.getSerializationService().toBytes(bind);
         Packet packet = new Packet(bytes).setPacketType(Packet.Type.BIND);
-        connection.write(packet);
+        boolean written = connection.write(packet);
+
+        logger.info("sendBindRequest: "+remoteEndPoint+" success:"+written);
+
         //now you can send anything...
     }
 
-    Channel createChannel(SocketChannel socketChannel, boolean client) throws Exception {
-        Channel wrapper = channelFactory.create(socketChannel, client, ioService.useDirectSocketBuffer());
-        acceptedSockets.add(wrapper);
-        return wrapper;
+    Channel createChannel(SocketChannel socketChannel, boolean clientMode) throws Exception {
+        DatagramChannel datagramChannel = DatagramChannel.open();
+        datagramChannel.socket().setReuseAddress(true);
+        try {
+
+            //     if (clientMode) {
+            InetSocketAddress localAddress = (InetSocketAddress) socketChannel.getLocalAddress();
+            InetSocketAddress remoteAddress = (InetSocketAddress) socketChannel.getRemoteAddress();
+
+
+            InetSocketAddress udpLocalAddress = new InetSocketAddress(localAddress.getHostString(), localAddress.getPort());
+            InetSocketAddress udpRemoteAddress = new InetSocketAddress(remoteAddress.getHostString(), remoteAddress.getPort());
+
+
+//            logger.info("datagramChannel.bind:" + udpLocalAddress + " clientMode:" + clientMode);
+//            logger.info("datagramChannel.connect:" + udpRemoteAddress + " clientMode:" + clientMode);
+
+            //  try {
+            datagramChannel.bind(udpLocalAddress);
+            // } catch (BindException e) {
+            //     throw new BindException(e.getMessage() + " localAddress:" + localAddress);
+            // }
+
+            // give the other side time to bind.
+            //Thread.sleep(2000);
+
+            datagramChannel.connect(udpRemoteAddress);
+            //    } else {
+            //InetSocketAddress addr = new InetSocketAddress(host, UDPort);
+
+            //  }
+        } catch (Exception e) {
+            logger.severe(e);
+            throw e;
+        }
+
+        UdpNioChannel channel = new UdpNioChannel(datagramChannel, clientMode);
+
+        //Channel wrapper = channelFactory.create(socketChannel, client, ioService.useDirectSocketBuffer());
+        acceptedSockets.add(channel);
+        return channel;
     }
 
     synchronized TcpIpConnection newConnection(Channel channel, Address endpoint) {

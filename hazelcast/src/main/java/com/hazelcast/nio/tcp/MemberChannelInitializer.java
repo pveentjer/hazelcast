@@ -22,6 +22,7 @@ import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.ChannelInitializer;
 import com.hazelcast.internal.networking.ChannelOutboundHandler;
 import com.hazelcast.internal.networking.InitResult;
+import com.hazelcast.internal.networking.udpnio.UdpNioChannel;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.IOService;
 import com.hazelcast.nio.ascii.TextChannelInboundHandler;
@@ -72,6 +73,8 @@ public class MemberChannelInitializer implements ChannelInitializer {
     public InitResult<ChannelInboundHandler> initInbound(Channel channel) throws IOException {
         String protocol = inboundProtocol(channel);
 
+        logger.info(channel + " inbound protocol:" + protocol);
+
         InitResult<ChannelInboundHandler> init;
         if (protocol == null) {
             // not all protocol data has been received; so return null to indicate that the initialization isn't ready yet.
@@ -94,7 +97,7 @@ public class MemberChannelInitializer implements ChannelInitializer {
         ConcurrentMap attributeMap = channel.attributeMap();
         ByteBuffer protocolBuffer = (ByteBuffer) attributeMap.get(PROTOCOL_BUFFER);
         if (protocolBuffer == null) {
-            protocolBuffer = ByteBuffer.allocate(3);
+            protocolBuffer = ByteBuffer.allocate(32 * 1024);
             attributeMap.put(PROTOCOL_BUFFER, protocolBuffer);
         }
 
@@ -104,15 +107,17 @@ public class MemberChannelInitializer implements ChannelInitializer {
             throw new EOFException("Could not read protocol type!");
         }
 
-        if (protocolBuffer.hasRemaining()) {
+        if (protocolBuffer.position() < 3) {
             // we have not yet received all protocol bytes
             return null;
         }
 
         // Since the protocol is complete; we can remove the protocol-buffer.
-        channel.attributeMap().remove(PROTOCOL_BUFFER);
-
-        String protocol = bytesToString(protocolBuffer.array());
+        byte[] protocolBytes = new byte[3];
+        for (int k = 0; k < 3; k++) {
+            protocolBytes[k] = protocolBuffer.array()[k];
+        }
+        String protocol = bytesToString(protocolBytes);
 
         // sets the protocol for the outbound initialization
         channel.attributeMap().put(PROTOCOL, protocol);
@@ -125,6 +130,12 @@ public class MemberChannelInitializer implements ChannelInitializer {
         connection.setType(MEMBER);
 
         ByteBuffer inputBuffer = newInputBuffer(connection.getChannel(), ioService.getSocketReceiveBufferSize());
+        ByteBuffer protocolBuffer = (ByteBuffer) channel.attributeMap().get(PROTOCOL_BUFFER);
+        int pendingBytes = protocolBuffer.position()-3;
+        logger.info("Pending bytes : "+pendingBytes);
+        for (int k = 3; k < protocolBuffer.position(); k++) {
+            inputBuffer.put(protocolBuffer.get(k));
+        }
 
         ChannelInboundHandler inboundHandler = ioService.createInboundHandler(connection);
 
@@ -132,7 +143,7 @@ public class MemberChannelInitializer implements ChannelInitializer {
             throw new IOException("Could not initialize ChannelInboundHandler!");
         }
 
-        return new InitResult<ChannelInboundHandler>(inputBuffer, inboundHandler);
+        return new InitResult<>(inputBuffer, inboundHandler);
     }
 
     private InitResult<ChannelInboundHandler> initInboundClientProtocol(Channel channel) throws IOException {
@@ -143,7 +154,7 @@ public class MemberChannelInitializer implements ChannelInitializer {
         ChannelInboundHandler inboundHandler
                 = new ClientMessageChannelInboundHandler(new MessageHandlerImpl(connection, ioService.getClientEngine()));
 
-        return new InitResult<ChannelInboundHandler>(inputBuffer, inboundHandler);
+        return new InitResult<>(inputBuffer, inboundHandler);
     }
 
     private InitResult<ChannelInboundHandler> initInboundTextProtocol(Channel channel, String protocol) {
@@ -158,7 +169,7 @@ public class MemberChannelInitializer implements ChannelInitializer {
         inputBuffer.put(stringToBytes(protocol));
 
         ChannelInboundHandler inboundHandler = new TextChannelInboundHandler(connection, outboundHandler);
-        return new InitResult<ChannelInboundHandler>(inputBuffer, inboundHandler);
+        return new InitResult<>(inputBuffer, inboundHandler);
     }
 
     private ByteBuffer newInputBuffer(Channel channel, int sizeKb) {
@@ -168,7 +179,12 @@ public class MemberChannelInitializer implements ChannelInitializer {
         ByteBuffer inputBuffer = newByteBuffer(sizeBytes, directBuffer);
 
         try {
-            channel.socket().setReceiveBufferSize(sizeBytes);
+            if (channel instanceof UdpNioChannel) {
+                UdpNioChannel udpChannel = (UdpNioChannel) channel;
+                udpChannel.getDatagramChannel().socket().setReceiveBufferSize(sizeBytes);
+            } else {
+                channel.socket().setReceiveBufferSize(sizeBytes);
+            }
         } catch (SocketException e) {
             logger.finest("Failed to adjust TCP receive buffer of " + channel + " to " + sizeBytes + " B.", e);
         }
@@ -186,6 +202,8 @@ public class MemberChannelInitializer implements ChannelInitializer {
     @Override
     public InitResult<ChannelOutboundHandler> initOutbound(Channel channel) {
         String protocol = outboundProtocol(channel);
+
+        logger.info(channel + " initOutbound protocol:" + protocol);
 
         if (protocol == null) {
             // the protocol isn't known yet; so return null to indicate that we can't initialize the channel yet.
@@ -219,7 +237,7 @@ public class MemberChannelInitializer implements ChannelInitializer {
         // we always send the cluster protocol to a fellow member.
         outputBuffer.put(stringToBytes(CLUSTER));
 
-        return new InitResult<ChannelOutboundHandler>(outputBuffer, outboundHandler);
+        return new InitResult<>(outputBuffer, outboundHandler);
     }
 
     private InitResult<ChannelOutboundHandler> initOutboundClientProtocol(Channel channel) {
@@ -227,7 +245,7 @@ public class MemberChannelInitializer implements ChannelInitializer {
 
         ByteBuffer outputBuffer = newOutputBuffer(channel, ioService.getSocketClientSendBufferSize());
 
-        return new InitResult<ChannelOutboundHandler>(outputBuffer, outboundHandler);
+        return new InitResult<>(outputBuffer, outboundHandler);
     }
 
     private InitResult<ChannelOutboundHandler> initOutboundTextProtocol(Channel channel) {
@@ -235,7 +253,7 @@ public class MemberChannelInitializer implements ChannelInitializer {
 
         ByteBuffer outputBuffer = newOutputBuffer(channel, ioService.getSocketClientSendBufferSize());
 
-        return new InitResult<ChannelOutboundHandler>(outputBuffer, outboundHandler);
+        return new InitResult<>(outputBuffer, outboundHandler);
     }
 
     private ByteBuffer newOutputBuffer(Channel channel, int sizeKb) {
@@ -244,7 +262,12 @@ public class MemberChannelInitializer implements ChannelInitializer {
         ByteBuffer outputBuffer = newByteBuffer(size, ioService.useDirectSocketBuffer());
 
         try {
-            channel.socket().setSendBufferSize(size);
+            if (channel instanceof UdpNioChannel) {
+                UdpNioChannel udpChannel = (UdpNioChannel) channel;
+                udpChannel.getDatagramChannel().socket().setSendBufferSize(size);
+            } else {
+                channel.socket().setSendBufferSize(size);
+            }
         } catch (SocketException e) {
             logger.finest("Failed to adjust TCP send buffer of " + channel + " to " + size + " B.", e);
         }

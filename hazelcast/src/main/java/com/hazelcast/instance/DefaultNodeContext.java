@@ -19,8 +19,7 @@ package com.hazelcast.instance;
 import com.hazelcast.cluster.Joiner;
 import com.hazelcast.internal.networking.ChannelErrorHandler;
 import com.hazelcast.internal.networking.EventLoopGroup;
-import com.hazelcast.internal.networking.nio.NioEventLoopGroup;
-import com.hazelcast.internal.networking.spinning.SpinningEventLoopGroup;
+import com.hazelcast.internal.networking.udpnio.UdpEventLoopGroup;
 import com.hazelcast.logging.LoggingServiceImpl;
 import com.hazelcast.nio.ConnectionManager;
 import com.hazelcast.nio.NodeIOService;
@@ -63,7 +62,6 @@ public class DefaultNodeContext implements NodeContext {
     }
 
     private EventLoopGroup createEventLoopGroup(Node node, NodeIOService ioService) {
-        boolean spinning = Boolean.getBoolean("hazelcast.io.spinning");
         LoggingServiceImpl loggingService = node.loggingService;
 
         MemberChannelInitializer initializer
@@ -72,24 +70,15 @@ public class DefaultNodeContext implements NodeContext {
         ChannelErrorHandler exceptionHandler
                 = new TcpIpConnectionChannelErrorHandler(loggingService.getLogger(TcpIpConnectionChannelErrorHandler.class));
 
-        if (spinning) {
-            return new SpinningEventLoopGroup(
-                    loggingService,
-                    node.nodeEngine.getMetricsRegistry(),
-                    exceptionHandler,
-                    initializer,
-                    node.hazelcastInstance.getName());
-        } else {
-            return new NioEventLoopGroup(
-                    loggingService,
-                    node.nodeEngine.getMetricsRegistry(),
-                    node.hazelcastInstance.getName(),
-                    exceptionHandler,
-                    ioService.getInputSelectorThreadCount(),
-                    ioService.getOutputSelectorThreadCount(),
-                    ioService.getBalancerIntervalSeconds(),
-                    initializer);
-        }
+        return new UdpEventLoopGroup(
+                loggingService,
+                node.nodeEngine.getMetricsRegistry(),
+                node.hazelcastInstance.getName(),
+                exceptionHandler,
+                ioService.getInputSelectorThreadCount(),
+                ioService.getOutputSelectorThreadCount(),
+                ioService.getBalancerIntervalSeconds(),
+                initializer);
     }
 
 }

@@ -1,20 +1,4 @@
-/*
- * Copyright (c) 2008-2017, Hazelcast, Inc. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-package com.hazelcast.internal.networking.nio;
+package com.hazelcast.internal.networking.udpnio;
 
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.networking.Channel;
@@ -22,6 +6,10 @@ import com.hazelcast.internal.networking.ChannelCloseListener;
 import com.hazelcast.internal.networking.ChannelErrorHandler;
 import com.hazelcast.internal.networking.ChannelInitializer;
 import com.hazelcast.internal.networking.EventLoopGroup;
+import com.hazelcast.internal.networking.nio.NioChannelReader;
+import com.hazelcast.internal.networking.nio.NioChannelWriter;
+import com.hazelcast.internal.networking.nio.NioThread;
+import com.hazelcast.internal.networking.nio.SelectorMode;
 import com.hazelcast.internal.networking.nio.iobalancer.IOBalancer;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
@@ -45,28 +33,16 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.logging.Level.FINE;
 import static java.util.logging.Level.INFO;
 
+
 /**
- * A non blocking {@link EventLoopGroup} implementation that makes use of {@link java.nio.channels.Selector} to have a
- * limited set of io threads, handle an arbitrary number of connections.
  *
- * Each {@link NioChannel} has 2 parts:
- * <ol>
- * <li>{@link NioChannelReader}: triggered by the NioThread when data is available in the socket. The NioChannelReader
- * takes care of reading data from the socket and calling the appropriate
- * {@link com.hazelcast.internal.networking.ChannelInboundHandler}</li>
- * <li>{@link NioChannelWriter}: triggered by the NioThread when either space is available in the socket for writing,
- * or when there is something that needs to be written e.g. a Packet. The NioChannelWriter takes care of calling the
- * appropriate {@link com.hazelcast.internal.networking.ChannelOutboundHandler} to convert the
- * {@link com.hazelcast.internal.networking.OutboundFrame} to bytes in in the ByteBuffer and writing it to the socket.
- * </li>
- * </ol>
+ * - Separate channel for operations and responses? So that back pressure can be applied on operations; but responses
+ * are likely to flow through
+ * - Separate channel for priority operations for the same reason as above?
  *
- * By default the {@link NioThread} blocks on the Selector, but it can be put in a 'selectNow' mode that makes it
- * spinning on the selector. This is an experimental feature and will cause the io threads to run hot. For this reason, when
- * this feature is enabled, the number of io threads should be reduced (preferably 1).
+ *
  */
-public class NioEventLoopGroup
-        implements EventLoopGroup {
+public class UdpEventLoopGroup implements EventLoopGroup {
 
     private volatile NioThread[] inputThreads;
     private volatile NioThread[] outputThreads;
@@ -81,8 +57,7 @@ public class NioEventLoopGroup
     private final ChannelInitializer channelInitializer;
     private final int inputThreadCount;
     private final int outputThreadCount;
-    private final Map<NioChannel, NioChannel> channels
-            = new ConcurrentHashMap<NioChannel, NioChannel>();
+    private final Map<UdpNioChannel, UdpNioChannel> channels = new ConcurrentHashMap<>();
     private final ChannelCloseListener channelCloseListener = new ChannelCloseListenerImpl();
 
     // The selector mode determines how IO threads will block (or not) on the Selector:
@@ -98,7 +73,7 @@ public class NioEventLoopGroup
     private volatile IOBalancer ioBalancer;
     private boolean selectorWorkaroundTest = Boolean.getBoolean("hazelcast.io.selector.workaround.test");
 
-    public NioEventLoopGroup(
+    public UdpEventLoopGroup(
             LoggingService loggingService,
             MetricsRegistry metricsRegistry,
             String hzName,
@@ -112,7 +87,7 @@ public class NioEventLoopGroup
         this.loggingService = loggingService;
         this.inputThreadCount = inputThreadCount;
         this.outputThreadCount = outputThreadCount;
-        this.logger = loggingService.getLogger(NioEventLoopGroup.class);
+        this.logger = loggingService.getLogger(UdpEventLoopGroup.class);
         this.errorHandler = errorHandler;
         this.balanceIntervalSeconds = balanceIntervalSeconds;
         this.channelInitializer = channelInitializer;
@@ -159,12 +134,9 @@ public class NioEventLoopGroup
 
     @Override
     public void start() {
-        if (logger.isFineEnabled()) {
-            logger.fine("TcpIpConnectionManager configured with Non Blocking IO-threading model: "
-                    + inputThreadCount + " input threads and "
-                    + outputThreadCount + " output threads");
-        }
-
+        logger.info("UdpEventLoopGroup configured with Non Blocking IO-threading model: "
+                + inputThreadCount + " input threads and "
+                + outputThreadCount + " output threads");
 
         logger.log(getSelectorMode() != SELECT ? INFO : FINE, "IO threads selector mode is " + getSelectorMode());
         this.inputThreads = new NioThread[inputThreadCount];
@@ -202,33 +174,53 @@ public class NioEventLoopGroup
         if (metricsRegistry.minimumLevel().isEnabled(DEBUG)) {
             metricsRegistry.scheduleAtFixedRate(new PublishAllTask(), 1, SECONDS);
         }
+
+        //new Thread(new DebugTask()).start();
     }
 
     private class PublishAllTask implements Runnable {
         @Override
         public void run() {
-            for (NioChannel channel : channels.values()) {
+            for (UdpNioChannel channel : channels.values()) {
                 final NioChannelReader reader = channel.getReader();
                 NioThread inputThread = reader.getOwner();
                 if (inputThread != null) {
-                    inputThread.addTaskAndWakeup(new Runnable() {
-                        @Override
-                        public void run() {
-                            reader.publish();
-                        }
-                    });
+                    inputThread.addTaskAndWakeup(reader::publish);
                 }
 
                 final NioChannelWriter writer = channel.getWriter();
                 NioThread outputThread = writer.getOwner();
                 if (outputThread != null) {
-                    outputThread.addTaskAndWakeup(new Runnable() {
-                        @Override
-                        public void run() {
-                            writer.publish();
-                        }
-                    });
+                    outputThread.addTaskAndWakeup(writer::publish);
                 }
+            }
+        }
+    }
+
+    private class DebugTask implements Runnable {
+        @Override
+        public void run() {
+            try {
+                while (true) {
+                    logger.info("Channels:" + channels.values().size());
+
+                    for (UdpNioChannel channel : channels.values()) {
+                        NioChannelReader reader = channel.getReader();
+                        NioChannelWriter writer = channel.getWriter();
+
+                        logger.info(channel
+                                +"\n\treader interest:" + reader.opsInterested() + " ready:" + reader.opsReady()
+                                + "\n\twriter interest:" + writer.opsInterested() + " ready:" + writer.opsReady());
+                    }
+
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            } catch (Exception e) {
+                logger.severe(e);
             }
         }
     }
@@ -264,19 +256,23 @@ public class NioEventLoopGroup
 
     @Override
     public void register(final Channel channel) {
-        NioChannel nioChannel = checkInstanceOf(NioChannel.class, channel);
+        logger.info("register " + channel);
+
+        UdpNioChannel udpChannel = checkInstanceOf(UdpNioChannel.class, channel);
 
         try {
-            nioChannel.socketChannel().configureBlocking(false);
+            udpChannel.getDatagramChannel().configureBlocking(false);
         } catch (IOException e) {
             throw rethrow(e);
         }
 
-        NioChannelReader reader = newChannelReader(nioChannel);
-        NioChannelWriter writer = newChannelWriter(nioChannel);
+        channels.put(udpChannel, udpChannel);
 
-        nioChannel.setReader(reader);
-        nioChannel.setWriter(writer);
+        NioChannelReader reader = newChannelReader(udpChannel);
+        NioChannelWriter writer = newChannelWriter(udpChannel);
+
+        udpChannel.setReader(reader);
+        udpChannel.setWriter(writer);
 
         ioBalancer.channelAdded(reader, writer);
 
@@ -290,7 +286,7 @@ public class NioEventLoopGroup
         channel.addCloseListener(channelCloseListener);
     }
 
-    private NioChannelWriter newChannelWriter(NioChannel channel) {
+    private NioChannelWriter newChannelWriter(UdpNioChannel channel) {
         int index = hashToIndex(nextOutputThreadIndex.getAndIncrement(), outputThreadCount);
         NioThread[] threads = outputThreads;
         if (threads == null) {
@@ -299,14 +295,14 @@ public class NioEventLoopGroup
 
         return new NioChannelWriter(
                 channel,
-                channel.socketChannel(),
+                channel.getDatagramChannel(),
                 threads[index],
                 loggingService.getLogger(NioChannelWriter.class),
                 ioBalancer,
                 channelInitializer);
     }
 
-    private NioChannelReader newChannelReader(NioChannel channel) {
+    private NioChannelReader newChannelReader(UdpNioChannel channel) {
         int index = hashToIndex(nextInputThreadIndex.getAndIncrement(), inputThreadCount);
         NioThread[] threads = inputThreads;
         if (threads == null) {
@@ -315,7 +311,7 @@ public class NioEventLoopGroup
 
         return new NioChannelReader(
                 channel,
-                channel.socketChannel(),
+                channel.getDatagramChannel(),
                 threads[index],
                 loggingService.getLogger(NioChannelReader.class),
                 ioBalancer,
@@ -325,14 +321,16 @@ public class NioEventLoopGroup
     private class ChannelCloseListenerImpl implements ChannelCloseListener {
         @Override
         public void onClose(Channel channel) {
-            NioChannel nioChannel = (NioChannel) channel;
+            logger.info("Removing channel:" + channel);
+
+            UdpNioChannel udpChannel = (UdpNioChannel) channel;
 
             channels.remove(channel);
 
-            ioBalancer.channelRemoved(nioChannel.getReader(), nioChannel.getWriter());
+            ioBalancer.channelRemoved(udpChannel.getReader(), udpChannel.getWriter());
 
-            metricsRegistry.deregister(nioChannel.getReader());
-            metricsRegistry.deregister(nioChannel.getWriter());
+            metricsRegistry.deregister(udpChannel.getReader());
+            metricsRegistry.deregister(udpChannel.getWriter());
         }
     }
 }

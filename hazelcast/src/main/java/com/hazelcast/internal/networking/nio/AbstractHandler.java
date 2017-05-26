@@ -23,8 +23,8 @@ import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 
 import java.io.IOException;
+import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
-import java.nio.channels.SocketChannel;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.DEBUG;
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
@@ -41,7 +41,7 @@ public abstract class AbstractHandler
     protected final Channel channel;
     protected NioThread ioThread;
     protected SelectionKey selectionKey;
-    private final SocketChannel socketChannel;
+    private final SelectableChannel selectableChannel;
     private final int initialOps;
     private final IOBalancer ioBalancer;
 
@@ -53,13 +53,14 @@ public abstract class AbstractHandler
     @Probe
     private final SwCounter migrationCount = newSwCounter();
 
-    AbstractHandler(NioChannel channel,
+    AbstractHandler(Channel channel,
+                    SelectableChannel selectableChannel,
                     NioThread ioThread,
                     int initialOps,
                     ILogger logger,
                     IOBalancer ioBalancer) {
         this.channel = channel;
-        this.socketChannel = channel.socketChannel();
+        this.selectableChannel = selectableChannel;
         this.ioThread = ioThread;
         this.ioThreadId = ioThread.id;
         this.logger = logger;
@@ -72,13 +73,13 @@ public abstract class AbstractHandler
     }
 
     @Probe(level = DEBUG)
-    private long opsInterested() {
+    public long opsInterested() {
         SelectionKey selectionKey = this.selectionKey;
         return selectionKey == null ? -1 : selectionKey.interestOps();
     }
 
     @Probe(level = DEBUG)
-    private long opsReady() {
+    public long opsReady() {
         SelectionKey selectionKey = this.selectionKey;
         return selectionKey == null ? -1 : selectionKey.readyOps();
     }
@@ -89,21 +90,18 @@ public abstract class AbstractHandler
     }
 
     public void start() {
-        ioThread.addTaskAndWakeup(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    getSelectionKey();
-                } catch (Throwable t) {
-                    onFailure(t);
-                }
+        ioThread.addTaskAndWakeup(() -> {
+            try {
+                getSelectionKey();
+            } catch (Throwable t) {
+                onFailure(t);
             }
         });
     }
 
     SelectionKey getSelectionKey() throws IOException {
         if (selectionKey == null) {
-            selectionKey = socketChannel.register(ioThread.getSelector(), initialOps, this);
+            selectionKey = selectableChannel.register(ioThread.getSelector(), initialOps, this);
         }
         return selectionKey;
     }
@@ -113,11 +111,13 @@ public abstract class AbstractHandler
     }
 
     final void registerOp(int operation) throws IOException {
+        //logger.info(channel+" registerOp "+operation);
         SelectionKey selectionKey = getSelectionKey();
         selectionKey.interestOps(selectionKey.interestOps() | operation);
     }
 
     final void unregisterOp(int operation) throws IOException {
+        //logger.info(channel+" unregisterOp "+operation);
         SelectionKey selectionKey = getSelectionKey();
         int interestOps = selectionKey.interestOps();
         if ((interestOps & operation) != 0) {
@@ -141,7 +141,7 @@ public abstract class AbstractHandler
         assert ioThread == Thread.currentThread() : "startMigration can only run on the owning NioThread";
         assert ioThread != newOwner : "newOwner can't be the same as the existing owner";
 
-        if (!socketChannel.isOpen()) {
+        if (!selectableChannel.isOpen()) {
             // if the channel is closed, we are done.
             return;
         }
@@ -154,14 +154,11 @@ public abstract class AbstractHandler
         selectionKey.cancel();
         selectionKey = null;
 
-        newOwner.addTaskAndWakeup(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    completeMigration(newOwner);
-                } catch (Throwable t) {
-                    onFailure(t);
-                }
+        newOwner.addTaskAndWakeup(() -> {
+            try {
+                completeMigration(newOwner);
+            } catch (Throwable t) {
+                onFailure(t);
             }
         });
     }
@@ -171,7 +168,7 @@ public abstract class AbstractHandler
 
         ioBalancer.signalMigrationComplete();
 
-        if (!socketChannel.isOpen()) {
+        if (!selectableChannel.isOpen()) {
             return;
         }
 

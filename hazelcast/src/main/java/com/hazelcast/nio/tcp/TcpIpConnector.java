@@ -184,8 +184,9 @@ public class TcpIpConnector {
 
                 socketChannel.configureBlocking(false);
                 TcpIpConnection connection = connectionManager.newConnection(channel, address);
+
                 connectionManager.sendBindRequest(connection, address, true);
-            } catch (Exception e) {
+            }catch (Exception e) {
                 closeSocket(socketChannel);
                 logger.log(level, "Could not connect to: " + socketAddress + ". Reason: " + e.getClass().getSimpleName()
                         + "[" + e.getMessage() + "]");
