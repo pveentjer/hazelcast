@@ -30,7 +30,7 @@ public class UdpSpinningChannelWriter {
 
     public UdpSpinningChannelWriter() {
         for (int k = 0; k < buffers.length; k++) {
-            buffers[k] = new Buffer();
+            buffers[k] = new Buffer(32*1024);
         }
     }
 

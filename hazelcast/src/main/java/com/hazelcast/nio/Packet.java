@@ -282,8 +282,11 @@ public final class Packet extends HeapData implements OutboundFrame {
             }
 
             flags = src.getChar();
+            System.out.println("readFrom.flags:"+new Integer(flags));
             partitionId = src.getInt();
+            System.out.println("readFrom.partitionId:"+partitionId);
             size = src.getInt();
+            System.out.println("readFrom.size:"+size);
             headerComplete = true;
         }
 

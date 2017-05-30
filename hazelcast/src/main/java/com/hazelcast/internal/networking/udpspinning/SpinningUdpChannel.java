@@ -173,7 +173,7 @@ public class SpinningUdpChannel implements Channel {
 
     @Override
     public void flush() {
-        writer.flush();
+        //writer.flush();
     }
 
     @Override
