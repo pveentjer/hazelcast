@@ -22,15 +22,31 @@ import com.hazelcast.internal.networking.ChannelCloseListener;
 import com.hazelcast.internal.networking.ChannelErrorHandler;
 import com.hazelcast.internal.networking.ChannelInitializer;
 import com.hazelcast.internal.networking.EventLoopGroup;
+import com.hazelcast.internal.networking.nio.MigratableHandler;
+import com.hazelcast.internal.networking.nio.NioChannelReader;
+import com.hazelcast.internal.networking.nio.NioChannelWriter;
+import com.hazelcast.internal.networking.nio.NioEventLoopGroup;
+import com.hazelcast.internal.networking.nio.NioThread;
+import com.hazelcast.internal.networking.nio.iobalancer.IOBalancer;
+import com.hazelcast.internal.networking.udpnio.UdpNioChannel;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Vector;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.hazelcast.internal.metrics.ProbeLevel.DEBUG;
+import static com.hazelcast.internal.networking.nio.SelectorMode.SELECT;
+import static com.hazelcast.internal.networking.nio.SelectorMode.SELECT_NOW;
 import static com.hazelcast.util.ExceptionUtil.rethrow;
+import static com.hazelcast.util.HashUtil.hashToIndex;
 import static com.hazelcast.util.Preconditions.checkInstanceOf;
+import static com.hazelcast.util.ThreadUtil.createThreadPoolName;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static java.util.logging.Level.FINE;
+import static java.util.logging.Level.INFO;
 
 /**
  * A {@link EventLoopGroup} that uses (busy) spinning on the SocketChannels to see if there is something
@@ -52,7 +68,7 @@ public class UdpSpinningEventLoopGroup implements EventLoopGroup {
     private final ChannelCloseListener channelCloseListener = new ChannelCloseListenerImpl();
     private final ILogger logger;
     private final LoggingService loggingService;
-    private final SpinningInputThread inputThread;
+   // private final SpinningInputThread inputThread;
     private final SpinningOutputThread outputThread;
     private final ChannelInitializer channelInitializer;
     private final ChannelErrorHandler errorHandler;
@@ -60,6 +76,10 @@ public class UdpSpinningEventLoopGroup implements EventLoopGroup {
     private final ILogger readerLogger;
     private final ILogger writerLogger;
     private final List<SpinningUdpChannel> channels = new Vector<>();
+    private NioThread[] inputThreads;
+    private final AtomicInteger nextInputThreadIndex = new AtomicInteger();
+    private int inputThreadCount = 3;
+    private IOBalancer ioBalancer;
 
     public UdpSpinningEventLoopGroup(LoggingService loggingService,
                                      MetricsRegistry metricsRegistry,
@@ -72,7 +92,7 @@ public class UdpSpinningEventLoopGroup implements EventLoopGroup {
         this.writerLogger = loggingService.getLogger(UdpSpinningChannelWriter.class);
         this.metricsRegistry = metricsRegistry;
         this.errorHandler = errorHandler;
-        this.inputThread = new SpinningInputThread(hzName);
+       // this.inputThread = new SpinningInputThread(hzName);
         this.outputThread = new SpinningOutputThread(hzName);
         this.channelInitializer = channelInitializer;
     }
@@ -88,10 +108,28 @@ public class UdpSpinningEventLoopGroup implements EventLoopGroup {
 
         channels.add(spinningChannel);
 
-        UdpSpinningChannelReader reader = new UdpSpinningChannelReader(
-                spinningChannel, readerLogger, errorHandler, channelInitializer);
+        NioChannelReader reader = newChannelReader(spinningChannel);
+
         spinningChannel.setReader(reader);
-        inputThread.register(reader);
+
+        ioBalancer.channelAdded(reader, new MigratableHandler() {
+            @Override
+            public void requestMigration(NioThread newOwner) {
+
+            }
+
+            @Override
+            public NioThread getOwner() {
+                return null;
+            }
+
+            @Override
+            public long getLoad() {
+                return 0;
+            }
+        });
+
+        reader.start();
 
         UdpSpinningChannelWriter writer = new UdpSpinningChannelWriter(
                 spinningChannel, writerLogger, errorHandler, channelInitializer);
@@ -109,31 +147,69 @@ public class UdpSpinningEventLoopGroup implements EventLoopGroup {
     public void start() {
         logger.info("TcpIpConnectionManager configured with Spinning IO-threading model: "
                 + "1 input thread and 1 output thread");
-        inputThread.start();
         outputThread.start();
 
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                for (; ; ) {
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                    }
+        this.inputThreads = new NioThread[inputThreadCount];
 
-                    for(SpinningUdpChannel channel:channels){
-                        UdpSpinningChannelWriter writer = channel.getWriter();
-                        System.out.println(writer);
-                        //System.out.println(writer.);
-                    }
-                }
-            }
-        }).start();
+        for (int i = 0; i < inputThreads.length; i++) {
+            NioThread thread = new NioThread(
+                    createThreadPoolName("doo", "IO") + "in-" + i,
+                    loggingService.getLogger(NioThread.class),
+                    errorHandler,
+                    SELECT,
+                    null);
+            thread.id = i;
+            inputThreads[i] = thread;
+            metricsRegistry.scanAndRegister(thread, "tcp.inputThread[" + thread.getName() + "]");
+            thread.start();
+        }
+
+        startIOBalancer();
+//
+//        new Thread(new Runnable() {
+//            @Override
+//            public void run() {
+//                for (; ; ) {
+//                    try {
+//                        Thread.sleep(1000);
+//                    } catch (InterruptedException e) {
+//                    }
+//
+//                    for(SpinningUdpChannel channel:channels){
+//                        UdpSpinningChannelWriter writer = channel.getWriter();
+//                        System.out.println(writer);
+//                        //System.out.println(writer.);
+//                    }
+//                }
+//            }
+//        }).start();
+    }
+
+    private NioChannelReader newChannelReader(SpinningUdpChannel channel) {
+        int index = hashToIndex(nextInputThreadIndex.getAndIncrement(), inputThreadCount);
+        NioThread[] threads = inputThreads;
+        if (threads == null) {
+            throw new IllegalStateException("IO thread is closed!");
+        }
+
+        return new NioChannelReader(
+                channel,
+                channel.getDatagramChannel(),
+                threads[index],
+                loggingService.getLogger(NioChannelReader.class),
+                ioBalancer,
+                channelInitializer);
+    }
+
+
+    private void startIOBalancer() {
+        ioBalancer = new IOBalancer(inputThreads, new NioThread[0], "foo", 20, loggingService);
+        ioBalancer.start();
+        metricsRegistry.scanAndRegister(ioBalancer, "tcp.balancer");
     }
 
     @Override
     public void shutdown() {
-        inputThread.shutdown();
         outputThread.shutdown();
     }
 
@@ -146,7 +222,7 @@ public class UdpSpinningEventLoopGroup implements EventLoopGroup {
             metricsRegistry.deregister(spinningChannel.getWriter());
 
             outputThread.unregister(spinningChannel.getWriter());
-            inputThread.unregister(spinningChannel.getReader());
+           // inputThread.unregister(spinningChannel.getReader());
         }
     }
 }

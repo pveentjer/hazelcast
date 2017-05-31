@@ -71,12 +71,22 @@ public class DefaultNodeContext implements NodeContext {
         ChannelErrorHandler exceptionHandler
                 = new TcpIpConnectionChannelErrorHandler(loggingService.getLogger(TcpIpConnectionChannelErrorHandler.class));
 
-        return new UdpSpinningEventLoopGroup(
+//        return new UdpSpinningEventLoopGroup(
+//                loggingService,
+//                node.nodeEngine.getMetricsRegistry(),
+//                exceptionHandler,
+//                initializer,
+//                node.hazelcastInstance.getName());
+
+        return new UdpEventLoopGroup(
                 loggingService,
                 node.nodeEngine.getMetricsRegistry(),
+                node.hazelcastInstance.getName(),
                 exceptionHandler,
-                initializer,
-                node.hazelcastInstance.getName());
+                ioService.getInputSelectorThreadCount(),
+                ioService.getOutputSelectorThreadCount(),
+                ioService.getBalancerIntervalSeconds(),
+                initializer);
     }
 
 }

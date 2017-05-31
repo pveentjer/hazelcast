@@ -103,8 +103,10 @@ public class Buffer {
         }
 
         if (bytesGranted >= OFFSET_SIZE + INT_SIZE_IN_BYTES) {
-           // System.out.println(channel + " " + id + " onOverflow, enough space to write value");
-            // there is enough space in the buffer available to write the size
+            // there was not enough space in the buffer to write the packet, but there is enough space
+            // in the buffer to write -1 for size so the reader knows we are done with it.
+
+            // System.out.println(channel + " " + id + " onOverflow, enough space to write value");
             long packetAddress = baseAddress + packetStartIndex;
 
             // we need to mark the buffer as full, by setting -1 as size.
@@ -170,7 +172,7 @@ public class Buffer {
             }
 
             // we are the end of the buffer.
-           // System.out.println(channel + " " + id + ":drain null because not enough space, readIndex:" + readIndex + " writePos:" + writePos());
+            // System.out.println(channel + " " + id + ":drain null because not enough space, readIndex:" + readIndex + " writePos:" + writePos());
             readIndex = -1;
             return null;
         }

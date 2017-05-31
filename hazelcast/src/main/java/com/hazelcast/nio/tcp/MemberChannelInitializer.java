@@ -182,7 +182,7 @@ public class MemberChannelInitializer implements ChannelInitializer {
 
         try {
             if (channel instanceof UdpNioChannel) {
-                SpinningUdpChannel udpChannel = (SpinningUdpChannel) channel;
+                UdpNioChannel udpChannel = (UdpNioChannel) channel;
                 udpChannel.getDatagramChannel().socket().setReceiveBufferSize(sizeBytes);
             } else if(channel instanceof NioChannel){
                 channel.socket().setReceiveBufferSize(sizeBytes);
@@ -264,7 +264,10 @@ public class MemberChannelInitializer implements ChannelInitializer {
         ByteBuffer outputBuffer = newByteBuffer(size, ioService.useDirectSocketBuffer());
 
         try {
-            if (channel instanceof SpinningUdpChannel) {
+            if (channel instanceof UdpNioChannel) {
+                UdpNioChannel udpChannel = (UdpNioChannel) channel;
+                udpChannel.getDatagramChannel().socket().setSendBufferSize(size);
+            } else if (channel instanceof SpinningUdpChannel) {
                 SpinningUdpChannel udpChannel = (SpinningUdpChannel) channel;
                 udpChannel.getDatagramChannel().socket().setSendBufferSize(size);
             } else {

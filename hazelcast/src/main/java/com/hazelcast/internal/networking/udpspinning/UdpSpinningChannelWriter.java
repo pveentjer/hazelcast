@@ -56,7 +56,7 @@ public class UdpSpinningChannelWriter extends AbstractHandler {
         super(channel, logger, errorHandler);
 
         for (int k = 0; k < buffers.length; k++) {
-            buffers[k] = new Buffer(32 * 1024);
+            buffers[k] = new Buffer(3*4096 * 1024);
             buffers[k].channel = channel;
         }
 

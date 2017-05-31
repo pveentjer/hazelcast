@@ -3,6 +3,7 @@ package com.hazelcast.internal.networking.udpspinning;
 import com.hazelcast.internal.networking.Channel;
 import com.hazelcast.internal.networking.ChannelCloseListener;
 import com.hazelcast.internal.networking.OutboundFrame;
+import com.hazelcast.internal.networking.nio.NioChannelReader;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.Logger;
 
@@ -33,7 +34,7 @@ public class SpinningUdpChannel implements Channel {
             = newSetFromMap(new ConcurrentHashMap<ChannelCloseListener, Boolean>());
     private final boolean clientMode;
     private volatile int closed = FALSE;
-    private UdpSpinningChannelReader reader;
+    private NioChannelReader reader;
     private UdpSpinningChannelWriter writer;
 
     public SpinningUdpChannel(DatagramChannel datagramChannel, boolean clientMode) {
@@ -45,7 +46,7 @@ public class SpinningUdpChannel implements Channel {
         return datagramChannel;
     }
 
-    public void setReader(UdpSpinningChannelReader reader) {
+    public void setReader(NioChannelReader reader) {
         this.reader = reader;
     }
 
@@ -53,7 +54,7 @@ public class SpinningUdpChannel implements Channel {
         this.writer = writer;
     }
 
-    public UdpSpinningChannelReader getReader() {
+    public NioChannelReader getReader() {
         return reader;
     }
 

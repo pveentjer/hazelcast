@@ -345,7 +345,8 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
             throw e;
         }
 
-        SpinningUdpChannel channel = new SpinningUdpChannel(datagramChannel, clientMode);
+        UdpNioChannel channel = new UdpNioChannel(datagramChannel, clientMode);
+       // SpinningUdpChannel channel = new SpinningUdpChannel(datagramChannel, clientMode);
 
         //Channel wrapper = channelFactory.create(socketChannel, client, ioService.useDirectSocketBuffer());
         acceptedSockets.add(channel);
