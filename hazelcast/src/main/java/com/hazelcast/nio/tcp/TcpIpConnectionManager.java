@@ -23,6 +23,7 @@ import com.hazelcast.internal.networking.Channel;
 import com.hazelcast.internal.networking.ChannelFactory;
 import com.hazelcast.internal.networking.EventLoopGroup;
 import com.hazelcast.internal.networking.udpnio.UdpNioChannel;
+import com.hazelcast.internal.networking.udpspinning.SpinningUdpChannel;
 import com.hazelcast.internal.util.concurrent.ThreadFactoryImpl;
 import com.hazelcast.internal.util.counters.MwCounter;
 import com.hazelcast.logging.ILogger;
@@ -344,7 +345,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
             throw e;
         }
 
-        UdpNioChannel channel = new UdpNioChannel(datagramChannel, clientMode);
+        SpinningUdpChannel channel = new SpinningUdpChannel(datagramChannel, clientMode);
 
         //Channel wrapper = channelFactory.create(socketChannel, client, ioService.useDirectSocketBuffer());
         acceptedSockets.add(channel);

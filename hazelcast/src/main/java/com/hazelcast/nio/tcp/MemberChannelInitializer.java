@@ -22,7 +22,9 @@ import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.ChannelInitializer;
 import com.hazelcast.internal.networking.ChannelOutboundHandler;
 import com.hazelcast.internal.networking.InitResult;
+import com.hazelcast.internal.networking.nio.NioChannel;
 import com.hazelcast.internal.networking.udpnio.UdpNioChannel;
+import com.hazelcast.internal.networking.udpspinning.SpinningUdpChannel;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.IOService;
 import com.hazelcast.nio.ascii.TextChannelInboundHandler;
@@ -73,7 +75,7 @@ public class MemberChannelInitializer implements ChannelInitializer {
     public InitResult<ChannelInboundHandler> initInbound(Channel channel) throws IOException {
         String protocol = inboundProtocol(channel);
 
-        logger.info(channel + " inbound protocol:" + protocol);
+      //  logger.info(channel + " inbound protocol:" + protocol);
 
         InitResult<ChannelInboundHandler> init;
         if (protocol == null) {
@@ -180,9 +182,9 @@ public class MemberChannelInitializer implements ChannelInitializer {
 
         try {
             if (channel instanceof UdpNioChannel) {
-                UdpNioChannel udpChannel = (UdpNioChannel) channel;
+                SpinningUdpChannel udpChannel = (SpinningUdpChannel) channel;
                 udpChannel.getDatagramChannel().socket().setReceiveBufferSize(sizeBytes);
-            } else {
+            } else if(channel instanceof NioChannel){
                 channel.socket().setReceiveBufferSize(sizeBytes);
             }
         } catch (SocketException e) {
@@ -203,7 +205,7 @@ public class MemberChannelInitializer implements ChannelInitializer {
     public InitResult<ChannelOutboundHandler> initOutbound(Channel channel) {
         String protocol = outboundProtocol(channel);
 
-        logger.info(channel + " initOutbound protocol:" + protocol);
+       // logger.info(channel + " initOutbound protocol:" + protocol);
 
         if (protocol == null) {
             // the protocol isn't known yet; so return null to indicate that we can't initialize the channel yet.
@@ -262,8 +264,8 @@ public class MemberChannelInitializer implements ChannelInitializer {
         ByteBuffer outputBuffer = newByteBuffer(size, ioService.useDirectSocketBuffer());
 
         try {
-            if (channel instanceof UdpNioChannel) {
-                UdpNioChannel udpChannel = (UdpNioChannel) channel;
+            if (channel instanceof SpinningUdpChannel) {
+                SpinningUdpChannel udpChannel = (SpinningUdpChannel) channel;
                 udpChannel.getDatagramChannel().socket().setSendBufferSize(size);
             } else {
                 channel.socket().setSendBufferSize(size);

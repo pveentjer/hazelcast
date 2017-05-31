@@ -7,30 +7,41 @@ import com.hazelcast.core.IMap;
 import java.nio.channels.SelectionKey;
 
 /**
- * Created by alarmnummer on 5/26/17.
+ * reason of stalling:
+ * UdpSpinningChannelWriter{
+ *  channel=SpinningUdpChannel{/10.8.0.10:5701->/10.8.0.10:33723},
+ *  writeBuffer=Buffer{id=2, writeIndex=43, readIndex=0},
+ *  readBuffer=Buffer{id=1, writeIndex=0, readIndex=0},
+ *  bytesWritten=Counter{value=65509},
+ *  dirtyBuffer=null}
+ *
+ * The writers write to a different buffer, than the io thread is reading from. So the write that is done, is not visible and
+ * then we are in a stuck situation.
+ *
+ * The question is how this could have happened.
  */
 public class Main {
 
-    public static void main(String[] args){
-        System.out.println("OP_WRITE:"+ SelectionKey.OP_READ);
-        System.out.println("OP_WRITE:"+ SelectionKey.OP_WRITE);
-
+    public static void main(String[] args) {
+        System.out.println("OP_WRITE:" + SelectionKey.OP_READ);
+        System.out.println("OP_WRITE:" + SelectionKey.OP_WRITE);
 
         HazelcastInstance hz1 = Hazelcast.newHazelcastInstance();
         System.out.println("hz1 started");
         HazelcastInstance hz2 = Hazelcast.newHazelcastInstance();
         System.out.println("hz2 started");
-        HazelcastInstance hz3 = Hazelcast.newHazelcastInstance();
-        System.out.println("hz2 started");
 
-        IMap map1 = hz1.getMap("foo");
-        for(int k=0;k<10;k++){
-            map1.put(k,k);
-        }
+//        IMap map1 = hz1.getMap("foo");
+//        for (int k = 0; k < 10000; k++) {
+//            map1.put(k, k);
+//           // if (k % 100 == 0) {
+//                System.out.println("insert at:" + k);
+//           // }
+//        }
 
         IMap map2 = hz2.getMap("foo");
-        for(int k=0;k<10;k++){
-            System.out.println(map2.get(k));
+        for (int k = 0; k < 10000; k++) {
+            System.out.println("at "+k+" value="+map2.get(k));
         }
 
 

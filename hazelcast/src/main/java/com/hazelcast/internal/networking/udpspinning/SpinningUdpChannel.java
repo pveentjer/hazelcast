@@ -3,9 +3,6 @@ package com.hazelcast.internal.networking.udpspinning;
 import com.hazelcast.internal.networking.Channel;
 import com.hazelcast.internal.networking.ChannelCloseListener;
 import com.hazelcast.internal.networking.OutboundFrame;
-import com.hazelcast.internal.networking.nio.NioChannelReader;
-import com.hazelcast.internal.networking.nio.NioChannelWriter;
-import com.hazelcast.internal.networking.udpnio.UdpNioChannel;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.Logger;
 
@@ -36,7 +33,7 @@ public class SpinningUdpChannel implements Channel {
             = newSetFromMap(new ConcurrentHashMap<ChannelCloseListener, Boolean>());
     private final boolean clientMode;
     private volatile int closed = FALSE;
-    private NioChannelReader reader;
+    private UdpSpinningChannelReader reader;
     private UdpSpinningChannelWriter writer;
 
     public SpinningUdpChannel(DatagramChannel datagramChannel, boolean clientMode) {
@@ -48,7 +45,7 @@ public class SpinningUdpChannel implements Channel {
         return datagramChannel;
     }
 
-    public void setReader(NioChannelReader reader) {
+    public void setReader(UdpSpinningChannelReader reader) {
         this.reader = reader;
     }
 
@@ -56,7 +53,7 @@ public class SpinningUdpChannel implements Channel {
         this.writer = writer;
     }
 
-    public NioChannelReader getReader() {
+    public UdpSpinningChannelReader getReader() {
         return reader;
     }
 
@@ -178,6 +175,6 @@ public class SpinningUdpChannel implements Channel {
 
     @Override
     public String toString() {
-        return "UdpNioChannel{" + getLocalSocketAddress() + "->" + getRemoteSocketAddress() + '}';
+        return "SpinningUdpChannel{" + getLocalSocketAddress() + "->" + getRemoteSocketAddress() + '}';
     }
 }

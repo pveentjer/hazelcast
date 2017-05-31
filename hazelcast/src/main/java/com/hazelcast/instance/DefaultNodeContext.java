@@ -20,6 +20,7 @@ import com.hazelcast.cluster.Joiner;
 import com.hazelcast.internal.networking.ChannelErrorHandler;
 import com.hazelcast.internal.networking.EventLoopGroup;
 import com.hazelcast.internal.networking.udpnio.UdpEventLoopGroup;
+import com.hazelcast.internal.networking.udpspinning.UdpSpinningEventLoopGroup;
 import com.hazelcast.logging.LoggingServiceImpl;
 import com.hazelcast.nio.ConnectionManager;
 import com.hazelcast.nio.NodeIOService;
@@ -70,15 +71,12 @@ public class DefaultNodeContext implements NodeContext {
         ChannelErrorHandler exceptionHandler
                 = new TcpIpConnectionChannelErrorHandler(loggingService.getLogger(TcpIpConnectionChannelErrorHandler.class));
 
-        return new UdpEventLoopGroup(
+        return new UdpSpinningEventLoopGroup(
                 loggingService,
                 node.nodeEngine.getMetricsRegistry(),
-                node.hazelcastInstance.getName(),
                 exceptionHandler,
-                ioService.getInputSelectorThreadCount(),
-                ioService.getOutputSelectorThreadCount(),
-                ioService.getBalancerIntervalSeconds(),
-                initializer);
+                initializer,
+                node.hazelcastInstance.getName());
     }
 
 }
