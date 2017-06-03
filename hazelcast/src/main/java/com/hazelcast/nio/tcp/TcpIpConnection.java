@@ -9,6 +9,7 @@ import com.hazelcast.nio.Address;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.ConnectionType;
 import com.hazelcast.nio.IOService;
+import com.hazelcast.nio.Packet;
 
 import java.io.EOFException;
 import java.net.InetAddress;
@@ -16,6 +17,7 @@ import java.net.InetSocketAddress;
 import java.nio.channels.CancelledKeyException;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The Tcp/Ip implementation of the {@link com.hazelcast.nio.Connection}.
@@ -131,7 +133,7 @@ public final class TcpIpConnection implements Connection {
     public long lastReadTimeMillis() {
         long result = 0;
         for (Channel channel : channels) {
-            long r = channel.lastWriteTimeMillis();
+            long r = channel.lastReadTimeMillis();
             if (r > result) {
                 result = r;
             }
@@ -163,9 +165,24 @@ public final class TcpIpConnection implements Connection {
         return t != null && t != ConnectionType.NONE && t.isClient();
     }
 
+    private final AtomicLong selector = new AtomicLong();
+
     @Override
     public boolean write(OutboundFrame frame) {
-        if (channels[0].write(frame)) {
+//        int index = (int)(selector.incrementAndGet() % channels.length);
+//        Channel channel = channels[index];
+
+        Channel channel;
+        if (frame instanceof Packet) {
+            Packet packet = (Packet) frame;
+            int index =  (packet.getPartitionId() % channels.length);
+            channel = channels[index];
+        } else {
+            int index = (int) (selector.incrementAndGet() % channels.length);
+            channel = channels[index];
+        }
+
+        if (channel.write(frame)) {
             return true;
         }
 

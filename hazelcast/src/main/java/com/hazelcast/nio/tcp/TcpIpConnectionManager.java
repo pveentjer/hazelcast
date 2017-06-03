@@ -45,6 +45,7 @@ import java.nio.channels.DatagramChannel;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -134,6 +135,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         this.metricsRegistry = metricsRegistry;
         this.connector = new TcpIpConnector(this);
         metricsRegistry.scanAndRegister(this, "tcp.connection");
+
     }
 
     public IOService getIoService() {
@@ -283,15 +285,6 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
     }
 
     void sendBindRequest(TcpIpConnection connection, Address remoteEndPoint, boolean reply) {
-//
-
-
-//        try {
-//            Thread.sleep(5000);
-//        } catch (InterruptedException e) {
-//            e.printStackTrace();
-//        }
-
         connection.setEndPoint(remoteEndPoint);
         ioService.onSuccessfulConnection(remoteEndPoint);
         //make sure bind packet is the first packet sent to the end point.
@@ -312,42 +305,20 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         DatagramChannel datagramChannel = DatagramChannel.open();
         datagramChannel.socket().setReuseAddress(true);
         try {
-
-            //     if (clientMode) {
             InetSocketAddress localAddress = (InetSocketAddress) socketChannel.getLocalAddress();
             InetSocketAddress remoteAddress = (InetSocketAddress) socketChannel.getRemoteAddress();
-
 
             InetSocketAddress udpLocalAddress = new InetSocketAddress(localAddress.getHostString(), localAddress.getPort());
             InetSocketAddress udpRemoteAddress = new InetSocketAddress(remoteAddress.getHostString(), remoteAddress.getPort());
 
-
-//            logger.info("datagramChannel.bind:" + udpLocalAddress + " clientMode:" + clientMode);
-//            logger.info("datagramChannel.connect:" + udpRemoteAddress + " clientMode:" + clientMode);
-
-            //  try {
             datagramChannel.bind(udpLocalAddress);
-            // } catch (BindException e) {
-            //     throw new BindException(e.getMessage() + " localAddress:" + localAddress);
-            // }
-
-            // give the other side time to bind.
-            //Thread.sleep(2000);
-
             datagramChannel.connect(udpRemoteAddress);
-            //    } else {
-            //InetSocketAddress addr = new InetSocketAddress(host, UDPort);
-
-            //  }
         } catch (Exception e) {
             logger.severe(e);
             throw e;
         }
 
         UdpNioChannel channel = new UdpNioChannel(datagramChannel, clientMode);
-        // SpinningUdpChannel channel = new SpinningUdpChannel(datagramChannel, clientMode);
-
-        //Channel wrapper = channelFactory.create(socketChannel, client, ioService.useDirectSocketBuffer());
         acceptedSockets.add(channel);
         return channel;
     }
@@ -366,20 +337,25 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
 
             boolean clientMode = channel.isClientMode();
 
+            List<String> localNics = ioService.getAdditionalNics(localAddress.getAddress());
+            logger.info("nics localAddress '" + localAddress.getHostName() + "', localNics:" + localNics);
+            List<String> remoteNics = ioService.getAdditionalNics(remoteAddress.getAddress());
+            logger.info("remoteNics localAddress '" + localAddress.getHostName() + "', remoteNics:" + remoteNics);
+
             channels[0] = channel;
             for (int k = 1; k < channelCount; k++) {
                 logger.info("Creating support channel:" + k);
                 DatagramChannel datagramChannel = DatagramChannel.open();
                 datagramChannel.socket().setReuseAddress(true);
-
-                InetSocketAddress udpLocalAddress = new InetSocketAddress(
-                        localAddress.getHostString(),
-                        localAddress.getPort() + k * 100);
-
-                InetSocketAddress udpRemoteAddress = new InetSocketAddress(
-                        remoteAddress.getHostString(),
-                        remoteAddress.getPort() + k * 100);
-
+                InetSocketAddress udpLocalAddress;
+                InetSocketAddress udpRemoteAddress;
+                if (localNics.isEmpty()) {
+                    udpLocalAddress = new InetSocketAddress(localAddress.getHostString(), localAddress.getPort() + k * 100);
+                    udpRemoteAddress = new InetSocketAddress(remoteAddress.getHostString(), remoteAddress.getPort() + k * 100);
+                } else {
+                    udpLocalAddress = new InetSocketAddress(localNics.get(k - 1), localAddress.getPort());
+                    udpRemoteAddress = new InetSocketAddress(remoteNics.get(k - 1), remoteAddress.getPort());
+                }
                 datagramChannel.bind(udpLocalAddress);
                 datagramChannel.connect(udpRemoteAddress);
 

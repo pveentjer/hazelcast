@@ -148,14 +148,6 @@ public final class NioChannelWriter extends AbstractHandler implements Runnable 
 
     public void write(OutboundFrame frame) {
         //logger.info("writing frame:"+frame);
-
-        if(frame instanceof Packet){
-            Packet packet = (Packet)frame;
-            if(packet.packetSize()>10000){
-                throw new RuntimeException("Too big packet "+packet.packetSize());
-            }
-        }
-
         if (frame.isUrgent()) {
             urgentWriteQueue.offer(frame);
         } else {

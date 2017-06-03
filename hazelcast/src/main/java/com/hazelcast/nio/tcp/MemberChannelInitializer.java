@@ -73,8 +73,6 @@ public class MemberChannelInitializer implements ChannelInitializer {
 
     @Override
     public InitResult<ChannelInboundHandler> initInbound(Channel channel) throws IOException {
-        String protocol = inboundProtocol(channel);
-
         int index = (Integer) channel.attributeMap().get("channelIndex");
         if (index > 0) {
             logger.info("initInbound " + index + " " + channel);
@@ -83,6 +81,9 @@ public class MemberChannelInitializer implements ChannelInitializer {
             ChannelInboundHandler inboundHandler = ioService.createInboundHandler(connection);
             return new InitResult<>(inputBuffer, inboundHandler);
         }
+
+        String protocol = inboundProtocol(channel);
+
 
         //  logger.info(channel + " inbound protocol:" + protocol);
 

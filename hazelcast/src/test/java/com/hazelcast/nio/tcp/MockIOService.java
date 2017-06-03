@@ -43,6 +43,7 @@ import com.hazelcast.spi.impl.PacketHandler;
 import com.hazelcast.spi.impl.packetdispatcher.PacketDispatcher;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -50,6 +51,8 @@ import java.net.SocketException;
 import java.nio.channels.ServerSocketChannel;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class MockIOService implements IOService {
@@ -72,6 +75,11 @@ public class MockIOService implements IOService {
         this.serializationService = new DefaultSerializationServiceBuilder()
                 .addDataSerializableFactory(TestDataFactory.FACTORY_ID, new TestDataFactory())
                 .build();
+    }
+
+    @Override
+    public List<String> getAdditionalNics(InetAddress address) {
+        return new LinkedList<>();
     }
 
     @Override

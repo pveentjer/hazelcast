@@ -39,15 +39,20 @@ import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.properties.GroupProperty;
 
 import java.io.IOException;
+import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.util.ThreadUtil.createThreadName;
+import static java.lang.Byte.toUnsignedInt;
 
 @PrivateApi
 public class NodeIOService implements IOService {
@@ -58,6 +63,26 @@ public class NodeIOService implements IOService {
     public NodeIOService(Node node, NodeEngineImpl nodeEngine) {
         this.node = node;
         this.nodeEngine = nodeEngine;
+    }
+
+    @Override
+    public List<String> getAdditionalNics(InetAddress address) {
+        Inet4Address inet4Address = (Inet4Address) address;
+        byte[] bytes = inet4Address.getAddress();
+        String ip = toUnsignedInt(bytes[0]) + "." + toUnsignedInt(bytes[1]) + "." + toUnsignedInt(bytes[2]) + "." + toUnsignedInt(bytes[3]);
+
+        String key = "nic" + ip + "";
+        String nics = System.getProperty(key);
+
+        getLoggingService().getLogger(NodeIOService.class).info("key " + key + " nics: " + nics);
+
+        LinkedList<String> result = new LinkedList<>();
+        if (nics != null) {
+            for (String s : nics.split(",")) {
+                result.add(s);
+            }
+        }
+        return result;
     }
 
     @Override
