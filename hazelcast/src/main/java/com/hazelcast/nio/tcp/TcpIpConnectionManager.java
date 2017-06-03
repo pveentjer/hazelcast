@@ -23,7 +23,6 @@ import com.hazelcast.internal.networking.Channel;
 import com.hazelcast.internal.networking.ChannelFactory;
 import com.hazelcast.internal.networking.EventLoopGroup;
 import com.hazelcast.internal.networking.udpnio.UdpNioChannel;
-import com.hazelcast.internal.networking.udpspinning.SpinningUdpChannel;
 import com.hazelcast.internal.util.concurrent.ThreadFactoryImpl;
 import com.hazelcast.internal.util.counters.MwCounter;
 import com.hazelcast.logging.ILogger;
@@ -198,23 +197,23 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
             return false;
         }
 
-        logger.info("set endpoint:"+remoteEndPoint);
+        logger.info("set endpoint:" + remoteEndPoint);
         connection.setEndPoint(remoteEndPoint);
 
-        logger.info("onSucces connection:"+remoteEndPoint);
+        logger.info("onSucces connection:" + remoteEndPoint);
         ioService.onSuccessfulConnection(remoteEndPoint);
         if (reply) {
-            logger.info("sending reply bindrequest:"+remoteEndPoint);
+            logger.info("sending reply bindrequest:" + remoteEndPoint);
             sendBindRequest(connection, remoteEndPoint, false);
         }
         if (checkAlreadyConnected(connection, remoteEndPoint)) {
-            logger.info("checkAlreadyConnected:"+true);
+            logger.info("checkAlreadyConnected:" + true);
             return false;
         }
 
 
         boolean registered = registerConnection(remoteEndPoint, connection);
-        logger.info("registered:"+registered);
+        logger.info("registered:" + registered);
         return registered;
     }
 
@@ -304,7 +303,7 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         Packet packet = new Packet(bytes).setPacketType(Packet.Type.BIND);
         boolean written = connection.write(packet);
 
-        logger.info("sendBindRequest: "+remoteEndPoint+" success:"+written);
+        logger.info("sendBindRequest: " + remoteEndPoint + " success:" + written);
 
         //now you can send anything...
     }
@@ -346,20 +345,49 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
         }
 
         UdpNioChannel channel = new UdpNioChannel(datagramChannel, clientMode);
-       // SpinningUdpChannel channel = new SpinningUdpChannel(datagramChannel, clientMode);
+        // SpinningUdpChannel channel = new SpinningUdpChannel(datagramChannel, clientMode);
 
         //Channel wrapper = channelFactory.create(socketChannel, client, ioService.useDirectSocketBuffer());
         acceptedSockets.add(channel);
         return channel;
     }
 
-    synchronized TcpIpConnection newConnection(Channel channel, Address endpoint) {
+    private final int channelCount = Integer.getInteger("hazelcast.channelcount", 2);
+
+    synchronized TcpIpConnection newConnection(Channel channel, Address endpoint) throws Exception {
         try {
             if (!live) {
                 throw new IllegalStateException("connection manager is not live!");
             }
 
-            TcpIpConnection connection = new TcpIpConnection(this, connectionIdGen.incrementAndGet(), channel);
+            Channel[] channels = new Channel[channelCount];
+            InetSocketAddress localAddress = (InetSocketAddress) channel.getLocalSocketAddress();
+            InetSocketAddress remoteAddress = (InetSocketAddress) channel.getRemoteSocketAddress();
+
+            boolean clientMode = channel.isClientMode();
+
+            channels[0] = channel;
+            for (int k = 1; k < channelCount; k++) {
+                logger.info("Creating support channel:" + k);
+                DatagramChannel datagramChannel = DatagramChannel.open();
+                datagramChannel.socket().setReuseAddress(true);
+
+                InetSocketAddress udpLocalAddress = new InetSocketAddress(
+                        localAddress.getHostString(),
+                        localAddress.getPort() + k * 100);
+
+                InetSocketAddress udpRemoteAddress = new InetSocketAddress(
+                        remoteAddress.getHostString(),
+                        remoteAddress.getPort() + k * 100);
+
+                datagramChannel.bind(udpLocalAddress);
+                datagramChannel.connect(udpRemoteAddress);
+
+                Channel supportChannel = channels[k] = new UdpNioChannel(datagramChannel, clientMode);
+                logger.info("Finished Creating support channel:" + k + " " + supportChannel);
+            }
+
+            TcpIpConnection connection = new TcpIpConnection(this, connectionIdGen.incrementAndGet(), channels);
 
             connection.setEndPoint(endpoint);
             activeConnections.add(connection);
@@ -368,8 +396,14 @@ public class TcpIpConnectionManager implements ConnectionManager, PacketHandler 
                     + channel.getLocalSocketAddress() + " and " + channel.getRemoteSocketAddress());
             openedCount.inc();
 
-            eventLoopGroup.register(channel);
+            for (Channel c : channels) {
+                eventLoopGroup.register(c);
+            }
+
             return connection;
+        } catch (Exception e) {
+            logger.severe(e);
+            throw e;
         } finally {
             acceptedSockets.remove(channel);
         }

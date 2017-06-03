@@ -149,6 +149,13 @@ public final class NioChannelWriter extends AbstractHandler implements Runnable 
     public void write(OutboundFrame frame) {
         //logger.info("writing frame:"+frame);
 
+        if(frame instanceof Packet){
+            Packet packet = (Packet)frame;
+            if(packet.packetSize()>10000){
+                throw new RuntimeException("Too big packet "+packet.packetSize());
+            }
+        }
+
         if (frame.isUrgent()) {
             urgentWriteQueue.offer(frame);
         } else {
@@ -304,6 +311,9 @@ public final class NioChannelWriter extends AbstractHandler implements Runnable 
 
         this.outputBuffer = init.getByteBuffer();
         this.outboundHandler = init.getHandler();
+
+        System.out.println(getChannel()+" outputBuffer position:"+outputBuffer.position());
+
         registerOp(OP_WRITE);
         return true;
     }
@@ -327,11 +337,25 @@ public final class NioChannelWriter extends AbstractHandler implements Runnable 
      * Writes to content of the outputBuffer to the socket.
      */
     private void writeOutputBufferToSocket() throws IOException {
+   //     System.out.println("before writeOutputBufferToSocket: outputBuffer position:"+outputBuffer.position());
+
+        long position = outputBuffer.position();
+        long limit = outputBuffer.limit();
+        long remaining = outputBuffer.remaining();
+
         // So there is data for writing, so lets prepare the buffer for writing and then write it to the channel.
         outputBuffer.flip();
-        int written = channel.write(outputBuffer);
 
-        bytesWritten.inc(written);
+      //  System.out.println("after writeOutputBufferToSocket: outputBuffer position:"+outputBuffer.position());
+
+
+        try {
+            int written = channel.write(outputBuffer);
+            bytesWritten.inc(written);
+        }catch (IOException e){
+            throw new IOException("position:"+position+" limit:"+limit+" remaining:"+remaining,e);
+        }
+
 
         // Now we verify if all data is written.
         if (outputBuffer.hasRemaining()) {

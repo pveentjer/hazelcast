@@ -75,7 +75,16 @@ public class MemberChannelInitializer implements ChannelInitializer {
     public InitResult<ChannelInboundHandler> initInbound(Channel channel) throws IOException {
         String protocol = inboundProtocol(channel);
 
-      //  logger.info(channel + " inbound protocol:" + protocol);
+        int index = (Integer) channel.attributeMap().get("channelIndex");
+        if (index > 0) {
+            logger.info("initInbound " + index + " " + channel);
+            TcpIpConnection connection = (TcpIpConnection) channel.attributeMap().get(TcpIpConnection.class);
+            ByteBuffer inputBuffer = newInputBuffer(channel, ioService.getSocketReceiveBufferSize());
+            ChannelInboundHandler inboundHandler = ioService.createInboundHandler(connection);
+            return new InitResult<>(inputBuffer, inboundHandler);
+        }
+
+        //  logger.info(channel + " inbound protocol:" + protocol);
 
         InitResult<ChannelInboundHandler> init;
         if (protocol == null) {
@@ -133,12 +142,13 @@ public class MemberChannelInitializer implements ChannelInitializer {
 
         ByteBuffer inputBuffer = newInputBuffer(connection.getChannel(), ioService.getSocketReceiveBufferSize());
         ByteBuffer protocolBuffer = (ByteBuffer) channel.attributeMap().get(PROTOCOL_BUFFER);
-        int pendingBytes = protocolBuffer.position()-3;
-        logger.info("Pending bytes : "+pendingBytes);
+        int pendingBytes = protocolBuffer.position() - 3;
+        logger.info("Pending bytes : " + pendingBytes);
         for (int k = 3; k < protocolBuffer.position(); k++) {
             inputBuffer.put(protocolBuffer.get(k));
         }
 
+        //   inputBuffer.flip();
         ChannelInboundHandler inboundHandler = ioService.createInboundHandler(connection);
 
         if (inboundHandler == null) {
@@ -184,7 +194,7 @@ public class MemberChannelInitializer implements ChannelInitializer {
             if (channel instanceof UdpNioChannel) {
                 UdpNioChannel udpChannel = (UdpNioChannel) channel;
                 udpChannel.getDatagramChannel().socket().setReceiveBufferSize(sizeBytes);
-            } else if(channel instanceof NioChannel){
+            } else if (channel instanceof NioChannel) {
                 channel.socket().setReceiveBufferSize(sizeBytes);
             }
         } catch (SocketException e) {
@@ -203,9 +213,19 @@ public class MemberChannelInitializer implements ChannelInitializer {
      */
     @Override
     public InitResult<ChannelOutboundHandler> initOutbound(Channel channel) {
+        int index = (Integer) channel.attributeMap().get("channelIndex");
+        if (index > 0) {
+            logger.info("initOutbound " + index + " " + channel);
+
+            TcpIpConnection connection = (TcpIpConnection) channel.attributeMap().get(TcpIpConnection.class);
+            ByteBuffer outputBuffer = newOutputBuffer(channel, ioService.getSocketReceiveBufferSize());
+            ChannelOutboundHandler outboundHandler = ioService.createOutboundHandler(connection);
+            return new InitResult<>(outputBuffer, outboundHandler);
+        }
+
         String protocol = outboundProtocol(channel);
 
-       // logger.info(channel + " initOutbound protocol:" + protocol);
+        // logger.info(channel + " initOutbound protocol:" + protocol);
 
         if (protocol == null) {
             // the protocol isn't known yet; so return null to indicate that we can't initialize the channel yet.
@@ -236,8 +256,10 @@ public class MemberChannelInitializer implements ChannelInitializer {
         ChannelOutboundHandler outboundHandler = ioService.createOutboundHandler(connection);
 
         ByteBuffer outputBuffer = newOutputBuffer(channel, ioService.getSocketSendBufferSize());
+        //System.out.println("1 outputBuffer position:"+outputBuffer.position()+" limit:"+outputBuffer.limit()+" remaining:"+outputBuffer.remaining());
         // we always send the cluster protocol to a fellow member.
         outputBuffer.put(stringToBytes(CLUSTER));
+        // System.out.println("2 outputBuffer position:"+outputBuffer.position()+" limit:"+outputBuffer.limit()+" remaining:"+outputBuffer.remaining());
 
         return new InitResult<>(outputBuffer, outboundHandler);
     }

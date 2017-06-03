@@ -5,8 +5,6 @@ import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IFunction;
 import com.hazelcast.core.IMap;
 
-import java.nio.channels.SelectionKey;
-
 
 /**
  * reason of stalling:
@@ -25,27 +23,27 @@ import java.nio.channels.SelectionKey;
 public class Main {
 
     public static void main(String[] args) {
-        System.out.println("OP_WRITE:" + SelectionKey.OP_READ);
-        System.out.println("OP_WRITE:" + SelectionKey.OP_WRITE);
-
         HazelcastInstance hz1 = Hazelcast.newHazelcastInstance();
         System.out.println("hz1 started");
         HazelcastInstance hz2 = Hazelcast.newHazelcastInstance();
         System.out.println("hz2 started");
 
-//        IMap map1 = hz1.getMap("foo");
-//        for (int k = 0; k < 10000; k++) {
-//            map1.put(k, k);
-//           // if (k % 100 == 0) {
-//                System.out.println("insert at:" + k);
-//           // }
-//        }
+        IMap map1 = hz1.getMap("foo");
+        for (int k = 0; k < 10000; k++) {
+            map1.put(k, k);
+            if (k % 100 == 0) {
+                System.out.println("insert at:" + k);
+            }
+        }
+
+        System.out.println("Starting----------------------------------------");
 
         IMap map2 = hz2.getMap("foo");
         for (int k = 0; k < 10000; k++) {
             System.out.println("at " + k + " value=" + map2.get(k));
         }
 
+        System.out.println("Done---------------------------------------------");
 
     }
 
