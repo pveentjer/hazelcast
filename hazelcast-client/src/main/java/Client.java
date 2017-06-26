@@ -36,9 +36,9 @@ public class Client {
             final int threadId = k;
             Thread t = new Thread() {
                 public void run() {
-                    for (int item = 0; item < 1000 * 1000; item++) {
+                    for (int item = 0; item < 200 * 1000; item++) {
                         if(item%10==threadId) {
-                            map.put(item, new byte[1000]);
+                            map.put(item, new byte[16000]);
                             long l = inserted.incrementAndGet();
                             if(l %10000==0){
                                 System.out.println("    at:"+l);
