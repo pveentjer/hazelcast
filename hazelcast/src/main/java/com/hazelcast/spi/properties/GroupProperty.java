@@ -279,7 +279,7 @@ public final class GroupProperty {
     public static final HazelcastProperty SOCKET_CONNECT_TIMEOUT_SECONDS
             = new HazelcastProperty("hazelcast.socket.connect.timeout.seconds", 0, SECONDS);
     public static final HazelcastProperty SOCKET_KEEP_ALIVE
-            = new HazelcastProperty("hazelcast.socket.keep.alive", true);
+            = new HazelcastProperty("hazelcast.socket.keep.alive", false);
     public static final HazelcastProperty SOCKET_NO_DELAY
             = new HazelcastProperty("hazelcast.socket.no.delay", true);
 
