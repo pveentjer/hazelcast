@@ -9,6 +9,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.util.Date;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Created by alarmnummer on 26-6-17.
@@ -24,15 +27,31 @@ public class Client {
         clientConfig.getNetworkConfig().setConnectionAttemptLimit(100);
         clientConfig.getNetworkConfig().addAddress("10.212.1.116").addAddress("10.212.1.117").addAddress("10.212.1.118");
         HazelcastInstance client = HazelcastClient.newHazelcastClient(clientConfig);
-        IMap map = client.getMap("foo");
+        final IMap map = client.getMap("foo");
 
         System.out.println("Inserting data");
-        for(int k=0;k<1000*1000;k++) {
-            map.put(k, new byte[1000]);
-
-            if(k%10000==0){
-                System.out.println("    at:"+k);
-            }
+        List<Thread> threads = new LinkedList<Thread>();
+        final AtomicLong inserted = new AtomicLong();
+        for(int k=0;k<10;k++){
+            final int threadId = k;
+            Thread t = new Thread() {
+                public void run() {
+                    for (int item = 0; item < 1000 * 1000; item++) {
+                        if(item%10==threadId) {
+                            map.put(item, new byte[1000]);
+                            long l = inserted.incrementAndGet();
+                            if(l %10000==0){
+                                System.out.println("    at:"+l);
+                            }
+                        }
+                    }
+                }
+            };
+            t.start();
+            threads.add(t);
+        }
+        for(Thread t:threads){
+            t.join();
         }
         System.out.println("Finished inserting data");
 
