@@ -34,6 +34,9 @@ import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.logging.Level;
 
+import static com.hazelcast.spi.CallStatus.DONE_RESPONSE;
+import static com.hazelcast.spi.CallStatus.DONE_VOID;
+import static com.hazelcast.spi.CallStatus.WAIT;
 import static com.hazelcast.spi.ExceptionAction.RETRY_INVOCATION;
 import static com.hazelcast.spi.ExceptionAction.THROW_EXCEPTION;
 import static com.hazelcast.util.EmptyStatement.ignore;
@@ -97,7 +100,21 @@ public abstract class Operation implements DataSerializable {
     }
 
     // runs after wait-support, supposed to do actual operation
-    public abstract void run() throws Exception;
+    @Deprecated
+    public void run() throws Exception {
+    }
+
+    public CallStatus call() throws Exception {
+        if (this instanceof BlockingOperation) {
+            BlockingOperation blockingOperation = (BlockingOperation) this;
+            if (blockingOperation.shouldWait()) {
+                return WAIT;
+            }
+        }
+
+        run();
+        return returnsResponse() ? DONE_RESPONSE : DONE_VOID;
+    }
 
     // runs after backups, before wait-notify
     public void afterRun() throws Exception {
@@ -110,6 +127,7 @@ public abstract class Operation implements DataSerializable {
      * <p>
      * In other words, {@code true} is for synchronous operation and {@code false} is for asynchronous one.
      */
+    @Deprecated
     public boolean returnsResponse() {
         return true;
     }
