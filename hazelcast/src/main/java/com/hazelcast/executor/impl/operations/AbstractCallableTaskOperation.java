@@ -26,13 +26,12 @@ import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.hazelcast.spi.CallStatus;
+import com.hazelcast.spi.Offloaded;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.serialization.SerializationService;
 
 import java.io.IOException;
 import java.util.concurrent.Callable;
-
-import static com.hazelcast.spi.CallStatus.OFFLOADED;
 
 abstract class AbstractCallableTaskOperation extends Operation implements IdentifiedDataSerializable {
 
@@ -51,33 +50,10 @@ abstract class AbstractCallableTaskOperation extends Operation implements Identi
 
     @Override
     public final CallStatus call() {
-        Callable callable = loadCallable();
-        DistributedExecutorService service = getService();
-        service.execute(name, uuid, callable, this);
-        return OFFLOADED;
+        return new OffloadedImpl();
     }
 
-    private Callable loadCallable() {
-        ManagedContext managedContext = getManagedContext();
-
-        Callable callable = getNodeEngine().toObject(callableData);
-        if (callable instanceof RunnableAdapter) {
-            RunnableAdapter adapter = (RunnableAdapter) callable;
-            Runnable runnable = (Runnable) managedContext.initialize(adapter.getRunnable());
-            adapter.setRunnable(runnable);
-        } else {
-            callable = (Callable) managedContext.initialize(callable);
-        }
-        return callable;
-    }
-
-    private ManagedContext getManagedContext() {
-        HazelcastInstanceImpl hazelcastInstance = (HazelcastInstanceImpl) getNodeEngine().getHazelcastInstance();
-        SerializationService serializationService = hazelcastInstance.getSerializationService();
-        return serializationService.getManagedContext();
-    }
-
-    @Override
+      @Override
     public String getServiceName() {
         return DistributedExecutorService.SERVICE_NAME;
     }
@@ -106,5 +82,38 @@ abstract class AbstractCallableTaskOperation extends Operation implements Identi
     @Override
     public int getFactoryId() {
         return ExecutorDataSerializerHook.F_ID;
+    }
+
+    private class OffloadedImpl extends Offloaded {
+        OffloadedImpl() {
+            super(AbstractCallableTaskOperation.this);
+        }
+
+        @Override
+        public void start()  {
+            Callable callable = loadCallable();
+            DistributedExecutorService service = getService();
+            service.execute(name, uuid, callable, this);
+        }
+
+        private Callable loadCallable() {
+            ManagedContext managedContext = getManagedContext();
+
+            Callable callable = getNodeEngine().toObject(callableData);
+            if (callable instanceof RunnableAdapter) {
+                RunnableAdapter adapter = (RunnableAdapter) callable;
+                Runnable runnable = (Runnable) managedContext.initialize(adapter.getRunnable());
+                adapter.setRunnable(runnable);
+            } else {
+                callable = (Callable) managedContext.initialize(callable);
+            }
+            return callable;
+        }
+
+        private ManagedContext getManagedContext() {
+            HazelcastInstanceImpl hazelcastInstance = (HazelcastInstanceImpl) getNodeEngine().getHazelcastInstance();
+            SerializationService serializationService = hazelcastInstance.getSerializationService();
+            return serializationService.getManagedContext();
+        }
     }
 }

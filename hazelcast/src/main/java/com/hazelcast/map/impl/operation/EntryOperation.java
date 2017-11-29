@@ -32,6 +32,7 @@ import com.hazelcast.spi.BackupAwareOperation;
 import com.hazelcast.spi.BlockingOperation;
 import com.hazelcast.spi.CallStatus;
 import com.hazelcast.spi.ExecutionService;
+import com.hazelcast.spi.Offloaded;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationAccessor;
 import com.hazelcast.spi.OperationResponseHandler;
@@ -51,7 +52,6 @@ import static com.hazelcast.config.InMemoryFormat.OBJECT;
 import static com.hazelcast.core.Offloadable.NO_OFFLOADING;
 import static com.hazelcast.map.impl.operation.EntryOperator.operator;
 import static com.hazelcast.spi.CallStatus.DONE_RESPONSE;
-import static com.hazelcast.spi.CallStatus.OFFLOADED;
 import static com.hazelcast.spi.CallStatus.WAIT;
 import static com.hazelcast.spi.ExecutionService.OFFLOADABLE_EXECUTOR;
 import static com.hazelcast.spi.InvocationBuilder.DEFAULT_TRY_PAUSE_MILLIS;
@@ -180,103 +180,107 @@ public class EntryOperation extends MutatingKeyBasedMapOperation implements Back
         }
 
         if (offloading) {
-            runOffloaded();
-            return OFFLOADED;
+            return new OffloadedImpl();
         } else {
             runVanilla();
             return DONE_RESPONSE;
         }
     }
 
-    public void runOffloaded() {
-        if (!(entryProcessor instanceof Offloadable)) {
-            throw new HazelcastException("EntryProcessor is expected to implement Offloadable for this operation");
-        }
-        if (readOnly && entryProcessor.getBackupProcessor() != null) {
-            throw new HazelcastException("EntryProcessor.getBackupProcessor() should return null if ReadOnly implemented");
+    private class OffloadedImpl extends Offloaded {
+        public OffloadedImpl() {
+            super(EntryOperation.this);
         }
 
-        boolean shouldCloneForOffloading = OBJECT.equals(mapContainer.getMapConfig().getInMemoryFormat());
-        Object oldValue = recordStore.get(dataKey, false);
-        Object clonedOldValue = shouldCloneForOffloading ? toData(oldValue) : oldValue;
-
-        String executorName = ((Offloadable) entryProcessor).getExecutorName();
-        executorName = executorName.equals(Offloadable.OFFLOADABLE_EXECUTOR) ? OFFLOADABLE_EXECUTOR : executorName;
-
-        if (readOnly) {
-            runOffloadedReadOnlyEntryProcessor(clonedOldValue, executorName);
-        } else {
-            runOffloadedModifyingEntryProcessor(clonedOldValue, executorName);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void runOffloadedReadOnlyEntryProcessor(final Object oldValue, String executorName) {
-        ops.onStartAsyncOperation(this);
-        getNodeEngine().getExecutionService().execute(executorName, new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    Data result = operator(EntryOperation.this, entryProcessor)
-                            .operateOnKeyValue(dataKey, oldValue).getResult();
-                    getOperationResponseHandler().sendResponse(EntryOperation.this, result);
-                } catch (Throwable t) {
-                    getOperationResponseHandler().sendResponse(EntryOperation.this, t);
-                } finally {
-                    ops.onCompletionAsyncOperation(EntryOperation.this);
-                }
+        @Override
+        public void start() {
+            if (!(entryProcessor instanceof Offloadable)) {
+                throw new HazelcastException("EntryProcessor is expected to implement Offloadable for this operation");
             }
-        });
-    }
+            if (readOnly && entryProcessor.getBackupProcessor() != null) {
+                throw new HazelcastException("EntryProcessor.getBackupProcessor() should return null if ReadOnly implemented");
+            }
 
-    @SuppressWarnings("unchecked")
-    private void runOffloadedModifyingEntryProcessor(final Object oldValue, String executorName) {
-        final OperationServiceImpl ops = (OperationServiceImpl) getNodeEngine().getOperationService();
+            boolean shouldCloneForOffloading = OBJECT.equals(mapContainer.getMapConfig().getInMemoryFormat());
+            Object oldValue = recordStore.get(dataKey, false);
+            Object clonedOldValue = shouldCloneForOffloading ? toData(oldValue) : oldValue;
 
-        // callerId is random since the local locks are NOT re-entrant
-        // using a randomID every time prevents from re-entering the already acquired lock
-        final String finalCaller = UuidUtil.newUnsecureUuidString();
-        final Data finalDataKey = dataKey;
-        final long finalThreadId = threadId;
-        final long finalCallId = getCallId();
-        final long finalBegin = begin;
+            String executorName = ((Offloadable) entryProcessor).getExecutorName();
+            executorName = executorName.equals(Offloadable.OFFLOADABLE_EXECUTOR) ? OFFLOADABLE_EXECUTOR : executorName;
 
-        // The off-loading uses local locks, since the locking is used only on primary-replica.
-        // The locks are not supposed to be migrated on partition migration or partition promotion & downgrade.
-        lock(finalDataKey, finalCaller, finalThreadId, finalCallId);
+            if (readOnly) {
+                runOffloadedReadOnlyEntryProcessor(clonedOldValue, executorName);
+            } else {
+                runOffloadedModifyingEntryProcessor(clonedOldValue, executorName);
+            }
+        }
 
-        try {
-            ops.onStartAsyncOperation(this);
+        @SuppressWarnings("unchecked")
+        private void runOffloadedReadOnlyEntryProcessor(final Object oldValue, String executorName) {
             getNodeEngine().getExecutionService().execute(executorName, new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        EntryOperator entryOperator = operator(EntryOperation.this, entryProcessor)
-                                .operateOnKeyValue(dataKey, oldValue);
-                        Data result = entryOperator.getResult();
-                        EntryEventType modificationType = entryOperator.getEventType();
-                        if (modificationType != null) {
-                            Data newValue = toData(entryOperator.getNewValue());
-                            updateAndUnlock(toData(oldValue), newValue, modificationType, finalCaller, finalThreadId,
-                                    result, finalBegin);
-                        } else {
-                            unlockOnly(result, finalCaller, finalThreadId, finalBegin);
-                        }
+                        Data result = operator(EntryOperation.this, entryProcessor)
+                                .operateOnKeyValue(dataKey, oldValue).getResult();
+                        OffloadedImpl.this.sendResponse(result);
                     } catch (Throwable t) {
-                        getLogger().severe("Unexpected error on Offloadable execution", t);
-                        unlockOnly(t, finalCaller, finalThreadId, finalBegin);
+                        OffloadedImpl.this.sendResponse(t);
                     }
                 }
             });
-        } catch (Throwable t) {
+        }
+
+        @SuppressWarnings("unchecked")
+        private void runOffloadedModifyingEntryProcessor(final Object oldValue, String executorName) {
+            final OperationServiceImpl ops = (OperationServiceImpl) getNodeEngine().getOperationService();
+
+            // callerId is random since the local locks are NOT re-entrant
+            // using a randomID every time prevents from re-entering the already acquired lock
+            final String finalCaller = UuidUtil.newUnsecureUuidString();
+            final Data finalDataKey = dataKey;
+            final long finalThreadId = threadId;
+            final long finalCallId = getCallId();
+            final long finalBegin = begin;
+
+            // The off-loading uses local locks, since the locking is used only on primary-replica.
+            // The locks are not supposed to be migrated on partition migration or partition promotion & downgrade.
+            lock(finalDataKey, finalCaller, finalThreadId, finalCallId);
+
             try {
-                unlock(finalDataKey, finalCaller, finalThreadId, finalCallId, t);
-                sneakyThrow(t);
-            } finally {
-                ops.onCompletionAsyncOperation(this);
+                getNodeEngine().getExecutionService().execute(executorName, new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            EntryOperator entryOperator = operator(EntryOperation.this, entryProcessor)
+                                    .operateOnKeyValue(dataKey, oldValue);
+                            Data result = entryOperator.getResult();
+                            EntryEventType modificationType = entryOperator.getEventType();
+                            if (modificationType != null) {
+                                Data newValue = toData(entryOperator.getNewValue());
+                                updateAndUnlock(toData(oldValue), newValue, modificationType, finalCaller, finalThreadId,
+                                        result, finalBegin);
+                            } else {
+                                unlockOnly(result, finalCaller, finalThreadId, finalBegin);
+                            }
+                        } catch (Throwable t) {
+                            getLogger().severe("Unexpected error on Offloadable execution", t);
+                            unlockOnly(t, finalCaller, finalThreadId, finalBegin);
+                        }
+                    }
+                });
+            } catch (Throwable t) {
+               // try {
+                    unlock(finalDataKey, finalCaller, finalThreadId, finalCallId, t);
+                    sneakyThrow(t);
+               // } finally {
+                    //todo:
+                    //ops.onCompletionAsyncOperation(this);
+               // }
             }
         }
     }
+
 
     private Data toData(Object obj) {
         return mapServiceContext.toData(obj);

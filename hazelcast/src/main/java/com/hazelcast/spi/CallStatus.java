@@ -21,46 +21,67 @@ package com.hazelcast.spi;
  *
  *
  *
- * <h1>CallStatus doesn't need ot be enum</h1>
- * CallStatus is currently an enumeration. But if for whatever reason state needs to be returned, we can easily convert this
- * enumeration to a regular object like e.g. java https://docs.oracle.com/javase/8/docs/api/java/util/Optional.html.
- *
- * So you can have a call status class and if e.g. an operation that requires interleaving, a new Interleaving (subclass of
- * CallStatus) can be returned containing all the state for that interleaving.
- *
- * The same can be done for Blocking operations. Currently we just return WAIT, but this can easily be modified by creating a new
- * Wait (subclass of CallStatus) containing the wait key or whatever else is needed.
  *
  * <h1>Future additions</h1>
  * In the future we can add more values to this enumeration, for example 'YIELD' for batching operations that wants to
  * release the operation thread so that other operations can be interleaved.
  */
-public enum CallStatus {
+public class CallStatus {
+
+    /**
+     *
+     */
+    public static final int ENUM_DONE_RESPONSE = 0;
+    /**
+     *
+     */
+    public static final int ENUM_DONE_VOID = 1;
+    /**
+     *
+     */
+    public static final int ENUM_WAIT_RESPONSE = 2;
+    /**
+     *
+     */
+    public static final int ENUM_OFFLOADED = 3;
 
     /**
      * Signals that the Operation is done running and that a response is ready to be returned. Most of the normal operations
      * like IAtomicLong.get will fall in this category.
      */
-    DONE_RESPONSE,
+    public static final CallStatus DONE_RESPONSE = new CallStatus(ENUM_DONE_RESPONSE);
 
     /**
      * Signals that the Operation is done running, but no response will be returned. Most of the regular operations like map.get
      * will return a response, but there are also fire and forget operations (lot of cluster operations) that don't return a
      * response.
      */
-    DONE_VOID,
+    public static final CallStatus DONE_VOID = new CallStatus(ENUM_DONE_VOID);
 
     /**
      * Indicates that the call could not complete because waiting is required. E.g. a queue.take on an empty queue. This can
      * only be returned by BlockingOperations.
      */
-    WAIT,
+    public static final CallStatus WAIT = new CallStatus(ENUM_WAIT_RESPONSE);
 
-    /**
-     * Signals that the Operation has been offloaded e.g. an EntryProcessor. And therefor no response is available when the
-     * operation is executed. Only at a later time a response is ready and it is up to the offload functionality to determine
-     * how to deal with that. It could be that a response is send using the original operation handler, but it could also
-     * be that the operation will be rescheduled on an operation thread (a real continuation).
-     */
-    OFFLOADED
+    private final int ordinalValue;
+
+    public CallStatus(int ordinalValue) {
+        this.ordinalValue = ordinalValue;
+    }
+
+    public int ordinal() {
+        return ordinalValue;
+    }
+
+    //
+//    public enum CallStatusEnum {
+//        DONE_RESPONSE,
+//        DONE_VOID,
+//
+//        WAIT,
+//
+//        OFFLOADED
+//    }
 }
+

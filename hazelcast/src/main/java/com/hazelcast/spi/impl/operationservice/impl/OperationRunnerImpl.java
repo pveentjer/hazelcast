@@ -41,6 +41,7 @@ import com.hazelcast.quorum.impl.QuorumServiceImpl;
 import com.hazelcast.spi.BlockingOperation;
 import com.hazelcast.spi.CallStatus;
 import com.hazelcast.spi.Notifier;
+import com.hazelcast.spi.Offloaded;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationResponseHandler;
 import com.hazelcast.spi.ReadonlyOperation;
@@ -65,6 +66,10 @@ import java.util.logging.Level;
 import static com.hazelcast.internal.metrics.ProbeLevel.DEBUG;
 import static com.hazelcast.internal.util.counters.MwCounter.newMwCounter;
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
+import static com.hazelcast.spi.CallStatus.ENUM_DONE_RESPONSE;
+import static com.hazelcast.spi.CallStatus.ENUM_DONE_VOID;
+import static com.hazelcast.spi.CallStatus.ENUM_OFFLOADED;
+import static com.hazelcast.spi.CallStatus.ENUM_WAIT_RESPONSE;
 import static com.hazelcast.spi.OperationAccessor.setCallerAddress;
 import static com.hazelcast.spi.OperationAccessor.setConnection;
 import static com.hazelcast.spi.impl.OperationResponseHandlerFactory.createEmptyResponseHandler;
@@ -201,19 +206,27 @@ class OperationRunnerImpl extends OperationRunner implements MetricsProvider {
     private void call(Operation op) throws Exception {
         CallStatus callStatus = op.call();
 
-        switch (callStatus) {
-            case DONE_RESPONSE:
+        switch (callStatus.ordinal()) {
+            case ENUM_DONE_RESPONSE:
                 handleResponse(op);
                 afterRun(op);
                 break;
-            case DONE_VOID:
-                // todo: currently there is no difference between DONE_VOID and OFFLOADED
+            case ENUM_DONE_VOID:
                 op.afterRun();
                 break;
-            case OFFLOADED:
+            case ENUM_OFFLOADED:
                 op.afterRun();
+
+                Offloaded offloaded = (Offloaded) callStatus;
+                offloaded.setOperationService(operationService);
+                operationService.onStartAsyncOperation(offloaded.source());
+                try {
+                    offloaded.start();
+                } catch (Exception e) {
+                    offloaded.sendResponse(e);
+                }
                 break;
-            case WAIT:
+            case ENUM_WAIT_RESPONSE:
                 nodeEngine.getOperationParker().park((BlockingOperation) op);
                 break;
             default:

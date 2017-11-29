@@ -21,11 +21,9 @@ import com.hazelcast.logging.ILogger;
 import com.hazelcast.monitor.LocalExecutorStats;
 import com.hazelcast.monitor.impl.LocalExecutorStatsImpl;
 import com.hazelcast.spi.ExecutionService;
-import com.hazelcast.spi.LiveOperations;
-import com.hazelcast.spi.LiveOperationsTracker;
 import com.hazelcast.spi.ManagedService;
 import com.hazelcast.spi.NodeEngine;
-import com.hazelcast.spi.Operation;
+import com.hazelcast.spi.Offloaded;
 import com.hazelcast.spi.RemoteService;
 import com.hazelcast.spi.StatisticsAwareService;
 import com.hazelcast.util.Clock;
@@ -45,7 +43,7 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
-public class DistributedExecutorService implements ManagedService, RemoteService, LiveOperationsTracker,
+public class DistributedExecutorService implements ManagedService, RemoteService,
         StatisticsAwareService<LocalExecutorStats> {
 
     public static final String SERVICE_NAME = "hz:impl:executorService";
@@ -95,12 +93,12 @@ public class DistributedExecutorService implements ManagedService, RemoteService
         reset();
     }
 
-    public void execute(String name, String uuid, Callable callable, Operation op) {
+    public void execute(String name, String uuid, Callable callable, Offloaded offloaded) {
         ExecutorConfig cfg = getOrFindExecutorConfig(name);
         if (cfg.isStatisticsEnabled()) {
             startPending(name);
         }
-        CallableProcessor processor = new CallableProcessor(name, uuid, callable, op, cfg.isStatisticsEnabled());
+        CallableProcessor processor = new CallableProcessor(name, uuid, callable, offloaded, cfg.isStatisticsEnabled());
         if (uuid != null) {
             submittedTasks.put(uuid, processor);
         }
@@ -176,14 +174,6 @@ public class DistributedExecutorService implements ManagedService, RemoteService
     }
 
     @Override
-    public void populate(LiveOperations liveOperations) {
-        for (CallableProcessor processor : submittedTasks.values()) {
-            Operation op = processor.op;
-            liveOperations.add(op.getCallerAddress(), op.getCallId());
-        }
-    }
-
-    @Override
     public Map<String, LocalExecutorStats> getStats() {
         Map<String, LocalExecutorStats> executorStats = MapUtil.createHashMap(statsMap.size());
         for (Map.Entry<String, LocalExecutorStatsImpl> queueStat : statsMap.entrySet()) {
@@ -195,6 +185,7 @@ public class DistributedExecutorService implements ManagedService, RemoteService
     /**
      * Locate the {@code ExecutorConfig} in local {@link #executorConfigCache} or find it from {@link NodeEngine#getConfig()} and
      * cache it locally.
+     *
      * @param name
      * @return
      */
@@ -215,18 +206,18 @@ public class DistributedExecutorService implements ManagedService, RemoteService
 
         private final String name;
         private final String uuid;
-        private final Operation op;
+        private final Offloaded offloaded;
         private final String callableToString;
         private final long creationTime = Clock.currentTimeMillis();
         private final boolean statisticsEnabled;
 
-        private CallableProcessor(String name, String uuid, Callable callable, Operation op, boolean statisticsEnabled) {
+        private CallableProcessor(String name, String uuid, Callable callable, Offloaded offloaded, boolean statisticsEnabled) {
             //noinspection unchecked
             super(callable);
             this.name = name;
             this.uuid = uuid;
             this.callableToString = String.valueOf(callable);
-            this.op = op;
+            this.offloaded = offloaded;
             this.statisticsEnabled = statisticsEnabled;
         }
 
@@ -265,8 +256,8 @@ public class DistributedExecutorService implements ManagedService, RemoteService
         }
 
         private boolean sendResponse(Object result) {
-            if (RESPONSE_FLAG.compareAndSet(this, Boolean.FALSE, Boolean.TRUE)) {
-                op.sendResponse(result);
+            if (RESPONSE_FLAG.compareAndSet(this, false, true)) {
+                offloaded.sendResponse(result);
                 return true;
             }
 
