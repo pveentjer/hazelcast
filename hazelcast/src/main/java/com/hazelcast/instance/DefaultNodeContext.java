@@ -20,20 +20,27 @@ import com.hazelcast.cluster.Joiner;
 import com.hazelcast.config.MemberAddressProviderConfig;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.ConfigurationException;
+import com.hazelcast.internal.networking.Channel;
 import com.hazelcast.internal.networking.ChannelErrorHandler;
 import com.hazelcast.internal.networking.EventLoopGroup;
+import com.hazelcast.internal.networking.aeron.AeronEventLoopGroup;
+import com.hazelcast.internal.networking.aeron.FragmentHandlerFactory;
+import com.hazelcast.internal.networking.aeron.MemberFragmentHandler;
 import com.hazelcast.internal.networking.nio.NioEventLoopGroup;
 import com.hazelcast.internal.networking.spinning.SpinningEventLoopGroup;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingServiceImpl;
 import com.hazelcast.nio.ClassLoaderUtil;
+import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.ConnectionManager;
 import com.hazelcast.nio.NodeIOService;
 import com.hazelcast.nio.tcp.MemberChannelInitializer;
+import com.hazelcast.nio.tcp.TcpIpConnection;
 import com.hazelcast.nio.tcp.TcpIpConnectionChannelErrorHandler;
 import com.hazelcast.nio.tcp.TcpIpConnectionManager;
 import com.hazelcast.spi.MemberAddressProvider;
 import com.hazelcast.spi.annotation.PrivateApi;
+import io.aeron.logbuffer.FragmentHandler;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -143,8 +150,8 @@ public class DefaultNodeContext implements NodeContext {
                 node.getProperties());
     }
 
-    private EventLoopGroup createEventLoopGroup(Node node, NodeIOService ioService) {
-        boolean spinning = Boolean.getBoolean("hazelcast.io.spinning");
+    private EventLoopGroup createEventLoopGroup(final Node node, NodeIOService ioService) {
+        String eventLoopGroup = System.getProperty("hazelcast.io.eventloopgroup","nio");
         LoggingServiceImpl loggingService = node.loggingService;
 
         MemberChannelInitializer initializer
@@ -153,14 +160,14 @@ public class DefaultNodeContext implements NodeContext {
         ChannelErrorHandler exceptionHandler
                 = new TcpIpConnectionChannelErrorHandler(loggingService.getLogger(TcpIpConnectionChannelErrorHandler.class));
 
-        if (spinning) {
+        if (eventLoopGroup.equals("spinning")) {
             return new SpinningEventLoopGroup(
                     loggingService,
                     node.nodeEngine.getMetricsRegistry(),
                     exceptionHandler,
                     initializer,
                     node.hazelcastInstance.getName());
-        } else {
+        } else if(eventLoopGroup.equals("nio")){
             return new NioEventLoopGroup(
                     loggingService,
                     node.nodeEngine.getMetricsRegistry(),
@@ -170,7 +177,24 @@ public class DefaultNodeContext implements NodeContext {
                     ioService.getOutputSelectorThreadCount(),
                     ioService.getBalancerIntervalSeconds(),
                     initializer);
+        }else if(eventLoopGroup.equals("aeron")){
+                return new AeronEventLoopGroup(loggingService, exceptionHandler, new MyFragmentHandlerFactory(node));
+        }else{
+            throw new IllegalArgumentException("Unknown eventloopgroup '"+eventLoopGroup+"'");
         }
     }
 
+    private static class MyFragmentHandlerFactory implements FragmentHandlerFactory {
+        private final Node node;
+
+        public MyFragmentHandlerFactory(Node node) {
+            this.node = node;
+        }
+
+        @Override
+        public FragmentHandler create(Channel channel) {
+            TcpIpConnection connection = (TcpIpConnection) channel.attributeMap().get(TcpIpConnection.class);
+            return new MemberFragmentHandler(connection, node.getNodeEngine().getPacketDispatcher());
+        }
+    }
 }

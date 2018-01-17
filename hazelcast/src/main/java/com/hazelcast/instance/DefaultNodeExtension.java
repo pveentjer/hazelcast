@@ -56,6 +56,7 @@ import com.hazelcast.internal.management.TimedMemberStateFactory;
 import com.hazelcast.internal.networking.ChannelFactory;
 import com.hazelcast.internal.networking.ChannelInboundHandler;
 import com.hazelcast.internal.networking.ChannelOutboundHandler;
+import com.hazelcast.internal.networking.aeron.AeronChannelFactory;
 import com.hazelcast.internal.networking.nio.NioChannelFactory;
 import com.hazelcast.internal.networking.spinning.SpinningChannelFactory;
 import com.hazelcast.internal.serialization.InternalSerializationService;
@@ -244,8 +245,17 @@ public class DefaultNodeExtension implements NodeExtension {
 
     @Override
     public ChannelFactory getChannelFactory() {
-        boolean spinning = Boolean.getBoolean("hazelcast.io.spinning");
-        return spinning ? new SpinningChannelFactory() : new NioChannelFactory();
+        String eventLoopGroup = System.getProperty("hazelcast.io.eventloopgroup", "nio");
+
+        if (eventLoopGroup.equals("spinning")) {
+            return new SpinningChannelFactory();
+        } else if (eventLoopGroup.equals("nio")) {
+            return new NioChannelFactory();
+        } else if (eventLoopGroup.equals("aeron")) {
+            return new AeronChannelFactory();
+        } else {
+            throw new IllegalArgumentException("Unknown eventloopgroup '" + eventLoopGroup + "'");
+        }
     }
 
     @Override

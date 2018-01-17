@@ -36,7 +36,7 @@ import static com.hazelcast.nio.Packet.VERSION;
  * A {@link PacketIOHelper} is designed to be reused.
  */
 public class PacketIOHelper {
-    static final int HEADER_SIZE = BYTE_SIZE_IN_BYTES + SHORT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
+    public static final int HEADER_SIZE = BYTE_SIZE_IN_BYTES + SHORT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
 
     private int valueOffset;
     private int size;
