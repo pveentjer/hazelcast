@@ -50,15 +50,28 @@ public class AeronEventLoopGroup implements EventLoopGroup {
 
         System.out.println("Channel.class:" + channel.getClass());
 
-        InetSocketAddress remote = (InetSocketAddress) channel.getRemoteSocketAddress();
+        InetSocketAddress remoteAddress = (InetSocketAddress) channel.getRemoteSocketAddress();
 
         Publication publication = aeron.addPublication(
-                format("aeron:udp?endpoint=%s:%s", remote.getHostName(), remote.getPort()), 1);
+                format("aeron:udp?endpoint=%s:%s", remoteAddress.getHostName(), remoteAddress.getPort()), 1);
 
-        InetSocketAddress local = (InetSocketAddress) channel.getLocalSocketAddress();
+
+        // if this clientMode=false, the port of the local address is predictable, however when it is clientMode=true,
+        // then the local port is an ephemeral port.
+        // If the subscription is shared, the port to send to by server nodes needs to be constant, but that is
+        // a problem with an ephemeral port. So the remote node has no way of knowing where to connect to.
+
+        // there is no problem when the client needs to send something to the server, because it knows which port to
+        // connect to, but the server can't connect to the client because it doesn't know the port the client is running on
+
+        // so we need to have a 'client' side port that remains constant and all servers known how to connect to it.
+
+        // so perhaps a change in logic?
+        // - always send some data to the remote node so it knows where to connect to?
+        InetSocketAddress localAddress = (InetSocketAddress) channel.getLocalSocketAddress();
 
         Subscription subscription = aeron.addSubscription(
-                format("aeron:udp?endpoint=%s:%s", local.getHostName(), local.getPort()), 1);
+                format("aeron:udp?endpoint=%s:%s", localAddress.getHostName(), localAddress.getPort()), 1);
 
         channel.publication = publication;
         channel.subscription = subscription;
@@ -84,6 +97,7 @@ public class AeronEventLoopGroup implements EventLoopGroup {
         }
 
         public void run() {
+            // instead of an array, there should be 1 subscription
             while (!shutdown) {
                 for (AeronChannel channel : channels) {
                     channel.subscription.poll(channel.handler, 10);
