@@ -112,7 +112,7 @@ import static java.security.AccessController.doPrivileged;
 @SuppressWarnings({"checkstyle:methodcount", "checkstyle:visibilitymodifier", "checkstyle:classdataabstractioncoupling",
         "checkstyle:classfanoutcomplexity"})
 @PrivateApi
-public class Node {
+public class  Node {
 
     private static final int THREAD_SLEEP_DURATION_MS = 500;
 

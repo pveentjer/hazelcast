@@ -46,6 +46,7 @@ import com.hazelcast.logging.LoggingServiceImpl;
 import com.hazelcast.nio.Address;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.nio.serialization.Data;
+import com.hazelcast.nio.tcp.CoalescingPacketDecoder;
 import com.hazelcast.quorum.impl.QuorumServiceImpl;
 import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.Operation;
@@ -81,6 +82,7 @@ import java.util.LinkedList;
 
 import static com.hazelcast.internal.diagnostics.Diagnostics.METRICS_DISTRIBUTED_DATASTRUCTURES;
 import static com.hazelcast.internal.diagnostics.Diagnostics.METRICS_LEVEL;
+import static com.hazelcast.spi.properties.GroupProperty.DISPATCH_THREAD_COUNT;
 import static com.hazelcast.util.EmptyStatement.ignore;
 import static com.hazelcast.util.ExceptionUtil.rethrow;
 import static java.lang.System.currentTimeMillis;
@@ -141,14 +143,41 @@ public class NodeEngineImpl implements NodeEngine {
             }
             this.transactionManagerService = new TransactionManagerServiceImpl(this);
             this.wanReplicationService = node.getNodeExtension().createService(WanReplicationService.class);
-            this.packetDispatcher = new PacketDispatcher(
-                    logger,
-                    operationService.getOperationExecutor(),
-                    operationService.getInboundResponseHandlerSupplier().get(),
-                    operationService.getInvocationMonitor(),
-                    eventService,
-                    new ConnectionManagerPacketHandler(),
-                    new JetPacketHandler());
+
+            int dispatchThreadCount = node.getProperties().getInteger(DISPATCH_THREAD_COUNT);
+            if (dispatchThreadCount > 0) {
+                logger.info("Creating CoalescingPacketDecoder");
+                return new CoalescingPacketDecoder(connection, nodeEngine.getPacketDispatcher());
+
+                PacketHandler packetDispatcher = new PacketDispatcher(
+                        logger,
+                        operationService.getOperationExecutor(),
+                        operationService.getInboundResponseHandlerSupplier().get(),
+                        operationService.getInvocationMonitor(),
+                        eventService,
+                        new ConnectionManagerPacketHandler(),
+                        new JetPacketHandler());
+
+                this.packetDispatcher = new Dispatcher(
+                        logger,
+                       "hazelcast",
+                        node.nodeEngine,
+                        packetDispatcher);
+
+
+            } else {
+                logger.info("Creating PacketDecoder");
+                this.packetDispatcher = new PacketDispatcher(
+                        logger,
+                        operationService.getOperationExecutor(),
+                        operationService.getInboundResponseHandlerSupplier().get(),
+                        operationService.getInvocationMonitor(),
+                        eventService,
+                        new ConnectionManagerPacketHandler(),
+                        new JetPacketHandler());
+            }
+
+
             this.quorumService = new QuorumServiceImpl(this);
             this.diagnostics = newDiagnostics();
             this.splitBrainMergePolicyProvider = new SplitBrainMergePolicyProvider(this);

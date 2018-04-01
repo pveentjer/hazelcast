@@ -16,18 +16,36 @@
 
 package com.hazelcast.spi.impl;
 
+import com.hazelcast.internal.util.concurrent.MPSCQueue;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Packet;
+import com.hazelcast.spi.impl.operationexecutor.OperationHostileThread;
+import com.hazelcast.spi.properties.GroupProperty;
+import com.hazelcast.spi.properties.HazelcastProperties;
+import com.hazelcast.util.MutableInteger;
+import sun.rmi.server.Dispatcher;
+
+import java.util.concurrent.BlockingQueue;
 
 import static com.hazelcast.instance.OutOfMemoryErrorDispatcher.inspectOutOfMemoryError;
 import static com.hazelcast.nio.Packet.FLAG_OP_CONTROL;
 import static com.hazelcast.nio.Packet.FLAG_OP_RESPONSE;
+import static com.hazelcast.spi.properties.GroupProperty.DISPATCH_THREAD_COUNT;
+import static com.hazelcast.spi.properties.GroupProperty.RESPONSE_THREAD_COUNT;
+import static com.hazelcast.util.EmptyStatement.ignore;
+import static com.hazelcast.util.ThreadUtil.createThreadName;
 
 /**
  * A {@link PacketHandler} that dispatches the {@link Packet} to the right service. So operations are send to the
  * {@link com.hazelcast.spi.OperationService}, events are send to the {@link com.hazelcast.spi.EventService} etc.
  */
 public final class PacketDispatcher implements PacketHandler {
+    private static final ThreadLocal<MutableInteger> INT_HOLDER = new ThreadLocal<MutableInteger>() {
+        @Override
+        protected MutableInteger initialValue() {
+            return new MutableInteger();
+        }
+    };
 
     private final ILogger logger;
     private final PacketHandler eventService;
@@ -36,8 +54,10 @@ public final class PacketDispatcher implements PacketHandler {
     private final PacketHandler connectionManager;
     private final PacketHandler responseHandler;
     private final PacketHandler invocationMonitor;
+    private final DispatchThread[] threads;
 
     public PacketDispatcher(ILogger logger,
+                            HazelcastProperties properties,
                             PacketHandler operationExecutor,
                             PacketHandler responseHandler,
                             PacketHandler invocationMonitor,
@@ -51,6 +71,16 @@ public final class PacketDispatcher implements PacketHandler {
         this.connectionManager = connectionManager;
         this.operationExecutor = operationExecutor;
         this.jetService = jetService;
+
+        int responseThreadCount = properties.getInteger(DISPATCH_THREAD_COUNT);
+        if (responseThreadCount < 0) {
+            throw new IllegalArgumentException(DISPATCH_THREAD_COUNT.getName() + " can't be smaller than 0");
+        }
+
+        threads = new DispatchThread[responseThreadCount];
+        for(int k=0;k<threads.length;k++){
+            threads[k]=new DispatchThread();
+        }
     }
 
     @Override
@@ -86,4 +116,72 @@ public final class PacketDispatcher implements PacketHandler {
             logger.severe("Failed to process: " + packet, t);
         }
     }
+
+    public void start() {
+        for (DispatchThread thread : threads) {
+            thread.start();
+        }
+    }
+
+    public void shutdown() {
+        for (DispatchThread thread : threads) {
+            thread.shutdown();
+        }
+    }
+
+    @Override
+    public void handle(Packet packet) {
+        int threadIndex = INT_HOLDER.get().getAndInc() % threads.length;
+        threads[threadIndex].dispatchQueue.add(packet);
+    }
+
+    private final class DispatchThread extends Thread implements OperationHostileThread {
+
+        private final BlockingQueue<Packet> dispatchQueue;
+        private volatile boolean shutdown;
+
+        private DispatchThread(String hzName, int threadIndex) {
+            super(createThreadName(hzName, "dispatch-" + threadIndex));
+            this.dispatchQueue = new MPSCQueue<Packet>(this, null);
+        }
+
+        @Override
+        public void run() {
+            try {
+                run0();
+            } catch (InterruptedException e) {
+                ignore(e);
+            } catch (Throwable t) {
+                inspectOutOfMemoryError(t);
+                logger.severe(t);
+            }
+        }
+
+        private void run0() throws InterruptedException {
+            while (!shutdown) {
+                Packet packet = dispatchQueue.take();
+                Packet next;
+                do {
+                    next = packet.next;
+                    packet.next = null;
+                    process(packet);
+                } while (next != null);
+            }
+        }
+
+        private void process(Packet packet) {
+            try {
+                packetHandler.handle(packet);
+            } catch (Throwable e) {
+                inspectOutOfMemoryError(e);
+                logger.severe("Failed to process packet: " + packet + " on:" + getName(), e);
+            }
+        }
+
+        private void shutdown() {
+            shutdown = true;
+            interrupt();
+        }
+    }
+
 }

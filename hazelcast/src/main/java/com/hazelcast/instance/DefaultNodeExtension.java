@@ -69,6 +69,7 @@ import com.hazelcast.nio.Address;
 import com.hazelcast.nio.ClassLoaderUtil;
 import com.hazelcast.nio.IOService;
 import com.hazelcast.nio.MemberSocketInterceptor;
+import com.hazelcast.nio.tcp.CoalescingPacketDecoder;
 import com.hazelcast.nio.tcp.PacketDecoder;
 import com.hazelcast.nio.tcp.PacketEncoder;
 import com.hazelcast.nio.tcp.TcpIpConnection;
@@ -98,6 +99,7 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static com.hazelcast.map.impl.MapServiceConstructor.getDefaultMapServiceConstructor;
+import static com.hazelcast.spi.properties.GroupProperty.DISPATCH_THREAD_COUNT;
 
 @PrivateApi
 @SuppressWarnings({"checkstyle:methodcount", "checkstyle:classfanoutcomplexity", "checkstyle:classdataabstractioncoupling"})
@@ -256,7 +258,15 @@ public class DefaultNodeExtension implements NodeExtension {
     @Override
     public ChannelInboundHandler createInboundHandler(TcpIpConnection connection, IOService ioService) {
         NodeEngineImpl nodeEngine = node.nodeEngine;
-        return new PacketDecoder(connection, nodeEngine.getPacketDispatcher());
+
+        int dispatchThreadCount = node.getProperties().getInteger(DISPATCH_THREAD_COUNT);
+        if (dispatchThreadCount > 0) {
+            logger.info("Creating CoalescingPacketDecoder");
+            return new CoalescingPacketDecoder(connection, nodeEngine.getPacketDispatcher());
+        } else {
+            logger.info("Creating PacketDecoder");
+            return new PacketDecoder(connection, nodeEngine.getPacketDispatcher());
+        }
     }
 
     @Override
