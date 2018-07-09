@@ -22,9 +22,9 @@ import com.hazelcast.instance.MemberImpl;
 import com.hazelcast.instance.Node;
 import com.hazelcast.internal.cluster.ClusterClock;
 import com.hazelcast.internal.management.dto.SlowOperationDTO;
-import com.hazelcast.internal.metrics.MetricsProvider;
-import com.hazelcast.internal.metrics.MetricsRegistry;
+import com.hazelcast.internal.metrics.MetricsProvideContext;
 import com.hazelcast.internal.metrics.Probe;
+import com.hazelcast.internal.metrics.ProbeRoot;
 import com.hazelcast.internal.partition.InternalPartitionService;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.internal.util.RuntimeAvailableProcessors;
@@ -94,7 +94,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * @see PartitionInvocation
  * @see TargetInvocation
  */
-public final class OperationServiceImpl implements InternalOperationService, MetricsProvider, LiveOperationsTracker {
+public final class OperationServiceImpl implements InternalOperationService, ProbeRoot, LiveOperationsTracker {
 
     private static final int ASYNC_QUEUE_CAPACITY = 100000;
     private static final long TERMINATION_TIMEOUT_MILLIS = SECONDS.toMillis(10);
@@ -425,9 +425,12 @@ public final class OperationServiceImpl implements InternalOperationService, Met
     }
 
     @Override
-    public void provideMetrics(MetricsRegistry registry) {
-        registry.scanAndRegister(this, "operation");
-        registry.collectMetrics(invocationRegistry, invocationMonitor, inboundResponseHandlerSupplier, operationExecutor);
+    public void scanMetrics(MetricsProvideContext context) {
+        context.scan(invocationRegistry);
+        context.scan(invocationMonitor);
+        context.scan(inboundResponseHandlerSupplier);
+        context.scan(operationExecutor);
+        context.scan("operation", this);
     }
 
     public void start() {

@@ -136,6 +136,8 @@ public interface MetricsRegistry {
      */
     <S> void register(S source, String name, ProbeLevel level, LongProbeFunction<S> probe);
 
+    void addRoot(ProbeRoot probeRoot, String name);
+
     /**
      * Registers a probe.
      *

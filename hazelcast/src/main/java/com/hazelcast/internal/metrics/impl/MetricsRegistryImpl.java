@@ -25,6 +25,7 @@ import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.ProbeBuilder;
 import com.hazelcast.internal.metrics.ProbeFunction;
 import com.hazelcast.internal.metrics.ProbeLevel;
+import com.hazelcast.internal.metrics.ProbeRoot;
 import com.hazelcast.internal.metrics.renderers.ProbeRenderer;
 import com.hazelcast.internal.util.concurrent.ThreadFactoryImpl;
 import com.hazelcast.logging.ILogger;
@@ -74,6 +75,7 @@ public class MetricsRegistryImpl implements MetricsRegistry {
     private final AtomicReference<SortedProbeInstances> sortedProbeInstancesRef
             = new AtomicReference<SortedProbeInstances>(new SortedProbeInstances(0));
 
+    private final ConcurrentMap<ProbeRoot, String> roots = new ConcurrentHashMap<ProbeRoot, String>();
 
     /**
      * Creates a MetricsRegistryImpl instance.
@@ -274,6 +276,18 @@ public class MetricsRegistryImpl implements MetricsRegistry {
         for (ProbeInstance probeInstance : getSortedProbeInstances()) {
             render(renderer, probeInstance);
         }
+
+        try {
+            for (Map.Entry<Object, String> entry : roots.entrySet()) {
+                ProbeRoot root = entry.getKey();
+                SourceMetadata sourceMetadata = loadSourceMetadata(root.getClass());
+                for (FieldProbe fieldProbe : sourceMetadata.fields()) {
+                    render(renderer, fieldProbe,root, entry.getValue()+"."+fieldProbe.field.getName());
+                }
+            }
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -283,6 +297,11 @@ public class MetricsRegistryImpl implements MetricsRegistry {
                 ((MetricsProvider) object).provideMetrics(this);
             }
         }
+    }
+
+    @Override
+    public void addRoot(ProbeRoot root, String name) {
+         roots.put(root, name);
     }
 
     @Override
@@ -315,6 +334,26 @@ public class MetricsRegistryImpl implements MetricsRegistry {
         ProbeFunction function = probeInstance.function;
         Object source = probeInstance.source;
         String name = probeInstance.name;
+
+        if (function == null || source == null) {
+            renderer.renderNoValue(name);
+            return;
+        }
+
+        try {
+            if (function instanceof LongProbeFunction) {
+                LongProbeFunction longFunction = (LongProbeFunction) function;
+                renderer.renderLong(name, longFunction.get(source));
+            } else {
+                DoubleProbeFunction doubleFunction = (DoubleProbeFunction) function;
+                renderer.renderDouble(name, doubleFunction.get(source));
+            }
+        } catch (Exception e) {
+            renderer.renderException(name, e);
+        }
+    }
+
+    private void render(ProbeRenderer renderer, ProbeFunction function, Object source, String name) {
 
         if (function == null || source == null) {
             renderer.renderNoValue(name);

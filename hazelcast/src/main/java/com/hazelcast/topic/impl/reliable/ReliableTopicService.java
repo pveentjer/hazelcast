@@ -18,6 +18,8 @@ package com.hazelcast.topic.impl.reliable;
 
 import com.hazelcast.config.ReliableTopicConfig;
 import com.hazelcast.core.DistributedObject;
+import com.hazelcast.internal.metrics.MetricsProvideContext;
+import com.hazelcast.internal.metrics.ProbeRoot;
 import com.hazelcast.monitor.LocalTopicStats;
 import com.hazelcast.monitor.impl.LocalTopicStatsImpl;
 import com.hazelcast.spi.ManagedService;
@@ -34,7 +36,7 @@ import java.util.concurrent.ConcurrentMap;
 
 import static com.hazelcast.util.ConcurrencyUtil.getOrPutSynchronized;
 
-public class ReliableTopicService implements ManagedService, RemoteService, StatisticsAwareService {
+public class ReliableTopicService implements ManagedService, RemoteService, StatisticsAwareService, ProbeRoot {
 
     public static final String SERVICE_NAME = "hz:impl:reliableTopicService";
     private final ConcurrentMap<String, LocalTopicStatsImpl> statsMap = new ConcurrentHashMap<String, LocalTopicStatsImpl>();
@@ -80,6 +82,13 @@ public class ReliableTopicService implements ManagedService, RemoteService, Stat
             topicStats.put(queueStat.getKey(), queueStat.getValue());
         }
         return topicStats;
+    }
+
+    @Override
+    public void scanMetrics(MetricsProvideContext context) {
+        for (Map.Entry<String, LocalTopicStatsImpl> entry : statsMap.entrySet()) {
+            context.scan(entry.getKey(), entry.getValue());
+        }
     }
 
     @Override
