@@ -31,6 +31,7 @@ import static com.hazelcast.nio.Bits.LONG_SIZE_IN_BYTES;
 import static com.hazelcast.nio.Bits.NULL_ARRAY_LENGTH;
 import static com.hazelcast.nio.Bits.SHORT_SIZE_IN_BYTES;
 import static com.hazelcast.version.Version.UNKNOWN;
+import static java.nio.ByteOrder.BIG_ENDIAN;
 
 class ByteArrayObjectDataOutput extends VersionedObjectDataOutput implements BufferObjectDataOutput {
 
@@ -48,7 +49,7 @@ class ByteArrayObjectDataOutput extends VersionedObjectDataOutput implements Buf
         this.initialSize = size;
         this.buffer = new byte[size];
         this.service = service;
-        isBigEndian = byteOrder == ByteOrder.BIG_ENDIAN;
+        isBigEndian = byteOrder == BIG_ENDIAN;
     }
 
     @Override
@@ -191,13 +192,13 @@ class ByteArrayObjectDataOutput extends VersionedObjectDataOutput implements Buf
     @Override
     public void writeInt(int v, ByteOrder byteOrder) throws IOException {
         ensureAvailable(INT_SIZE_IN_BYTES);
-        Bits.writeInt(buffer, pos, v, byteOrder == ByteOrder.BIG_ENDIAN);
+        Bits.writeInt(buffer, pos, v, byteOrder == BIG_ENDIAN);
         pos += INT_SIZE_IN_BYTES;
     }
 
     @Override
     public void writeInt(int position, int v, ByteOrder byteOrder) throws IOException {
-        Bits.writeInt(buffer, position, v, byteOrder == ByteOrder.BIG_ENDIAN);
+        Bits.writeInt(buffer, position, v, byteOrder == BIG_ENDIAN);
     }
 
     @Override
@@ -215,13 +216,13 @@ class ByteArrayObjectDataOutput extends VersionedObjectDataOutput implements Buf
     @Override
     public void writeLong(long v, ByteOrder byteOrder) throws IOException {
         ensureAvailable(LONG_SIZE_IN_BYTES);
-        Bits.writeLong(buffer, pos, v, byteOrder == ByteOrder.BIG_ENDIAN);
+        Bits.writeLong(buffer, pos, v, byteOrder == BIG_ENDIAN);
         pos += LONG_SIZE_IN_BYTES;
     }
 
     @Override
     public void writeLong(int position, long v, ByteOrder byteOrder) throws IOException {
-        Bits.writeLong(buffer, position, v, byteOrder == ByteOrder.BIG_ENDIAN);
+        Bits.writeLong(buffer, position, v, byteOrder == BIG_ENDIAN);
     }
 
     @Override
@@ -239,13 +240,13 @@ class ByteArrayObjectDataOutput extends VersionedObjectDataOutput implements Buf
     @Override
     public void writeShort(int v, ByteOrder byteOrder) throws IOException {
         ensureAvailable(SHORT_SIZE_IN_BYTES);
-        Bits.writeShort(buffer, pos, (short) v, byteOrder == ByteOrder.BIG_ENDIAN);
+        Bits.writeShort(buffer, pos, (short) v, byteOrder == BIG_ENDIAN);
         pos += SHORT_SIZE_IN_BYTES;
     }
 
     @Override
     public void writeShort(int position, int v, ByteOrder byteOrder) throws IOException {
-        Bits.writeShort(buffer, position, (short) v, byteOrder == ByteOrder.BIG_ENDIAN);
+        Bits.writeShort(buffer, position, (short) v, byteOrder == BIG_ENDIAN);
     }
 
     @Override
@@ -440,7 +441,7 @@ class ByteArrayObjectDataOutput extends VersionedObjectDataOutput implements Buf
 
     @Override
     public ByteOrder getByteOrder() {
-        return isBigEndian ? ByteOrder.BIG_ENDIAN : ByteOrder.LITTLE_ENDIAN;
+        return isBigEndian ? BIG_ENDIAN : ByteOrder.LITTLE_ENDIAN;
     }
 
     @Override
