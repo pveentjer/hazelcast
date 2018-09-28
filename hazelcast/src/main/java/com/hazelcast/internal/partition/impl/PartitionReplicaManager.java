@@ -22,6 +22,7 @@ import com.hazelcast.internal.partition.InternalPartition;
 import com.hazelcast.internal.partition.NonFragmentedServiceNamespace;
 import com.hazelcast.internal.partition.PartitionReplicaVersionManager;
 import com.hazelcast.internal.partition.operation.PartitionReplicaSyncRequest;
+import com.hazelcast.internal.util.PartitionIds;
 import com.hazelcast.internal.util.counters.MwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Address;
@@ -41,7 +42,6 @@ import com.hazelcast.util.scheduler.ScheduledEntry;
 import com.hazelcast.util.scheduler.ScheduledEntryProcessor;
 
 import java.util.ArrayList;
-import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -439,12 +439,12 @@ public class PartitionReplicaManager implements PartitionReplicaVersionManager {
             nodeEngine.getOperationService().executeOnPartitions(new PartitionAntiEntropyTaskFactory(), getLocalPartitions());
         }
 
-        private BitSet getLocalPartitions() {
-            BitSet localPartitions = new BitSet(partitionService.getPartitionCount());
+        private PartitionIds getLocalPartitions() {
+            PartitionIds localPartitions = new PartitionIds(partitionService.getPartitionCount());
 
             for (InternalPartition partition : partitionService.getInternalPartitions()) {
                 if (partition.isLocal()) {
-                    localPartitions.set(partition.getPartitionId());
+                    localPartitions.add(partition.getPartitionId());
                 }
             }
             return localPartitions;

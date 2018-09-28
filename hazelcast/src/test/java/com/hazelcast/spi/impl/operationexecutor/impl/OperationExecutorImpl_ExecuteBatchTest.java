@@ -16,6 +16,7 @@
 
 package com.hazelcast.spi.impl.operationexecutor.impl;
 
+import com.hazelcast.internal.util.PartitionIds;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.impl.operationservice.PartitionTaskFactory;
 import com.hazelcast.spi.properties.HazelcastProperties;
@@ -27,7 +28,6 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 
-import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.hazelcast.spi.properties.GroupProperty.PARTITION_COUNT;
@@ -44,7 +44,7 @@ public class OperationExecutorImpl_ExecuteBatchTest extends OperationExecutorImp
     public void whenNullFactory() {
         initExecutor();
 
-        executor.executeOnPartitions(null, new BitSet());
+        executor.executeOnPartitions(null, new PartitionIds(0));
     }
 
     @Test(expected = NullPointerException.class)
@@ -59,14 +59,14 @@ public class OperationExecutorImpl_ExecuteBatchTest extends OperationExecutorImp
         config.setProperty(PARTITION_OPERATION_THREAD_COUNT.getName(), "16");
         initExecutor();
 
-        final BitSet partitions = newPartitions();
+        final PartitionIds partitions = newPartitions();
         final DummyPartitionTaskFactory taskFactory = new DummyPartitionTaskFactory();
         executor.executeOnPartitions(taskFactory, partitions);
 
         assertTrueEventually(new AssertTask() {
             @Override
             public void run() {
-                assertEquals(partitions.length(), taskFactory.completed.get());
+                assertEquals(partitions.capacity(), taskFactory.completed.get());
             }
         });
     }
@@ -90,13 +90,13 @@ public class OperationExecutorImpl_ExecuteBatchTest extends OperationExecutorImp
         }, 5);
     }
 
-    private BitSet newPartitions() {
+    private PartitionIds newPartitions() {
         HazelcastProperties properties = new HazelcastProperties(config);
-        BitSet bitSet = new BitSet(properties.getInteger(PARTITION_COUNT));
-        for (int k = 0; k < bitSet.size(); k++) {
-            bitSet.set(k);
+        PartitionIds partitionIds = new PartitionIds(properties.getInteger(PARTITION_COUNT));
+        for (int k = 0; k < partitionIds.capacity(); k++) {
+            partitionIds.add(k);
         }
-        return bitSet;
+        return partitionIds;
     }
 
     class DummyOperation extends Operation {

@@ -16,6 +16,7 @@
 
 package com.hazelcast.spi.impl.operationexecutor;
 
+import com.hazelcast.internal.util.PartitionIds;
 import com.hazelcast.nio.Packet;
 import com.hazelcast.spi.LiveOperationsTracker;
 import com.hazelcast.spi.Operation;
@@ -23,8 +24,6 @@ import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.impl.OperationExecutorImpl;
 import com.hazelcast.spi.impl.operationservice.PartitionTaskFactory;
 import com.hazelcast.util.function.Consumer;
-
-import java.util.BitSet;
 
 /**
  * The OperationExecutor is responsible for scheduling work (packets/operations)
@@ -123,7 +122,7 @@ public interface OperationExecutor extends Consumer<Packet>, LiveOperationsTrack
      *                    partitions there is a bit indicating if a task should be
      *                    executed on the partition.
      */
-    void executeOnPartitions(PartitionTaskFactory taskFactory, BitSet partitions);
+    void executeOnPartitions(PartitionTaskFactory taskFactory, PartitionIds partitions);
 
     /**
      * Executes the given {@link PartitionSpecificRunnable} at some point in the

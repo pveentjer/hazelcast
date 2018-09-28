@@ -16,9 +16,8 @@
 
 package com.hazelcast.spi.impl.operationexecutor.impl;
 
+import com.hazelcast.internal.util.PartitionIds;
 import com.hazelcast.spi.impl.operationservice.PartitionTaskFactory;
-
-import java.util.BitSet;
 
 import static com.hazelcast.spi.impl.operationexecutor.impl.OperationExecutorImpl.getPartitionThreadId;
 
@@ -28,12 +27,12 @@ import static com.hazelcast.spi.impl.operationexecutor.impl.OperationExecutorImp
 public class TaskBatch {
 
     private final PartitionTaskFactory taskFactory;
-    private final BitSet partitions;
+    private final PartitionIds partitions;
     private final int threadId;
     private final int partitionThreadCount;
     private int nextPartitionId;
 
-    public TaskBatch(PartitionTaskFactory taskFactory, BitSet partitions, int threadId, int partitionThreadCount) {
+    public TaskBatch(PartitionTaskFactory taskFactory, PartitionIds partitions, int threadId, int partitionThreadCount) {
         this.taskFactory = taskFactory;
         this.partitions = partitions;
         this.threadId = threadId;
@@ -56,7 +55,7 @@ public class TaskBatch {
 
     private int nextPartitionId() {
         for (; ; ) {
-            int partitionId = partitions.nextSetBit(nextPartitionId);
+            int partitionId = partitions.nextPartitionId(nextPartitionId);
             if (partitionId == -1) {
                 return -1;
             }

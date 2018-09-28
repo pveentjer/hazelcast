@@ -18,6 +18,7 @@ package com.hazelcast.spi.impl.operationservice;
 
 import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.internal.management.dto.SlowOperationDTO;
+import com.hazelcast.internal.util.PartitionIds;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.OperationService;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
@@ -135,7 +136,7 @@ public interface InternalOperationService extends OperationService {
      * @param partitions  the partitions to execute an operation on.
      * @throws NullPointerException if taskFactory or partitions is null.
      */
-    void executeOnPartitions(PartitionTaskFactory taskFactory, BitSet partitions);
+    void executeOnPartitions(PartitionTaskFactory taskFactory, PartitionIds partitions);
 
     /**
      * Returns information about long running operations.

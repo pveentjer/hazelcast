@@ -27,6 +27,7 @@ import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.partition.InternalPartitionService;
 import com.hazelcast.internal.serialization.InternalSerializationService;
+import com.hazelcast.internal.util.PartitionIds;
 import com.hazelcast.internal.util.RuntimeAvailableProcessors;
 import com.hazelcast.internal.util.counters.Counter;
 import com.hazelcast.internal.util.counters.MwCounter;
@@ -53,7 +54,6 @@ import com.hazelcast.util.executor.ExecutorType;
 import com.hazelcast.util.executor.ManagedExecutorService;
 
 import java.util.ArrayList;
-import java.util.BitSet;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -263,7 +263,7 @@ public final class OperationServiceImpl implements InternalOperationService, Met
     }
 
     @Override
-    public void executeOnPartitions(PartitionTaskFactory taskFactory, BitSet partitions) {
+    public void executeOnPartitions(PartitionTaskFactory taskFactory, PartitionIds partitions) {
         operationExecutor.executeOnPartitions(taskFactory, partitions);
     }
 
