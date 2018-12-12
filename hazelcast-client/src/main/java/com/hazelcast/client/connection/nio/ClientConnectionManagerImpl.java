@@ -417,7 +417,6 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
         connectionStrategy.onDisconnect(connection);
     }
 
-
     private boolean useAnyOutboundPort() {
         return outboundPortCount == 0;
     }
@@ -516,83 +515,6 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
         connectionListeners.add(connectionListener);
     }
 
-    private void authenticate(final Address target, final ClientConnection connection, final boolean asOwner,
-                              final AuthenticationFuture future) {
-        final ClientPrincipal principal = getPrincipal();
-        ClientMessage clientMessage = encodeAuthenticationRequest(asOwner, client.getSerializationService(), principal);
-        ClientInvocation clientInvocation = new ClientInvocation(client, clientMessage, null, connection);
-        ClientInvocationFuture invocationFuture = clientInvocation.invokeUrgent();
-
-        ScheduledFuture timeoutTaskFuture = executionService.schedule(
-                new TimeoutAuthenticationTask(invocationFuture), authenticationTimeout, MILLISECONDS);
-        invocationFuture.andThen(new AuthCallback(connection, asOwner, target, future, timeoutTaskFuture));
-    }
-
-    private ClientMessage encodeAuthenticationRequest(boolean asOwner, SerializationService ss, ClientPrincipal principal) {
-        byte serializationVersion = ((InternalSerializationService) ss).getVersion();
-        String uuid = null;
-        String ownerUuid = null;
-        if (principal != null) {
-            uuid = principal.getUuid();
-            ownerUuid = principal.getOwnerUuid();
-        }
-        ClientMessage clientMessage;
-        Credentials credentials = credentialsFactory.newCredentials();
-        lastCredentials = credentials;
-        if (credentials.getClass().equals(UsernamePasswordCredentials.class)) {
-            UsernamePasswordCredentials cr = (UsernamePasswordCredentials) credentials;
-            clientMessage = ClientAuthenticationCodec
-                    .encodeRequest(cr.getUsername(), cr.getPassword(), uuid, ownerUuid, asOwner, ClientTypes.JAVA,
-                            serializationVersion, BuildInfoProvider.getBuildInfo().getVersion());
-        } else {
-            Data data = ss.toData(credentials);
-            clientMessage = ClientAuthenticationCustomCodec.encodeRequest(data, uuid, ownerUuid,
-                    asOwner, ClientTypes.JAVA, serializationVersion, BuildInfoProvider.getBuildInfo().getVersion());
-        }
-        return clientMessage;
-    }
-
-    private void onAuthenticated(Address target, ClientConnection connection) {
-        ClientConnection oldConnection = activeConnections.put(connection.getEndPoint(), connection);
-        if (oldConnection == null) {
-            if (logger.isFinestEnabled()) {
-                logger.finest("Authentication succeeded for " + connection
-                        + " and there was no old connection to this end-point");
-            }
-            fireConnectionAddedEvent(connection);
-        } else {
-            if (logger.isFinestEnabled()) {
-                logger.finest("Re-authentication succeeded for " + connection);
-            }
-            assert connection.equals(oldConnection);
-        }
-
-        connectionsInProgress.remove(target);
-        logger.info("Authenticated with server " + connection.getEndPoint() + ", server version:" + connection
-                .getConnectedServerVersionString() + " Local address: " + connection.getLocalSocketAddress());
-
-        /* check if connection is closed by remote before authentication complete, if that is the case
-        we need to remove it back from active connections.
-        Race description from https://github.com/hazelcast/hazelcast/pull/8832.(A little bit changed)
-        - open a connection client -> member
-        - send auth message
-        - receive auth reply -> reply processing is offloaded to an executor. Did not start to run yet.
-        - member closes the connection -> the connection is trying to removed from map
-                                                             but it was not there to begin with
-        - the executor start processing the auth reply -> it put the connection to the connection map.
-        - we end up with a closed connection in activeConnections map */
-        if (!connection.isAlive()) {
-            removeFromActiveConnections(connection);
-        }
-    }
-
-    private void onAuthenticationFailed(Address target, ClientConnection connection, Throwable cause) {
-        if (logger.isFinestEnabled()) {
-            logger.finest("Authentication of " + connection + " failed.", cause);
-        }
-        connection.close(null, cause);
-        connectionsInProgress.remove(target);
-    }
 
     public Credentials getLastCredentials() {
         return lastCredentials;
@@ -618,7 +540,6 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
             future.complete(new TimeoutException("Authentication response did not come back in "
                     + authenticationTimeout + " millis"));
         }
-
     }
 
     private class InitConnectionTask implements Runnable {
@@ -626,11 +547,13 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
         private final Address target;
         private final boolean asOwner;
         private final AuthenticationFuture future;
+        private final InternalSerializationService serializationService;
 
         InitConnectionTask(Address target, boolean asOwner, AuthenticationFuture future) {
             this.target = target;
             this.asOwner = asOwner;
             this.future = future;
+            this.serializationService = (InternalSerializationService) client.getSerializationService();
         }
 
         @Override
@@ -646,7 +569,7 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
             }
 
             try {
-                authenticate(target, connection, asOwner, future);
+                authenticate(connection);
             } catch (Exception e) {
                 future.onFailure(e);
                 connection.close("Failed to authenticate connection", e);
@@ -665,6 +588,50 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
                         + " could not translate address " + target);
             }
             return createSocketConnection(address);
+        }
+
+        private void authenticate(ClientConnection connection) {
+            ClientPrincipal principal = getPrincipal();
+            ClientMessage authenticationRequest = encodeAuthenticationRequest(principal);
+            ClientInvocation clientInvocation = new ClientInvocation(client, authenticationRequest, null, connection);
+            ClientInvocationFuture invocationFuture = clientInvocation.invokeUrgent();
+
+            ScheduledFuture timeoutTaskFuture = executionService.schedule(
+                    new TimeoutAuthenticationTask(invocationFuture), authenticationTimeout, MILLISECONDS);
+            invocationFuture.andThen(new AuthCallback(connection, asOwner, target, future, timeoutTaskFuture));
+        }
+
+        private ClientMessage encodeAuthenticationRequest(ClientPrincipal principal) {
+            byte serializationVersion = serializationService.getVersion();
+            String uuid = null;
+            String ownerUuid = null;
+            if (principal != null) {
+                uuid = principal.getUuid();
+                ownerUuid = principal.getOwnerUuid();
+            }
+            Credentials credentials = credentialsFactory.newCredentials();
+            lastCredentials = credentials;
+            if (credentials.getClass().equals(UsernamePasswordCredentials.class)) {
+                UsernamePasswordCredentials cr = (UsernamePasswordCredentials) credentials;
+                return ClientAuthenticationCodec.encodeRequest(
+                        cr.getUsername(),
+                        cr.getPassword(),
+                        uuid,
+                        ownerUuid,
+                        asOwner,
+                        ClientTypes.JAVA,
+                        serializationVersion,
+                        BuildInfoProvider.getBuildInfo().getVersion());
+            } else {
+                return ClientAuthenticationCustomCodec.encodeRequest(
+                        serializationService.toData(credentials),
+                        uuid,
+                        ownerUuid,
+                        asOwner,
+                        ClientTypes.JAVA,
+                        serializationVersion,
+                        BuildInfoProvider.getBuildInfo().getVersion());
+            }
         }
     }
 
@@ -697,7 +664,6 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
     public Future<Void> connectToClusterAsync() {
         return clusterConnector.connectToClusterAsync();
     }
-
 
     private class AuthCallback implements ExecutionCallback<ClientMessage> {
         private final ClientConnection connection;
@@ -740,7 +706,7 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
                         logger.info("Setting " + connection + " as owner with principal " + principal);
 
                     }
-                    onAuthenticated(target, connection);
+                    onAuthenticated();
                     future.onSuccess(connection);
                     break;
                 case CREDENTIALS_FAILED:
@@ -752,11 +718,54 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
             }
         }
 
+        private void onAuthenticated() {
+            ClientConnection oldConnection = activeConnections.put(connection.getEndPoint(), connection);
+            if (oldConnection == null) {
+                if (logger.isFinestEnabled()) {
+                    logger.finest("Authentication succeeded for " + connection
+                            + " and there was no old connection to this end-point");
+                }
+                fireConnectionAddedEvent(connection);
+            } else {
+                if (logger.isFinestEnabled()) {
+                    logger.finest("Re-authentication succeeded for " + connection);
+                }
+                assert connection.equals(oldConnection);
+            }
+
+            connectionsInProgress.remove(target);
+            logger.info("Authenticated with server " + connection.getEndPoint() + ", server version:" + connection
+                    .getConnectedServerVersionString() + " Local address: " + connection.getLocalSocketAddress());
+
+        /* check if connection is closed by remote before authentication complete, if that is the case
+        we need to remove it back from active connections.
+        Race description from https://github.com/hazelcast/hazelcast/pull/8832.(A little bit changed)
+        - open a connection client -> member
+        - send auth message
+        - receive auth reply -> reply processing is offloaded to an executor. Did not start to run yet.
+        - member closes the connection -> the connection is trying to removed from map
+                                                             but it was not there to begin with
+        - the executor start processing the auth reply -> it put the connection to the connection map.
+        - we end up with a closed connection in activeConnections map */
+            if (!connection.isAlive()) {
+                removeFromActiveConnections(connection);
+            }
+        }
+
+
         @Override
         public void onFailure(Throwable t) {
             timeoutTaskFuture.cancel(true);
-            onAuthenticationFailed(target, connection, t);
+            onAuthenticationFailed(t);
             future.onFailure(t);
+        }
+
+        private void onAuthenticationFailed(Throwable cause) {
+            if (logger.isFinestEnabled()) {
+                logger.finest("Authentication of " + connection + " failed.", cause);
+            }
+            connection.close(null, cause);
+            connectionsInProgress.remove(target);
         }
     }
 }
