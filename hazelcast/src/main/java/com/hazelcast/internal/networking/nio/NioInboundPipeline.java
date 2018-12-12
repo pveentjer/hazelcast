@@ -105,60 +105,67 @@ public final class NioInboundPipeline extends NioPipeline implements InboundPipe
 
     @Override
     void process() throws Exception {
-        processCount.inc();
-        // we are going to set the timestamp even if the channel is going to fail reading. In that case
-        // the connection is going to be closed anyway.
-        lastReadTime = currentTimeMillis();
+        try {
+            processCount.inc();
+            // we are going to set the timestamp even if the channel is going to fail reading. In that case
+            // the connection is going to be closed anyway.
+            lastReadTime = currentTimeMillis();
 
-        int readBytes = socketChannel.read(receiveBuffer);
+            int readBytes = socketChannel.read(receiveBuffer);
 
-        if (readBytes == -1) {
-            throw new EOFException("Remote socket closed!");
-        }
+            System.out.println(channel + " readBytes:" + readBytes);
 
-        //System.out.println(channel + " bytes read:" + readBytes);
-
-        // even if no bytes are read; it is still important that we process the pipeline.
-
-        bytesRead.inc(readBytes);
-
-        // currently the whole pipeline is retried when one of the handlers is dirty; but only the dirty handler
-        // and the remaining sequence should need to retry.
-        InboundHandler[] localHandlers = handlers;
-        boolean cleanPipeline;
-        boolean unregisterRead;
-        do {
-            cleanPipeline = true;
-            unregisterRead = false;
-            for (int handlerIndex = 0; handlerIndex < localHandlers.length; handlerIndex++) {
-                InboundHandler handler = localHandlers[handlerIndex];
-                HandlerStatus handlerStatus = handler.onRead();
-
-                if (localHandlers != handlers) {
-                    handlerIndex = -1;
-                    localHandlers = handlers;
-                    continue;
-                }
-
-                switch (handlerStatus) {
-                    case CLEAN:
-                        break;
-                    case DIRTY:
-                        cleanPipeline = false;
-                        break;
-                    case BLOCKED:
-                        // setting cleanPipeline to true keep flushing everything downstream, but not upstream.
-                        cleanPipeline = true;
-                        unregisterRead = true;
-                        break;
-                    default:
-                        throw new IllegalStateException();
-                }
+            if (readBytes == -1) {
+                throw new EOFException("Remote socket closed!");
             }
-        } while (!cleanPipeline);
 
-        if (unregisterRead) {
-            unregisterOp(OP_READ);
+            //System.out.println(channel + " bytes read:" + readBytes);
+
+            // even if no bytes are read; it is still important that we process the pipeline.
+
+            bytesRead.inc(readBytes);
+
+            // currently the whole pipeline is retried when one of the handlers is dirty; but only the dirty handler
+            // and the remaining sequence should need to retry.
+            InboundHandler[] localHandlers = handlers;
+            boolean cleanPipeline;
+            boolean unregisterRead;
+            do {
+                cleanPipeline = true;
+                unregisterRead = false;
+                for (int handlerIndex = 0; handlerIndex < localHandlers.length; handlerIndex++) {
+                    InboundHandler handler = localHandlers[handlerIndex];
+                    HandlerStatus handlerStatus = handler.onRead();
+
+                    if (localHandlers != handlers) {
+                        handlerIndex = -1;
+                        localHandlers = handlers;
+                        continue;
+                    }
+
+                    switch (handlerStatus) {
+                        case CLEAN:
+                            break;
+                        case DIRTY:
+                            cleanPipeline = false;
+                            break;
+                        case BLOCKED:
+                            // setting cleanPipeline to true keep flushing everything downstream, but not upstream.
+                            cleanPipeline = true;
+                            unregisterRead = true;
+                            break;
+                        default:
+                            throw new IllegalStateException();
+                    }
+                }
+            } while (!cleanPipeline);
+
+            if (unregisterRead) {
+                unregisterOp(OP_READ);
+            }
+        }catch (Exception e){
+            e.printStackTrace();
+            throw e;
         }
     }
 
@@ -236,18 +243,28 @@ public final class NioInboundPipeline extends NioPipeline implements InboundPipe
 
     private void updatePipeline(InboundHandler[] handlers) {
         this.handlers = handlers;
-        receiveBuffer = handlers.length == 0 ? null : (ByteBuffer) handlers[0].src();
 
         InboundHandler prev = null;
         for (InboundHandler handler : handlers) {
+
             if (prev != null) {
-                Object src = handler.src();
-                if (src instanceof ByteBuffer) {
-                    prev.dst(src);
+                Object src = prev.dst();
+                if(handler.src()==null){
+                    handler.src(src);
+                }
+                if(handler.dst()==null){
+                    handler.dst(src);
                 }
             }
             prev = handler;
         }
+
+        //System.out.println(handlers.length);
+        for(InboundHandler handler: handlers){
+            System.out.println(channel+" "+handler.getClass()+" src:"+handler.src()+" dst:"+handler.dst());
+        }
+
+        receiveBuffer = handlers.length == 0 ? null : (ByteBuffer) handlers[0].src();
     }
 
     // useful for debugging

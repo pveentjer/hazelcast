@@ -68,8 +68,8 @@ public abstract class AuthenticationBaseMessageTask<P> extends AbstractStableClu
         return prepareAuthenticatedClientMessage();
     }
 
-
     protected void doRun() throws Throwable {
+        System.out.println(getClass().getSimpleName()+".run()");
         initializeAndProcessMessage();
     }
 

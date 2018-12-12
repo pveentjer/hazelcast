@@ -45,7 +45,7 @@ public class Select_NioNetworkingFactory implements NetworkingFactory {
                         .inputThreadCount(properties.getInteger(IO_INPUT_THREAD_COUNT))
                         .outputThreadCount(properties.getInteger(IO_OUTPUT_THREAD_COUNT))
                         .balancerIntervalSeconds(properties.getInteger(IO_BALANCER_INTERVAL_SECONDS))
-                        .channelInitializer(new PlainChannelInitializer(ioService))
+                        .channelInitializer(new PlainChannelInitializer(ioService, null))
                         .selectorMode(SelectorMode.SELECT));
     }
 }

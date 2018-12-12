@@ -16,6 +16,7 @@
 
 package com.hazelcast.nio.tcp;
 
+import com.hazelcast.instance.Node;
 import com.hazelcast.internal.networking.Channel;
 import com.hazelcast.internal.networking.ChannelOptions;
 import com.hazelcast.internal.networking.ChannelInitializer;
@@ -45,10 +46,12 @@ public class PlainChannelInitializer implements ChannelInitializer {
 
     private final IOService ioService;
     private final HazelcastProperties props;
+    private final Node node;
 
-    public PlainChannelInitializer(IOService ioService) {
+    public PlainChannelInitializer(IOService ioService, Node node) {
         this.props = ioService.properties();
         this.ioService = ioService;
+        this.node = node;
     }
 
     @Override
@@ -62,7 +65,7 @@ public class PlainChannelInitializer implements ChannelInitializer {
                 .setOption(SO_LINGER, props.getSeconds(SOCKET_LINGER_SECONDS));
 
         ProtocolEncoder encoder = new ProtocolEncoder(ioService);
-        ProtocolDecoder decoder = new ProtocolDecoder(ioService, encoder);
+        ProtocolDecoder decoder = new ProtocolDecoder(ioService, encoder, node);
 
         channel.outboundPipeline().addLast(encoder);
         channel.inboundPipeline().addLast(decoder);

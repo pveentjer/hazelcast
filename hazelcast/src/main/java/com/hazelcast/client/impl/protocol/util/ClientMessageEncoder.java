@@ -35,11 +35,6 @@ public class ClientMessageEncoder extends OutboundHandler<Supplier<ClientMessage
     private ClientMessage message;
 
     @Override
-    public void handlerAdded() {
-        initDstBuffer();
-    }
-
-    @Override
     public HandlerStatus onWrite() {
         compactOrClear(dst);
         try {
@@ -53,6 +48,7 @@ public class ClientMessageEncoder extends OutboundHandler<Supplier<ClientMessage
                     }
                 }
 
+                System.out.println("Client: Sending regular message:"+message);
                 if (message.writeTo(dst)) {
                     // message got written, lets see if another message can be written
                     message = null;

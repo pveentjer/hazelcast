@@ -26,6 +26,7 @@ import com.hazelcast.internal.networking.OutboundFrame;
 import com.hazelcast.internal.networking.nio.iobalancer.IOBalancer;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.nio.IOUtil;
 import com.hazelcast.util.function.Supplier;
 
 import java.io.IOException;
@@ -44,6 +45,7 @@ import static com.hazelcast.util.collection.ArrayUtils.append;
 import static com.hazelcast.util.collection.ArrayUtils.replaceFirst;
 import static java.lang.Math.max;
 import static java.lang.System.currentTimeMillis;
+import static java.lang.System.setOut;
 import static java.lang.Thread.currentThread;
 import static java.nio.channels.SelectionKey.OP_WRITE;
 
@@ -185,47 +187,53 @@ public final class NioOutboundPipeline
     @Override
     @SuppressWarnings("unchecked")
     public void process() throws Exception {
-        processCount.inc();
+        try {
+            processCount.inc();
 
-        OutboundHandler[] localHandlers = handlers;
-        HandlerStatus pipelineStatus = CLEAN;
-        for (int handlerIndex = 0; handlerIndex < localHandlers.length; handlerIndex++) {
-            OutboundHandler handler = localHandlers[handlerIndex];
+            OutboundHandler[] localHandlers = handlers;
+            HandlerStatus pipelineStatus = CLEAN;
+            for (int handlerIndex = 0; handlerIndex < localHandlers.length; handlerIndex++) {
+                OutboundHandler handler = localHandlers[handlerIndex];
 
-            HandlerStatus handlerStatus = handler.onWrite();
+                HandlerStatus handlerStatus = handler.onWrite();
 
-            if (localHandlers != handlers) {
-                // change in the pipeline detected, therefor the pipeline is restarted.
-                localHandlers = handlers;
-                pipelineStatus = CLEAN;
-                handlerIndex = -1;
-            } else if (handlerStatus != CLEAN) {
-                pipelineStatus = handlerStatus;
+                if (localHandlers != handlers) {
+                    // change in the pipeline detected, therefor the pipeline is restarted.
+                    localHandlers = handlers;
+                    pipelineStatus = CLEAN;
+                    handlerIndex = -1;
+                } else if (handlerStatus != CLEAN) {
+                    pipelineStatus = handlerStatus;
+                }
             }
-        }
 
-        flushToSocket();
+            flushToSocket();
 
-        if (sendBuffer.remaining() > 0) {
-            pipelineStatus = DIRTY;
-        }
+            if (sendBuffer.remaining() > 0) {
+                pipelineStatus = DIRTY;
+            }
 
-        switch (pipelineStatus) {
-            case CLEAN:
-                // There is nothing left to be done; so lets unschedule this pipeline
-                unschedule();
-                break;
-            case DIRTY:
-                // pipeline is dirty, so lets register for an OP_WRITE to write
-                // more data.
-                registerOp(OP_WRITE);
-                break;
-            case BLOCKED:
-                // pipeline is blocked; no point in receiving OP_WRITE events.
-                unregisterOp(OP_WRITE);
-                break;
-            default:
-                throw new IllegalStateException();
+            switch (pipelineStatus) {
+                case CLEAN:
+                    // There is nothing left to be done; so lets unschedule this pipeline
+                    unschedule();
+                    break;
+                case DIRTY:
+                    // pipeline is dirty, so lets register for an OP_WRITE to write
+                    // more data.
+                    registerOp(OP_WRITE);
+                    break;
+                case BLOCKED:
+                    // pipeline is blocked; no point in receiving OP_WRITE events.
+                    unregisterOp(OP_WRITE);
+                    break;
+                default:
+                    throw new IllegalStateException();
+            }
+        } catch (Exception e) {
+            System.out.println(channel+" ran into exception");
+            e.printStackTrace();
+            throw e;
         }
     }
 
@@ -272,7 +280,7 @@ public final class NioOutboundPipeline
         lastWriteTime = currentTimeMillis();
         int written = socketChannel.write(sendBuffer);
         bytesWritten.inc(written);
-        //System.out.println(channel+" bytes written:"+written);
+        System.out.println(channel + " bytes written:" + written);
     }
 
     @Override
@@ -280,7 +288,7 @@ public final class NioOutboundPipeline
         writeQueue.clear();
         priorityWriteQueue.clear();
         super.requestClose();
-   }
+    }
 
     @Override
     protected void publishMetrics() {
@@ -321,6 +329,7 @@ public final class NioOutboundPipeline
         for (OutboundHandler addedHandler : addedHandlers) {
             addedHandler.setChannel(channel).handlerAdded();
         }
+
         updatePipeline(append(handlers, addedHandlers));
         return this;
     }
@@ -344,20 +353,40 @@ public final class NioOutboundPipeline
 
     private void updatePipeline(OutboundHandler[] newHandlers) {
         this.handlers = newHandlers;
-        this.sendBuffer = newHandlers.length == 0 ? null : (ByteBuffer) newHandlers[newHandlers.length - 1].dst();
 
         OutboundHandler prev = null;
+        Object prevSrc = null;
         for (OutboundHandler handler : handlers) {
             if (prev == null) {
+                // first handler.
                 handler.src(this);
             } else {
                 Object src = prev.dst();
+
+                if (src == null) {
+                    src = prevSrc;
+                } else {
+                    prevSrc = src;
+                }
+
                 if (src instanceof ByteBuffer) {
                     handler.src(src);
+                    if(handler.dst()==null){
+                        handler.dst(src);
+                    }
                 }
             }
             prev = handler;
         }
+
+        this.sendBuffer = newHandlers.length == 0 ? null : (ByteBuffer) newHandlers[newHandlers.length - 1].dst();
+
+        if (sendBuffer != null)
+            System.out.println(channel + " " + IOUtil.toDebugString("sndBuffer", sendBuffer));
+        else
+            System.out.println(channel + " sndBuffer=null");
+
+        System.out.println(channel + " " + pipelineToString());
     }
 
     // useful for debugging

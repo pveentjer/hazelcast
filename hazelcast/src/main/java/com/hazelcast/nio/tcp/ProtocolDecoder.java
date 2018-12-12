@@ -16,10 +16,13 @@
 
 package com.hazelcast.nio.tcp;
 
+import com.hazelcast.client.impl.protocol.util.ClientAuthenticationHandler;
 import com.hazelcast.client.impl.protocol.util.ClientMessageDecoder;
+import com.hazelcast.instance.Node;
 import com.hazelcast.internal.networking.ChannelOptions;
 import com.hazelcast.internal.networking.InboundHandler;
 import com.hazelcast.internal.networking.HandlerStatus;
+import com.hazelcast.internal.networking.InitReceiveBuffer;
 import com.hazelcast.nio.IOService;
 import com.hazelcast.nio.ascii.TextDecoder;
 import com.hazelcast.nio.ascii.TextEncoder;
@@ -47,7 +50,7 @@ import static com.hazelcast.util.StringUtil.stringToBytes;
  * A {@link InboundHandler} that reads the protocol bytes
  * {@link com.hazelcast.nio.Protocols} and based on the protocol it creates the
  * appropriate handlers.
- *
+ * <p>
  * The ProtocolDecoder doesn't forward to the dst; it replaces itself once the
  * protocol bytes are known. So that is why the Void type for dst.
  */
@@ -56,11 +59,13 @@ public class ProtocolDecoder extends InboundHandler<ByteBuffer, Void> {
     private final IOService ioService;
     private final ProtocolEncoder protocolEncoder;
     private final HazelcastProperties props;
+    private final Node node;
 
-    public ProtocolDecoder(IOService ioService, ProtocolEncoder protocolEncoder) {
+    public ProtocolDecoder(IOService ioService, ProtocolEncoder protocolEncoder, Node node) {
         this.ioService = ioService;
         this.protocolEncoder = protocolEncoder;
         this.props = ioService.properties();
+        this.node = node;
     }
 
     @Override
@@ -118,10 +123,14 @@ public class ProtocolDecoder extends InboundHandler<ByteBuffer, Void> {
         channel.options()
                 .setOption(SO_RCVBUF, clientRcvBuf())
                 // clients dont support direct buffers
+                // todo: it this still the case? Afaik they do
                 .setOption(DIRECT_BUF, false);
 
         TcpIpConnection connection = (TcpIpConnection) channel.attributeMap().get(TcpIpConnection.class);
-        channel.inboundPipeline().replace(this, new ClientMessageDecoder(connection, ioService.getClientEngine()));
+
+        ClientAuthenticationHandler authenticationHandler = new ClientAuthenticationHandler(node);
+        ClientMessageDecoder messageDecoder = new ClientMessageDecoder(connection, ioService.getClientEngine());
+        channel.inboundPipeline().replace(this, new InitReceiveBuffer(), authenticationHandler, messageDecoder);
     }
 
     private void initChannelForText(String protocol) {

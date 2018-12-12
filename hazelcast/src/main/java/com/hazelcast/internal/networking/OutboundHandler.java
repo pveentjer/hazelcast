@@ -80,7 +80,8 @@ public abstract class OutboundHandler<S, D> extends ChannelHandler<OutboundHandl
      *
      * The buffer created is reading mode.
      */
-    protected final void initDstBuffer() {
+    public final void initDstBuffer() {
+        System.out.println("dst buffer.size:"+channel.options().getOption(SO_SNDBUF));
         initDstBuffer(channel.options().getOption(SO_SNDBUF));
     }
 

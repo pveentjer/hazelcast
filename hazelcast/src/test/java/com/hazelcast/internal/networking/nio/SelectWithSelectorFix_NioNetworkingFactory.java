@@ -45,7 +45,7 @@ public class SelectWithSelectorFix_NioNetworkingFactory implements NetworkingFac
                         .inputThreadCount(properties.getInteger(IO_INPUT_THREAD_COUNT))
                         .outputThreadCount(properties.getInteger(IO_OUTPUT_THREAD_COUNT))
                         .balancerIntervalSeconds(properties.getInteger(IO_BALANCER_INTERVAL_SECONDS))
-                        .channelInitializer(new PlainChannelInitializer(ioService))
+                        .channelInitializer(new PlainChannelInitializer(ioService, null))
                         .selectorMode(SelectorMode.SELECT_WITH_FIX)
                         .selectorWorkaroundTest(true));
     }

@@ -277,7 +277,7 @@ public class DefaultNodeExtension implements NodeExtension {
             }
         }
 
-        return new PlainChannelInitializer(ioService);
+        return new PlainChannelInitializer(ioService, node);
     }
 
     @Override

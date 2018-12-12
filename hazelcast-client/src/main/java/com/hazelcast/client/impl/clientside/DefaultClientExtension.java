@@ -21,6 +21,7 @@ import com.hazelcast.client.HazelcastClientNotActiveException;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.config.ClientNetworkConfig;
 import com.hazelcast.client.config.SocketOptions;
+import com.hazelcast.client.connection.nio.ClientAuthenticationRequestEncoder;
 import com.hazelcast.client.connection.nio.ClientPlainChannelInitializer;
 import com.hazelcast.client.proxy.ClientMapProxy;
 import com.hazelcast.client.proxy.NearCachedClientMapProxy;
@@ -38,6 +39,7 @@ import com.hazelcast.instance.BuildInfoProvider;
 import com.hazelcast.internal.nearcache.NearCacheManager;
 import com.hazelcast.internal.nearcache.impl.DefaultNearCacheManager;
 import com.hazelcast.internal.networking.ChannelInitializer;
+import com.hazelcast.internal.networking.OutboundHandler;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.internal.serialization.SerializationServiceBuilder;
 import com.hazelcast.internal.serialization.impl.DefaultSerializationServiceBuilder;
@@ -53,6 +55,8 @@ import com.hazelcast.spi.properties.GroupProperty;
 import com.hazelcast.spi.properties.HazelcastProperties;
 import com.hazelcast.spi.serialization.SerializationService;
 import com.hazelcast.util.function.Supplier;
+
+import java.nio.ByteBuffer;
 
 import static com.hazelcast.config.NearCacheConfigAccessor.initDefaultMaxSizeForOnHeapMaps;
 import static com.hazelcast.internal.config.ConfigValidator.checkNearCacheConfig;
@@ -127,7 +131,7 @@ public class DefaultClientExtension implements ClientExtension {
     }
 
     @Override
-    public ChannelInitializer createChannelInitializer() {
+    public ChannelInitializer createChannelInitializer(Supplier<ClientAuthenticationRequestEncoder> authRequestEncoderSupplier) {
         ClientNetworkConfig networkConfig = client.getClientConfig().getNetworkConfig();
         SSLConfig sslConfig = networkConfig.getSSLConfig();
         if (sslConfig != null && sslConfig.isEnabled()) {
@@ -139,7 +143,7 @@ public class DefaultClientExtension implements ClientExtension {
         SocketOptions socketOptions = networkConfig.getSocketOptions();
         HazelcastProperties properties = client.getProperties();
         boolean directBuffer = properties.getBoolean(SOCKET_CLIENT_BUFFER_DIRECT);
-        return new ClientPlainChannelInitializer(socketOptions, directBuffer);
+        return new ClientPlainChannelInitializer(socketOptions, directBuffer, authRequestEncoderSupplier);
     }
 
     @Override

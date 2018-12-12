@@ -209,7 +209,7 @@ public class HazelcastClientInstanceImpl implements HazelcastInstance, Serializa
     private final MetricsRegistryImpl metricsRegistry;
     private final Statistics statistics;
     private final Diagnostics diagnostics;
-    private final SerializationService serializationService;
+    private final InternalSerializationService serializationService;
     private final ClientICacheManager hazelcastCacheManager;
     private final ClientLockReferenceIdGenerator lockReferenceIdGenerator;
     private final ClientExceptionFactory clientExceptionFactory;
@@ -889,7 +889,7 @@ public class HazelcastClientInstanceImpl implements HazelcastInstance, Serializa
     }
 
     @Override
-    public SerializationService getSerializationService() {
+    public InternalSerializationService getSerializationService() {
         return serializationService;
     }
 

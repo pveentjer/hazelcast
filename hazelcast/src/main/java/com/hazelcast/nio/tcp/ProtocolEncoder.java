@@ -17,6 +17,7 @@
 package com.hazelcast.nio.tcp;
 
 import com.hazelcast.client.impl.protocol.util.ClientMessageEncoder;
+import com.hazelcast.internal.networking.InitDstBuffer;
 import com.hazelcast.internal.networking.OutboundHandler;
 import com.hazelcast.internal.networking.HandlerStatus;
 import com.hazelcast.nio.IOService;
@@ -146,7 +147,7 @@ public class ProtocolEncoder extends OutboundHandler<Void, ByteBuffer> {
         channel.options()
                 .setOption(SO_SNDBUF, clientSndBuf());
 
-        channel.outboundPipeline().replace(this, new ClientMessageEncoder());
+        channel.outboundPipeline().replace(this, new InitDstBuffer(), new ClientMessageEncoder());
     }
 
     private void initChannelForText() {

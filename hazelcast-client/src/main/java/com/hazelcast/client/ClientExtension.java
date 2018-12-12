@@ -16,14 +16,19 @@
 
 package com.hazelcast.client;
 
+import com.hazelcast.client.connection.nio.ClientAuthenticationRequestEncoder;
 import com.hazelcast.client.impl.clientside.HazelcastClientInstanceImpl;
 import com.hazelcast.client.spi.ClientProxyFactory;
 import com.hazelcast.internal.nearcache.NearCacheManager;
 import com.hazelcast.internal.networking.ChannelInitializer;
+import com.hazelcast.internal.networking.OutboundHandler;
 import com.hazelcast.internal.serialization.InternalSerializationService;
 import com.hazelcast.map.impl.MapService;
 import com.hazelcast.memory.MemoryStats;
 import com.hazelcast.nio.SocketInterceptor;
+import com.hazelcast.util.function.Supplier;
+
+import java.nio.ByteBuffer;
 
 /**
  * ClientExtension is a client extension mechanism to be able to plug different implementations of
@@ -59,7 +64,7 @@ public interface ClientExtension {
      */
     SocketInterceptor createSocketInterceptor();
 
-    ChannelInitializer createChannelInitializer();
+    ChannelInitializer createChannelInitializer(Supplier<ClientAuthenticationRequestEncoder> authRequestEncoderSupplier);
 
     /**
      * Creates a {@link NearCacheManager} instance to be used by this client.

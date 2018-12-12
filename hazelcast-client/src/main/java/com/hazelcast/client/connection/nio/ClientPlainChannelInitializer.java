@@ -22,7 +22,10 @@ import com.hazelcast.client.impl.protocol.util.ClientMessageDecoder;
 import com.hazelcast.client.impl.protocol.util.ClientMessageEncoder;
 import com.hazelcast.internal.networking.Channel;
 import com.hazelcast.internal.networking.ChannelInitializer;
+import com.hazelcast.internal.networking.InitDstBuffer;
+import com.hazelcast.internal.networking.InitReceiveBuffer;
 import com.hazelcast.util.function.Consumer;
+import com.hazelcast.util.function.Supplier;
 
 import static com.hazelcast.client.config.SocketOptions.KILO_BYTE;
 import static com.hazelcast.internal.networking.ChannelOption.DIRECT_BUF;
@@ -38,17 +41,21 @@ import static com.hazelcast.internal.networking.ChannelOption.TCP_NODELAY;
 /**
  * Client side ChannelInitializer for connections without SSL/TLS. Client in this
  * case is a real client using client protocol etc.
- *
+ * <p>
  * It will automatically send the Client Protocol to the server and configure the
  * correct buffers/handlers.
  */
 public class ClientPlainChannelInitializer implements ChannelInitializer {
     private final boolean directBuffer;
     private final SocketOptions socketOptions;
+    private final Supplier<ClientAuthenticationRequestEncoder> authRequestEncoderSupplier;
 
-    public ClientPlainChannelInitializer(SocketOptions socketOptions, boolean directBuffer) {
+    public ClientPlainChannelInitializer(SocketOptions socketOptions,
+                                         boolean directBuffer,
+                                         Supplier<ClientAuthenticationRequestEncoder> authRequestEncoderSupplier) {
         this.socketOptions = socketOptions;
         this.directBuffer = directBuffer;
+        this.authRequestEncoderSupplier = authRequestEncoderSupplier;
     }
 
     @Override
@@ -71,11 +78,24 @@ public class ClientPlainChannelInitializer implements ChannelInitializer {
                 connection.handleClientMessage(message);
             }
         });
-        channel.inboundPipeline().addLast(decoder);
+        channel.inboundPipeline().addLast(new InitReceiveBuffer(), decoder);
 
-        channel.outboundPipeline().addLast(new ClientMessageEncoder());
-        // before a client sends any data, it first needs to send the protocol.
-        // so the protocol encoder is actually the last handler in the outbound pipeline.
-        channel.outboundPipeline().addLast(new ClientProtocolEncoder());
+
+        try {
+            channel.outboundPipeline().addLast(new InitDstBuffer());
+            
+            // the first thing the client does is send the client protocol bytes; so this encoder is
+            // first in line. Once the bytes have been written to the buffer, this handler will remove itself.
+            channel.outboundPipeline().addLast(new ClientProtocolEncoder());
+
+            // after the client protocol bytes have been put in the buffer, the authentication request needs
+            // to be put in the buffer. Once the bytes have been written, this handler will remove itself.
+            channel.outboundPipeline().addLast(authRequestEncoderSupplier.get());
+
+            // writes the actual client message.
+            channel.outboundPipeline().addLast(new ClientMessageEncoder());
+        }catch (RuntimeException e){
+            e.printStackTrace();
+        }
     }
 }

@@ -58,6 +58,7 @@ import com.hazelcast.security.UsernamePasswordCredentials;
 import com.hazelcast.spi.properties.HazelcastProperties;
 import com.hazelcast.spi.serialization.SerializationService;
 import com.hazelcast.util.AddressUtil;
+import com.hazelcast.util.function.Supplier;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -176,7 +177,7 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
         return networking;
     }
 
-    protected NioNetworking initNetworking(HazelcastClientInstanceImpl client) {
+    protected NioNetworking initNetworking(final HazelcastClientInstanceImpl client) {
         HazelcastProperties properties = client.getProperties();
 
         SSLConfig sslConfig = client.getClientConfig().getNetworkConfig().getSSLConfig();
@@ -199,6 +200,14 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
             outputThreads = configuredOutputThreads;
         }
 
+        Supplier<ClientAuthenticationRequestEncoder> supplier = new Supplier<ClientAuthenticationRequestEncoder>() {
+            @Override
+            public ClientAuthenticationRequestEncoder get() {
+                return new ClientAuthenticationRequestEncoder(client.getSerializationService(),
+                        credentialsFactory, getPrincipal());
+            }
+        };
+
         return new NioNetworking(
                 new NioNetworking.Context()
                         .loggingService(client.getLoggingService())
@@ -208,7 +217,7 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
                         .inputThreadCount(inputThreads)
                         .outputThreadCount(outputThreads)
                         .balancerIntervalSeconds(properties.getInteger(IO_BALANCER_INTERVAL_SECONDS))
-                        .channelInitializer(client.getClientExtension().createChannelInitializer()));
+                        .channelInitializer(client.getClientExtension().createChannelInitializer(supplier)));
     }
 
     private SocketInterceptor initSocketInterceptor(SocketInterceptorConfig sic) {
@@ -553,7 +562,7 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
             this.target = target;
             this.asOwner = asOwner;
             this.future = future;
-            this.serializationService = (InternalSerializationService) client.getSerializationService();
+            this.serializationService = client.getSerializationService();
         }
 
         @Override
@@ -567,6 +576,8 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
                 connectionsInProgress.remove(target);
                 return;
             }
+
+          future.onSuccess(connection);
 
             try {
                 authenticate(connection);
@@ -593,6 +604,7 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
         private void authenticate(ClientConnection connection) {
             ClientPrincipal principal = getPrincipal();
             ClientMessage authenticationRequest = encodeAuthenticationRequest(principal);
+
             ClientInvocation clientInvocation = new ClientInvocation(client, authenticationRequest, null, connection);
             ClientInvocationFuture invocationFuture = clientInvocation.invokeUrgent();
 
@@ -737,21 +749,20 @@ public class ClientConnectionManagerImpl implements ClientConnectionManager {
             logger.info("Authenticated with server " + connection.getEndPoint() + ", server version:" + connection
                     .getConnectedServerVersionString() + " Local address: " + connection.getLocalSocketAddress());
 
-        /* check if connection is closed by remote before authentication complete, if that is the case
-        we need to remove it back from active connections.
-        Race description from https://github.com/hazelcast/hazelcast/pull/8832.(A little bit changed)
-        - open a connection client -> member
-        - send auth message
-        - receive auth reply -> reply processing is offloaded to an executor. Did not start to run yet.
-        - member closes the connection -> the connection is trying to removed from map
-                                                             but it was not there to begin with
-        - the executor start processing the auth reply -> it put the connection to the connection map.
-        - we end up with a closed connection in activeConnections map */
+            // check if connection is closed by remote before authentication complete, if that is the case
+            // we need to remove it back from active connections.
+            // Race description from https://github.com/hazelcast/hazelcast/pull/8832.(A little bit changed)
+            // - open a connection client -> member
+            // - send auth message
+            // - receive auth reply -> reply processing is offloaded to an executor. Did not start to run yet.
+            // - member closes the connection -> the connection is trying to removed from map
+            //                                                 but it was not there to begin with
+            // - the executor start processing the auth reply -> it put the connection to the connection map.
+            // - we end up with a closed connection in activeConnections map
             if (!connection.isAlive()) {
                 removeFromActiveConnections(connection);
             }
         }
-
 
         @Override
         public void onFailure(Throwable t) {

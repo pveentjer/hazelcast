@@ -48,11 +48,6 @@ public class ClientMessageDecoder extends InboundHandlerWithCounters<ByteBuffer,
     }
 
     @Override
-    public void handlerAdded() {
-        initSrcBuffer();
-    }
-
-    @Override
     public HandlerStatus onRead() {
         src.flip();
         try {
@@ -107,6 +102,7 @@ public class ClientMessageDecoder extends InboundHandlerWithCounters<ByteBuffer,
     }
 
     private void handleMessage(ClientMessage message) {
+        System.out.println("Member processing message "+message+" ");
         message.index(message.getDataOffset());
         message.setConnection(connection);
         dst.accept(message);
