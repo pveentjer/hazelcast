@@ -53,8 +53,8 @@ public final class ClientPartitionServiceImpl
         extends ClientAddPartitionListenerCodec.AbstractEventHandler
         implements EventHandler<ClientMessage>, ClientPartitionService {
 
-    private static final long PERIOD = 10;
-    private static final long INITIAL_DELAY = 10;
+    private static final long PERIOD = 10000;
+    private static final long INITIAL_DELAY = 100000;
 
     private final ExecutionCallback<ClientMessage> refreshTaskCallback = new RefreshTaskCallback();
     private final ConcurrentHashMap<Integer, Address> partitions = new ConcurrentHashMap<Integer, Address>(271, 0.75f, 1);

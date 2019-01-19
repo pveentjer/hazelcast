@@ -269,7 +269,11 @@ public final class NioOutboundPipeline
         // till it is empty. So it will also pick up tasks that are added while it is processing the selectionQueue.
 
         // owner can't be null because this method is made by the owning io thread.
-        owner().addTask(this);
+        if(Thread.currentThread().getClass()==NioThread.class) {
+            owner().addTask(this);
+        }else{
+            owner().addTaskAndWakeup(this);
+        }
     }
 
     private void flushToSocket() throws IOException {
