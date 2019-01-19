@@ -158,6 +158,7 @@ public final class NioOutboundPipeline
 
         return frame;
     }
+    private static final boolean WRITE_THROUGH = Boolean.parseBoolean("hazelcast.io.write.through");
 
     /**
      * Makes sure this OutboundHandler is scheduled to be executed by the IO thread.
@@ -179,10 +180,14 @@ public final class NioOutboundPipeline
             return;
         }
 
-        try {
-            process();
-        } catch (Throwable t) {
-            onError(t);
+        if(WRITE_THROUGH) {
+            try {
+                process();
+            } catch (Throwable t) {
+                onError(t);
+            }
+        }else{
+            addTaskAndWakeup(this);
         }
     }
 
