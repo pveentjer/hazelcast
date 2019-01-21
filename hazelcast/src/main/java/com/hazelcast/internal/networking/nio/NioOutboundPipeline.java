@@ -134,17 +134,57 @@ public final class NioOutboundPipeline
         return scheduled.get() ? 1 : 0;
     }
 
+    private OutboundFrame tmpFrame;
+
     public void write(OutboundFrame frame) {
+        if (scheduled.get()) {
+            offer(frame);
+            // So this pipeline is still scheduled, we don't need to schedule it again
+            return;
+        }
+
+        if (!scheduled.compareAndSet(false, true)) {
+            offer(frame);
+            // Another thread already has scheduled this pipeline, we are done. It
+            // doesn't matter which thread does the scheduling, as long as it happens.
+            return;
+        }
+
+        if(WRITE_THROUGH) {
+            if(tmpFrame==null){
+                tmpFrame = frame;
+            }else{
+                offer(frame);
+            }
+
+            try {
+                process();
+            } catch (Throwable t) {
+                onError(t);
+            }
+        }else{
+            offer(frame);
+            addTaskAndWakeup(this);
+        }
+    }
+
+    private void offer(OutboundFrame frame) {
         if (frame.isUrgent()) {
             priorityWriteQueue.offer(frame);
         } else {
             writeQueue.offer(frame);
         }
-        schedule();
     }
 
     @Override
     public OutboundFrame get() {
+        if(tmpFrame !=null){
+            normalFramesWritten.inc();
+            OutboundFrame f = tmpFrame;
+            tmpFrame = null;
+            return f;
+        }
+
         OutboundFrame frame = priorityWriteQueue.poll();
         if (frame == null) {
             frame = writeQueue.poll();
@@ -158,7 +198,7 @@ public final class NioOutboundPipeline
 
         return frame;
     }
-    private static final boolean WRITE_THROUGH = Boolean.parseBoolean("hazelcast.io.write.through");
+    private static final boolean WRITE_THROUGH = Boolean.parseBoolean(System.getProperty("hazelcast.io.write.through","true"));
 
     /**
      * Makes sure this OutboundHandler is scheduled to be executed by the IO thread.
