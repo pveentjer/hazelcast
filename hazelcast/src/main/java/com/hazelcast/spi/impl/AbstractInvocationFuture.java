@@ -148,34 +148,35 @@ public abstract class AbstractInvocationFuture<V> implements InternalCompletable
 
     @Override
     public V get() throws InterruptedException, ExecutionException {
-//        for(;;){
-//            if(isDone()){
-//                return resolveAndThrowIfException(state);
-//            }
-//            LockSupport.parkNanos(10000);
-//        }
-
-
-        Object response = registerWaiter(Thread.currentThread(), null);
-        if (response != VOID) {
-            // no registration was done since a value is available.
-            return resolveAndThrowIfException(response);
-        }
-
-        boolean interrupted = false;
-        try {
-            for (; ; ) {
-                park();
-                if (isDone()) {
-                    return resolveAndThrowIfException(state);
-                } else if (Thread.interrupted()) {
-                    interrupted = true;
-                    onInterruptDetected();
-                }
+        for(;;){
+            if(isDone()){
+                return resolveAndThrowIfException(state);
             }
-        } finally {
-            restoreInterrupt(interrupted);
+            //LockSupport.parkNanos(10000);
+            Thread.yield();
         }
+
+//
+//        Object response = registerWaiter(Thread.currentThread(), null);
+//        if (response != VOID) {
+//            // no registration was done since a value is available.
+//            return resolveAndThrowIfException(response);
+//        }
+//
+//        boolean interrupted = false;
+//        try {
+//            for (; ; ) {
+//                park();
+//                if (isDone()) {
+//                    return resolveAndThrowIfException(state);
+//                } else if (Thread.interrupted()) {
+//                    interrupted = true;
+//                    onInterruptDetected();
+//                }
+//            }
+//        } finally {
+//            restoreInterrupt(interrupted);
+//        }
     }
 
     @Override
@@ -186,27 +187,35 @@ public abstract class AbstractInvocationFuture<V> implements InternalCompletable
             return resolveAndThrowIfException(response);
         }
 
-        long deadlineNanos = System.nanoTime() + unit.toNanos(timeout);
-        boolean interrupted = false;
-        try {
-            long timeoutNanos = unit.toNanos(timeout);
-            while (timeoutNanos > 0) {
-                parkNanos(timeoutNanos);
-                timeoutNanos = deadlineNanos - System.nanoTime();
-
-                if (isDone()) {
-                    return resolveAndThrowIfException(state);
-                } else if (Thread.interrupted()) {
-                    interrupted = true;
-                    onInterruptDetected();
-                }
+        for(;;){
+            if(isDone()){
+                return resolveAndThrowIfException(state);
             }
-        } finally {
-            restoreInterrupt(interrupted);
+            //LockSupport.parkNanos(10000);
+            Thread.yield();
         }
 
-        unregisterWaiter(Thread.currentThread());
-        throw newTimeoutException(timeout, unit);
+//        long deadlineNanos = System.nanoTime() + unit.toNanos(timeout);
+//        boolean interrupted = false;
+//        try {
+//            long timeoutNanos = unit.toNanos(timeout);
+//            while (timeoutNanos > 0) {
+//                parkNanos(timeoutNanos);
+//                timeoutNanos = deadlineNanos - System.nanoTime();
+//
+//                if (isDone()) {
+//                    return resolveAndThrowIfException(state);
+//                } else if (Thread.interrupted()) {
+//                    interrupted = true;
+//                    onInterruptDetected();
+//                }
+//            }
+//        } finally {
+//            restoreInterrupt(interrupted);
+//        }
+//
+//        unregisterWaiter(Thread.currentThread());
+//        throw newTimeoutException(timeout, unit);
     }
 
     private static void restoreInterrupt(boolean interrupted) {

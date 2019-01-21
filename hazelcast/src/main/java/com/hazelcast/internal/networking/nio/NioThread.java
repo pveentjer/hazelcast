@@ -59,7 +59,7 @@ public class NioThread extends Thread implements OperationHostileThread {
     private static final int TEST_SELECTOR_BUG_PROBABILITY = Integer.parseInt(
             System.getProperty("hazelcast.io.selector.bug.probability", "16"));
     public static final long SPIN_DURATION_NANOS = TimeUnit.MICROSECONDS.toNanos(Integer.parseInt(
-            System.getProperty("hazelcast.io.selector.spin.duration.micros", "1000")));
+            System.getProperty("hazelcast.io.selector.spin.duration.micros", "300")));
 
     @SuppressWarnings("checkstyle:visibilitymodifier")
     // this field is set during construction and is meant for the probes so that the NioPipeline can
@@ -337,23 +337,28 @@ public class NioThread extends Thread implements OperationHostileThread {
     }
 
     private void selectNowThenSelectLoop() throws IOException {
-        long selectNowEndNanos = nanoTime() + SPIN_DURATION_NANOS;
-        System.out.println("selectNowThenSelectLoop");
+        long spinDeadlineNanos = nanoTime() + SPIN_DURATION_NANOS;
+        long lastSuccessNanos = nanoTime();
         while (!stop) {
             boolean tasksProcessed = processTaskQueue();
 
             int selectedKeys;
-            if(nanoTime() < selectNowEndNanos){
+            if (nanoTime() < spinDeadlineNanos) {
                 selectedKeys = selector.selectNow();
-                if(selectedKeys==0 && !tasksProcessed){
+                if (selectedKeys == 0 && !tasksProcessed) {
                     Thread.yield();
                 }
-            }else{
+            } else {
                 selectedKeys = selector.select(SELECT_WAIT_TIME_MILLIS);
             }
 
             if (selectedKeys > 0) {
-                selectNowEndNanos = nanoTime() + SPIN_DURATION_NANOS;
+                long nowNanos = nanoTime();
+                long periodLastSuccessfulSelect = nowNanos - lastSuccessNanos;
+                if (periodLastSuccessfulSelect < SPIN_DURATION_NANOS) {
+                    spinDeadlineNanos = nowNanos + SPIN_DURATION_NANOS;
+                }
+                lastSuccessNanos = nowNanos;
                 processSelectionKeys();
             }
         }
