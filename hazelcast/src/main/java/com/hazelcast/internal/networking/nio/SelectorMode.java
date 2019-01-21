@@ -27,12 +27,12 @@ public enum SelectorMode {
     SELECT,
     SELECT_NOW,
     SELECT_WITH_FIX,
-    SELECT_NOW_THEN_SELECT;
+    SPIN_THEN_SELECT;
 
     public static final String SELECT_STRING = "select";
     public static final String SELECT_WITH_FIX_STRING = "selectwithfix";
     public static final String SELECT_NOW_STRING = "selectnow";
-    public static final String SELECT_NOW_THEN_SELECT_STRING = "selectnow_then_select";
+    public static final String SPIN_THEN_SELECT_STRING = "spin_then_select";
 
     public static SelectorMode getConfiguredValue() {
         return fromString(getConfiguredString());
@@ -45,8 +45,8 @@ public enum SelectorMode {
     public static SelectorMode fromString(String value) {
         if (value.equals(SELECT_STRING)) {
             return SELECT;
-        } else if (value.equals(SELECT_NOW_THEN_SELECT_STRING)) {
-            return SELECT_NOW_THEN_SELECT;
+        } else if (value.equals(SPIN_THEN_SELECT_STRING)) {
+            return SPIN_THEN_SELECT;
         } else if (value.equals(SELECT_WITH_FIX_STRING)) {
             return SELECT_WITH_FIX;
         } else if (value.equals(SELECT_NOW_STRING) || value.startsWith(SELECT_NOW_STRING + ",")) {

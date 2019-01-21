@@ -44,6 +44,7 @@ import static com.hazelcast.util.EmptyStatement.ignore;
 import static java.lang.Math.max;
 import static java.lang.System.currentTimeMillis;
 import static java.lang.System.nanoTime;
+import static java.util.concurrent.TimeUnit.MICROSECONDS;
 
 public class NioThread extends Thread implements OperationHostileThread {
 
@@ -58,7 +59,7 @@ public class NioThread extends Thread implements OperationHostileThread {
     // when testing, we simulate the selector bug randomly with one out of TEST_SELECTOR_BUG_PROBABILITY
     private static final int TEST_SELECTOR_BUG_PROBABILITY = Integer.parseInt(
             System.getProperty("hazelcast.io.selector.bug.probability", "16"));
-    public static final long SPIN_DURATION_NANOS = TimeUnit.MICROSECONDS.toNanos(Integer.parseInt(
+    public static final long SPIN_DURATION_NANOS = MICROSECONDS.toNanos(Integer.parseInt(
             System.getProperty("hazelcast.io.selector.spin.duration.micros", "300")));
 
     @SuppressWarnings("checkstyle:visibilitymodifier")
@@ -234,8 +235,8 @@ public class NioThread extends Thread implements OperationHostileThread {
                         case SELECT_NOW:
                             selectNowLoop();
                             break;
-                        case SELECT_NOW_THEN_SELECT:
-                            selectNowThenSelectLoop();
+                        case SPIN_THEN_SELECT:
+                            spinThenSelectLoop();
                             break;
                         case SELECT:
                             selectLoop();
@@ -336,14 +337,17 @@ public class NioThread extends Thread implements OperationHostileThread {
         }
     }
 
-    private void selectNowThenSelectLoop() throws IOException {
-        long spinDeadlineNanos = nanoTime() + SPIN_DURATION_NANOS;
+    private void spinThenSelectLoop() throws IOException {
         long lastSuccessNanos = nanoTime();
+        // we don't want to start with spinning.
+        // this can be an issue when startup time matters.
+        long spinDeadlineNanos = lastSuccessNanos;
         while (!stop) {
             boolean tasksProcessed = processTaskQueue();
 
             int selectedKeys;
-            if (nanoTime() < spinDeadlineNanos) {
+            // correctly deals with overflow.
+            if (spinDeadlineNanos - nanoTime() < 0) {
                 selectedKeys = selector.selectNow();
                 if (selectedKeys == 0 && !tasksProcessed) {
                     Thread.yield();
@@ -354,8 +358,8 @@ public class NioThread extends Thread implements OperationHostileThread {
 
             if (selectedKeys > 0) {
                 long nowNanos = nanoTime();
-                long periodLastSuccessfulSelect = nowNanos - lastSuccessNanos;
-                if (periodLastSuccessfulSelect < SPIN_DURATION_NANOS) {
+                long periodLastSuccessNanos = nowNanos - lastSuccessNanos;
+                if (periodLastSuccessNanos < SPIN_DURATION_NANOS) {
                     spinDeadlineNanos = nowNanos + SPIN_DURATION_NANOS;
                 }
                 lastSuccessNanos = nowNanos;

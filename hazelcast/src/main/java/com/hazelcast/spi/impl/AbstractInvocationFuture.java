@@ -148,35 +148,35 @@ public abstract class AbstractInvocationFuture<V> implements InternalCompletable
 
     @Override
     public V get() throws InterruptedException, ExecutionException {
-        for(;;){
-            if(isDone()){
-                return resolveAndThrowIfException(state);
-            }
-            //LockSupport.parkNanos(10000);
-            Thread.yield();
+//        for(;;){
+//            if(isDone()){
+//                return resolveAndThrowIfException(state);
+//            }
+//            //LockSupport.parkNanos(10000);
+//            Thread.yield();
+//        }
+
+
+        Object response = registerWaiter(Thread.currentThread(), null);
+        if (response != VOID) {
+            // no registration was done since a value is available.
+            return resolveAndThrowIfException(response);
         }
 
-//
-//        Object response = registerWaiter(Thread.currentThread(), null);
-//        if (response != VOID) {
-//            // no registration was done since a value is available.
-//            return resolveAndThrowIfException(response);
-//        }
-//
-//        boolean interrupted = false;
-//        try {
-//            for (; ; ) {
-//                park();
-//                if (isDone()) {
-//                    return resolveAndThrowIfException(state);
-//                } else if (Thread.interrupted()) {
-//                    interrupted = true;
-//                    onInterruptDetected();
-//                }
-//            }
-//        } finally {
-//            restoreInterrupt(interrupted);
-//        }
+        boolean interrupted = false;
+        try {
+            for (; ; ) {
+                park();
+                if (isDone()) {
+                    return resolveAndThrowIfException(state);
+                } else if (Thread.interrupted()) {
+                    interrupted = true;
+                    onInterruptDetected();
+                }
+            }
+        } finally {
+            restoreInterrupt(interrupted);
+        }
     }
 
     @Override
