@@ -136,36 +136,45 @@ public final class NioOutboundPipeline
 
     private OutboundFrame tmpFrame;
 
+//    public void write(OutboundFrame frame) {
+//        if (scheduled.get()) {
+//            offer(frame);
+//            // So this pipeline is still scheduled, we don't need to schedule it again
+//            return;
+//        }
+//
+//        if (!scheduled.compareAndSet(false, true)) {
+//            offer(frame);
+//            // Another thread already has scheduled this pipeline, we are done. It
+//            // doesn't matter which thread does the scheduling, as long as it happens.
+//            return;
+//        }
+//
+//        if(WRITE_THROUGH) {
+//            if(tmpFrame==null){
+//                tmpFrame = frame;
+//            }else{
+//                offer(frame);
+//            }
+//
+//            try {
+//                process();
+//            } catch (Throwable t) {
+//                onError(t);
+//            }
+//        }else{
+//            offer(frame);
+//            addTaskAndWakeup(this);
+//        }
+//    }
+
     public void write(OutboundFrame frame) {
-        if (scheduled.get()) {
-            offer(frame);
-            // So this pipeline is still scheduled, we don't need to schedule it again
-            return;
+        if (frame.isUrgent()) {
+            priorityWriteQueue.offer(frame);
+        } else {
+            writeQueue.offer(frame);
         }
-
-        if (!scheduled.compareAndSet(false, true)) {
-            offer(frame);
-            // Another thread already has scheduled this pipeline, we are done. It
-            // doesn't matter which thread does the scheduling, as long as it happens.
-            return;
-        }
-
-        if(WRITE_THROUGH) {
-            if(tmpFrame==null){
-                tmpFrame = frame;
-            }else{
-                offer(frame);
-            }
-
-            try {
-                process();
-            } catch (Throwable t) {
-                onError(t);
-            }
-        }else{
-            offer(frame);
-            addTaskAndWakeup(this);
-        }
+        schedule();
     }
 
     private void offer(OutboundFrame frame) {

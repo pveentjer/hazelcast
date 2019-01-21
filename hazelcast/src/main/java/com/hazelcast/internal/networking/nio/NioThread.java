@@ -34,6 +34,7 @@ import java.util.Iterator;
 import java.util.Queue;
 import java.util.Random;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.INFO;
 import static com.hazelcast.internal.networking.nio.SelectorMode.SELECT_NOW;
@@ -42,6 +43,7 @@ import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
 import static com.hazelcast.util.EmptyStatement.ignore;
 import static java.lang.Math.max;
 import static java.lang.System.currentTimeMillis;
+import static java.lang.System.nanoTime;
 
 public class NioThread extends Thread implements OperationHostileThread {
 
@@ -56,6 +58,8 @@ public class NioThread extends Thread implements OperationHostileThread {
     // when testing, we simulate the selector bug randomly with one out of TEST_SELECTOR_BUG_PROBABILITY
     private static final int TEST_SELECTOR_BUG_PROBABILITY = Integer.parseInt(
             System.getProperty("hazelcast.io.selector.bug.probability", "16"));
+    public static final long SPIN_DURATION_NANOS = TimeUnit.MICROSECONDS.toNanos(Integer.parseInt(
+            System.getProperty("hazelcast.io.selector.spin.duration.micros", "1000")));
 
     @SuppressWarnings("checkstyle:visibilitymodifier")
     // this field is set during construction and is meant for the probes so that the NioPipeline can
@@ -230,6 +234,9 @@ public class NioThread extends Thread implements OperationHostileThread {
                         case SELECT_NOW:
                             selectNowLoop();
                             break;
+                        case SELECT_NOW_THEN_SELECT:
+                            selectNowThenSelectLoop();
+                            break;
                         case SELECT:
                             selectLoop();
                             break;
@@ -315,7 +322,6 @@ public class NioThread extends Thread implements OperationHostileThread {
         long idleRound = 0;
         while (!stop) {
             boolean tasksProcessed = processTaskQueue();
-
             int selectedKeys = selector.selectNow();
 
             if (selectedKeys > 0) {
@@ -326,6 +332,29 @@ public class NioThread extends Thread implements OperationHostileThread {
             } else if (idleStrategy != null) {
                 idleRound++;
                 idleStrategy.idle(idleRound);
+            }
+        }
+    }
+
+    private void selectNowThenSelectLoop() throws IOException {
+        long selectNowEndNanos = nanoTime() + SPIN_DURATION_NANOS;
+        System.out.println("selectNowThenSelectLoop");
+        while (!stop) {
+            boolean tasksProcessed = processTaskQueue();
+
+            int selectedKeys;
+            if(nanoTime() < selectNowEndNanos){
+                selectedKeys = selector.selectNow();
+                if(selectedKeys==0 && !tasksProcessed){
+                    Thread.yield();
+                }
+            }else{
+                selectedKeys = selector.select(SELECT_WAIT_TIME_MILLIS);
+            }
+
+            if (selectedKeys > 0) {
+                selectNowEndNanos = nanoTime() + SPIN_DURATION_NANOS;
+                processSelectionKeys();
             }
         }
     }
@@ -345,7 +374,7 @@ public class NioThread extends Thread implements OperationHostileThread {
     }
 
     private void processSelectionKeys() {
-        lastSelectTimeMs = currentTimeMillis();
+        //lastSelectTimeMs = currentTimeMillis();
         Iterator<SelectionKey> it = selector.selectedKeys().iterator();
         while (it.hasNext()) {
             SelectionKey sk = it.next();
@@ -367,7 +396,7 @@ public class NioThread extends Thread implements OperationHostileThread {
             eventCount.inc();
             pipeline.process();
         } catch (Throwable t) {
-             pipeline.onError(t);
+            pipeline.onError(t);
         }
     }
 

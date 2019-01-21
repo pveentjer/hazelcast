@@ -153,6 +153,8 @@ public final class NioNetworking implements Networking {
 
         this.inputThreads = new NioThread[inputThreadCount];
         for (int i = 0; i < inputThreads.length; i++) {
+            //SelectorMode s = inputThreads.length==1?SelectorMode.SELECT_NOW:selectorMode;
+
             NioThread thread = new NioThread(
                     createThreadPoolName(threadNamePrefix, "IO") + "in-" + i,
                     loggingService.getLogger(NioThread.class),
