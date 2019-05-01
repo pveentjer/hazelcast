@@ -34,7 +34,7 @@ import com.hazelcast.core.OperationTimeoutException;
 import com.hazelcast.instance.BuildInfo;
 import com.hazelcast.nio.Address;
 import com.hazelcast.nio.serialization.Data;
-import com.hazelcast.spi.serialization.SerializationService;
+import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.util.ExceptionUtil;
 import com.hazelcast.util.FutureUtil;
 

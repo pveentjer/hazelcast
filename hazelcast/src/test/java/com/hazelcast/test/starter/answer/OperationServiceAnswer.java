@@ -19,7 +19,7 @@ package com.hazelcast.test.starter.answer;
 import com.hazelcast.internal.serialization.impl.DefaultSerializationServiceBuilder;
 import com.hazelcast.spi.Operation;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
-import com.hazelcast.spi.serialization.SerializationService;
+import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.test.TestTaskExecutorUtil.PartitionSpecificRunnableWithResultQueue;
 import org.mockito.invocation.InvocationOnMock;
 

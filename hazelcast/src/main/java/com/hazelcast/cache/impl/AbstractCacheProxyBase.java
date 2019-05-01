@@ -28,7 +28,7 @@ import com.hazelcast.spi.NodeEngine;
 import com.hazelcast.spi.OperationFactory;
 import com.hazelcast.spi.OperationService;
 import com.hazelcast.spi.partition.IPartitionService;
-import com.hazelcast.spi.serialization.SerializationService;
+import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.util.collection.PartitionIdSet;
 import com.hazelcast.util.executor.CompletableFutureTask;
 

@@ -20,7 +20,7 @@ import com.hazelcast.core.HazelcastInstanceAware;
 import com.hazelcast.core.ManagedContext;
 import com.hazelcast.spi.NodeAware;
 import com.hazelcast.spi.annotation.PrivateApi;
-import com.hazelcast.spi.serialization.SerializationServiceAware;
+import com.hazelcast.internal.serialization.SerializationServiceAware;
 
 @PrivateApi
 public final class HazelcastManagedContext implements ManagedContext {

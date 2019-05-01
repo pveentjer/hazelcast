@@ -25,7 +25,7 @@ import com.hazelcast.logging.Logger;
 import com.hazelcast.memory.MemoryUnit;
 import com.hazelcast.monitor.impl.NearCacheStatsImpl;
 import com.hazelcast.nio.serialization.Data;
-import com.hazelcast.spi.serialization.SerializationService;
+import com.hazelcast.internal.serialization.SerializationService;
 import com.hazelcast.util.collection.InflatableSet;
 import com.hazelcast.util.collection.InflatableSet.Builder;
 
