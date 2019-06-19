@@ -17,7 +17,7 @@
 package com.hazelcast.internal.serialization.impl;
 
 import com.hazelcast.internal.serialization.InternalSerializationService;
-import com.hazelcast.nio.Bits;
+import com.hazelcast.util.Bits;
 import com.hazelcast.nio.serialization.Data;
 
 import java.io.Closeable;
@@ -26,7 +26,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteOrder;
 
-import static com.hazelcast.nio.Bits.NULL_ARRAY_LENGTH;
+import static com.hazelcast.util.Bits.NULL_ARRAY_LENGTH;
 
 public class ObjectDataInputStream extends VersionedObjectDataInput implements Closeable {
 

@@ -23,7 +23,7 @@ import com.hazelcast.config.QuorumListenerConfig;
 import com.hazelcast.cluster.Member;
 import com.hazelcast.cluster.MembershipEvent;
 import com.hazelcast.internal.cluster.ClusterService;
-import com.hazelcast.nio.ClassLoaderUtil;
+import com.hazelcast.util.ClassLoaderUtil;
 import com.hazelcast.quorum.HeartbeatAware;
 import com.hazelcast.quorum.PingAware;
 import com.hazelcast.quorum.Quorum;

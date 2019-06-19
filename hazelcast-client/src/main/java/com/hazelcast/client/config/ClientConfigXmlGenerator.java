@@ -56,7 +56,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
-import static com.hazelcast.nio.IOUtil.closeResource;
+import static com.hazelcast.util.IOUtil.closeResource;
 import static com.hazelcast.util.StringUtil.isNullOrEmpty;
 
 /**

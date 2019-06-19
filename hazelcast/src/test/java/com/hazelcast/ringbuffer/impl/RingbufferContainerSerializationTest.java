@@ -37,7 +37,7 @@ import java.io.IOException;
 
 import static com.hazelcast.config.InMemoryFormat.BINARY;
 import static com.hazelcast.config.InMemoryFormat.OBJECT;
-import static com.hazelcast.nio.IOUtil.closeResource;
+import static com.hazelcast.util.IOUtil.closeResource;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;

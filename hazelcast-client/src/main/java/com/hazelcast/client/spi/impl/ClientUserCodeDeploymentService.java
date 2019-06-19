@@ -40,8 +40,8 @@ import java.util.jar.JarInputStream;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static com.hazelcast.nio.IOUtil.closeResource;
-import static com.hazelcast.nio.IOUtil.toByteArray;
+import static com.hazelcast.util.IOUtil.closeResource;
+import static com.hazelcast.util.IOUtil.toByteArray;
 import static com.hazelcast.util.EmptyStatement.ignore;
 
 public class ClientUserCodeDeploymentService {

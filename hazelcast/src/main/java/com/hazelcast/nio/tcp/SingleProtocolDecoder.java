@@ -26,7 +26,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.nio.ByteBuffer;
 
 import static com.hazelcast.internal.networking.HandlerStatus.CLEAN;
-import static com.hazelcast.nio.IOUtil.compactOrClear;
+import static com.hazelcast.util.IOUtil.compactOrClear;
 import static com.hazelcast.nio.Protocols.PROTOCOL_LENGTH;
 import static com.hazelcast.util.StringUtil.bytesToString;
 

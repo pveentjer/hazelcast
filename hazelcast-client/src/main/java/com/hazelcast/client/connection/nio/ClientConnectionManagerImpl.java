@@ -82,7 +82,7 @@ import static com.hazelcast.client.spi.properties.ClientProperty.ALLOW_INVOCATIO
 import static com.hazelcast.client.spi.properties.ClientProperty.IO_BALANCER_INTERVAL_SECONDS;
 import static com.hazelcast.client.spi.properties.ClientProperty.IO_INPUT_THREAD_COUNT;
 import static com.hazelcast.client.spi.properties.ClientProperty.IO_OUTPUT_THREAD_COUNT;
-import static com.hazelcast.nio.IOUtil.closeResource;
+import static com.hazelcast.util.IOUtil.closeResource;
 import static com.hazelcast.util.ExceptionUtil.rethrow;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 

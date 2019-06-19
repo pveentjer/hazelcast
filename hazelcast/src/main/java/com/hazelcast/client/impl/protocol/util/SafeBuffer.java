@@ -16,7 +16,7 @@
 
 package com.hazelcast.client.impl.protocol.util;
 
-import com.hazelcast.nio.Bits;
+import com.hazelcast.util.Bits;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;

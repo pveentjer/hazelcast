@@ -21,6 +21,7 @@ import com.hazelcast.internal.memory.MemoryAccessor;
 import com.hazelcast.internal.memory.impl.AlignmentUtil;
 import com.hazelcast.logging.Logger;
 import com.hazelcast.spi.annotation.PrivateApi;
+import com.hazelcast.util.Bits;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;

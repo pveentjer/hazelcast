@@ -24,7 +24,7 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.LinkedList;
 
-import static com.hazelcast.nio.Bits.NULL_ARRAY_LENGTH;
+import static com.hazelcast.util.Bits.NULL_ARRAY_LENGTH;
 
 /**
  * The {@link java.util.LinkedList} serializer

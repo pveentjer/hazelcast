@@ -39,7 +39,7 @@ import com.hazelcast.spi.impl.eventservice.InternalEventService;
 
 import java.util.Collection;
 
-import static com.hazelcast.nio.ClassLoaderUtil.newInstance;
+import static com.hazelcast.util.ClassLoaderUtil.newInstance;
 import static com.hazelcast.util.ExceptionUtil.rethrow;
 
 /**

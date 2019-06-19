@@ -42,7 +42,7 @@ import java.io.InputStream;
 import java.net.URL;
 import java.util.ArrayList;
 
-import static com.hazelcast.nio.IOUtil.closeResource;
+import static com.hazelcast.util.IOUtil.closeResource;
 import static com.hazelcast.util.StringUtil.LINE_SEPARATOR;
 
 /**

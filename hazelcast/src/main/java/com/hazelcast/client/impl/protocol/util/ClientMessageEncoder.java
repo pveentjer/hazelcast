@@ -25,7 +25,7 @@ import java.util.function.Supplier;
 
 import static com.hazelcast.internal.networking.HandlerStatus.CLEAN;
 import static com.hazelcast.internal.networking.HandlerStatus.DIRTY;
-import static com.hazelcast.nio.IOUtil.compactOrClear;
+import static com.hazelcast.util.IOUtil.compactOrClear;
 
 /**
  * A {@link OutboundHandler} for the new-client. It writes ClientMessages to the ByteBuffer.

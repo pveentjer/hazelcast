@@ -43,8 +43,8 @@ import com.hazelcast.spi.serialization.SerializationService;
 
 import java.io.IOException;
 
-import static com.hazelcast.nio.IOUtil.readObject;
-import static com.hazelcast.nio.IOUtil.writeObject;
+import static com.hazelcast.util.IOUtil.readObject;
+import static com.hazelcast.util.IOUtil.writeObject;
 import static com.hazelcast.ringbuffer.impl.RingbufferDataSerializerHook.F_ID;
 import static com.hazelcast.ringbuffer.impl.RingbufferDataSerializerHook.MERGE_OPERATION;
 import static com.hazelcast.ringbuffer.impl.RingbufferService.SERVICE_NAME;

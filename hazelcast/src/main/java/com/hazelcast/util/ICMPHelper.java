@@ -19,9 +19,9 @@ package com.hazelcast.util;
 import java.io.File;
 import java.io.InputStream;
 
-import static com.hazelcast.nio.IOUtil.closeResource;
-import static com.hazelcast.nio.IOUtil.copy;
-import static com.hazelcast.nio.IOUtil.getFileFromResourcesAsStream;
+import static com.hazelcast.util.IOUtil.closeResource;
+import static com.hazelcast.util.IOUtil.copy;
+import static com.hazelcast.util.IOUtil.getFileFromResourcesAsStream;
 import static com.hazelcast.util.ExceptionUtil.rethrow;
 import static com.hazelcast.util.JVMUtil.is32bitJVM;
 import static com.hazelcast.util.OsHelper.OS;

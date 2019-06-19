@@ -26,7 +26,7 @@ import java.util.function.Supplier;
 
 import static com.hazelcast.internal.networking.HandlerStatus.CLEAN;
 import static com.hazelcast.internal.networking.HandlerStatus.DIRTY;
-import static com.hazelcast.nio.IOUtil.compactOrClear;
+import static com.hazelcast.util.IOUtil.compactOrClear;
 
 /**
  * A {@link OutboundHandler} that for member to member communication.

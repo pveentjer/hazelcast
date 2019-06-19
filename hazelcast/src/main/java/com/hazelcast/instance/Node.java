@@ -64,7 +64,7 @@ import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
 import com.hazelcast.logging.LoggingServiceImpl;
 import com.hazelcast.nio.Address;
-import com.hazelcast.nio.ClassLoaderUtil;
+import com.hazelcast.util.ClassLoaderUtil;
 import com.hazelcast.nio.Connection;
 import com.hazelcast.nio.EndpointManager;
 import com.hazelcast.nio.NetworkingService;

@@ -25,7 +25,7 @@ import com.hazelcast.config.helpers.DummyMapStore;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IMap;
 import com.hazelcast.instance.EndpointQualifier;
-import com.hazelcast.nio.IOUtil;
+import com.hazelcast.util.IOUtil;
 import com.hazelcast.quorum.QuorumType;
 import com.hazelcast.quorum.impl.ProbabilisticQuorumFunction;
 import com.hazelcast.quorum.impl.RecentlyActiveQuorumFunction;

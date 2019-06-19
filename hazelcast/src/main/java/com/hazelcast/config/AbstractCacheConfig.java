@@ -19,7 +19,7 @@ package com.hazelcast.config;
 import com.hazelcast.cache.impl.DeferredValue;
 import com.hazelcast.core.HazelcastException;
 import com.hazelcast.internal.serialization.InternalSerializationService;
-import com.hazelcast.nio.ClassLoaderUtil;
+import com.hazelcast.util.ClassLoaderUtil;
 import com.hazelcast.nio.serialization.BinaryInterface;
 import com.hazelcast.nio.serialization.DataSerializable;
 

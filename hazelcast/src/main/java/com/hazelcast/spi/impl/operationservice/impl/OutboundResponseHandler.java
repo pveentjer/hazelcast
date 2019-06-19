@@ -32,10 +32,10 @@ import com.hazelcast.spi.impl.operationservice.impl.responses.Response;
 
 import static com.hazelcast.internal.serialization.impl.SerializationConstants.CONSTANT_TYPE_DATA_SERIALIZABLE;
 import static com.hazelcast.internal.serialization.impl.SerializationConstants.CONSTANT_TYPE_NULL;
-import static com.hazelcast.nio.Bits.INT_SIZE_IN_BYTES;
-import static com.hazelcast.nio.Bits.writeInt;
-import static com.hazelcast.nio.Bits.writeIntB;
-import static com.hazelcast.nio.Bits.writeLong;
+import static com.hazelcast.util.Bits.INT_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.writeInt;
+import static com.hazelcast.util.Bits.writeIntB;
+import static com.hazelcast.util.Bits.writeLong;
 import static com.hazelcast.nio.Packet.FLAG_OP_RESPONSE;
 import static com.hazelcast.nio.Packet.FLAG_URGENT;
 import static com.hazelcast.nio.Packet.Type.OPERATION;

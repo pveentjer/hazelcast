@@ -26,7 +26,7 @@ import java.io.Closeable;
 import java.util.ArrayDeque;
 import java.util.Queue;
 
-import static com.hazelcast.nio.IOUtil.closeResource;
+import static com.hazelcast.util.IOUtil.closeResource;
 
 /**
  * Default {BufferPool} implementation.

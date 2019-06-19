@@ -39,7 +39,7 @@ import com.hazelcast.internal.eviction.ExpirationManager;
 import com.hazelcast.internal.util.InvocationUtil;
 import com.hazelcast.internal.util.SimpleCompletableFuture;
 import com.hazelcast.logging.ILogger;
-import com.hazelcast.nio.IOUtil;
+import com.hazelcast.util.IOUtil;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.spi.EventFilter;
 import com.hazelcast.spi.EventRegistration;

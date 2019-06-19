@@ -18,7 +18,7 @@ package com.hazelcast.internal.ascii.rest;
 
 import com.hazelcast.internal.ascii.NoOpCommand;
 import com.hazelcast.nio.Connection;
-import com.hazelcast.nio.IOUtil;
+import com.hazelcast.util.IOUtil;
 import com.hazelcast.nio.ascii.TextDecoder;
 import com.hazelcast.util.StringUtil;
 

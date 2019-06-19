@@ -28,7 +28,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 
 import com.hazelcast.logging.Logger;
-import com.hazelcast.nio.IOUtil;
+import com.hazelcast.util.IOUtil;
 import com.hazelcast.util.StringUtil;
 
 /**

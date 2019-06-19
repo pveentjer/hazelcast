@@ -18,8 +18,8 @@ package com.hazelcast.spi.impl.sequence;
 
 import java.util.concurrent.atomic.AtomicLongArray;
 
-import static com.hazelcast.nio.Bits.CACHE_LINE_LENGTH;
-import static com.hazelcast.nio.Bits.LONG_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.CACHE_LINE_LENGTH;
+import static com.hazelcast.util.Bits.LONG_SIZE_IN_BYTES;
 import static com.hazelcast.util.Preconditions.checkPositive;
 
 /**

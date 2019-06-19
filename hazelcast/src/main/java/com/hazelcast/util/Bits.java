@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.hazelcast.nio;
+package com.hazelcast.util;
 
 import com.hazelcast.internal.memory.impl.EndiannessUtil;
 import com.hazelcast.spi.annotation.PrivateApi;

@@ -17,7 +17,7 @@
 package com.hazelcast.cluster;
 
 import com.hazelcast.cluster.impl.MemberImpl;
-import com.hazelcast.nio.IOUtil;
+import com.hazelcast.util.IOUtil;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.DataSerializable;

@@ -56,9 +56,9 @@ import java.util.function.Consumer;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.MANDATORY;
 import static com.hazelcast.internal.util.counters.MwCounter.newMwCounter;
-import static com.hazelcast.nio.IOUtil.close;
-import static com.hazelcast.nio.IOUtil.closeResource;
-import static com.hazelcast.nio.IOUtil.setChannelOptions;
+import static com.hazelcast.util.IOUtil.close;
+import static com.hazelcast.util.IOUtil.closeResource;
+import static com.hazelcast.util.IOUtil.setChannelOptions;
 import static com.hazelcast.util.Preconditions.checkNotNull;
 import static java.util.Collections.newSetFromMap;
 import static java.util.Collections.unmodifiableCollection;

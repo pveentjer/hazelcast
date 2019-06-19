@@ -17,7 +17,7 @@
 package com.hazelcast.client.impl.protocol.util;
 
 import com.hazelcast.internal.serialization.impl.HeapData;
-import com.hazelcast.nio.Bits;
+import com.hazelcast.util.Bits;
 import com.hazelcast.nio.serialization.Data;
 
 import java.util.ArrayList;

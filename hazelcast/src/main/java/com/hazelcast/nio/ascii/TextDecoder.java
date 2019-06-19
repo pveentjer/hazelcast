@@ -36,7 +36,7 @@ import java.nio.ByteBuffer;
 import static com.hazelcast.internal.ascii.TextCommandConstants.TextCommandType.ERROR_CLIENT;
 import static com.hazelcast.internal.ascii.TextCommandConstants.TextCommandType.UNKNOWN;
 import static com.hazelcast.internal.networking.HandlerStatus.CLEAN;
-import static com.hazelcast.nio.IOUtil.compactOrClear;
+import static com.hazelcast.util.IOUtil.compactOrClear;
 
 @PrivateApi
 public abstract class TextDecoder extends InboundHandler<ByteBuffer, Void> {

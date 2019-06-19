@@ -16,14 +16,14 @@
 
 package com.hazelcast.nio.serialization;
 
-import static com.hazelcast.nio.Bits.BOOLEAN_SIZE_IN_BYTES;
-import static com.hazelcast.nio.Bits.BYTE_SIZE_IN_BYTES;
-import static com.hazelcast.nio.Bits.CHAR_SIZE_IN_BYTES;
-import static com.hazelcast.nio.Bits.DOUBLE_SIZE_IN_BYTES;
-import static com.hazelcast.nio.Bits.FLOAT_SIZE_IN_BYTES;
-import static com.hazelcast.nio.Bits.INT_SIZE_IN_BYTES;
-import static com.hazelcast.nio.Bits.LONG_SIZE_IN_BYTES;
-import static com.hazelcast.nio.Bits.SHORT_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.BOOLEAN_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.BYTE_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.CHAR_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.DOUBLE_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.FLOAT_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.INT_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.LONG_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.SHORT_SIZE_IN_BYTES;
 import static java.lang.Integer.MAX_VALUE;
 
 public enum FieldType {

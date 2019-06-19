@@ -42,7 +42,7 @@ import com.hazelcast.cluster.Member;
 import com.hazelcast.multimap.MultiMap;
 import com.hazelcast.partition.Partition;
 import com.hazelcast.internal.util.RuntimeAvailableProcessors;
-import com.hazelcast.nio.IOUtil;
+import com.hazelcast.util.IOUtil;
 import com.hazelcast.util.Clock;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 

@@ -29,7 +29,7 @@ import static com.hazelcast.client.impl.protocol.ClientMessage.BEGIN_AND_END_FLA
 import static com.hazelcast.client.impl.protocol.ClientMessage.BEGIN_FLAG;
 import static com.hazelcast.client.impl.protocol.ClientMessage.END_FLAG;
 import static com.hazelcast.internal.networking.HandlerStatus.CLEAN;
-import static com.hazelcast.nio.IOUtil.compactOrClear;
+import static com.hazelcast.util.IOUtil.compactOrClear;
 
 /**
  * Builds {@link ClientMessage}s from byte chunks.

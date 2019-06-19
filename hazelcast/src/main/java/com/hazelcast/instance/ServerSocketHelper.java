@@ -20,7 +20,7 @@ import com.hazelcast.config.EndpointConfig;
 import com.hazelcast.config.NetworkConfig;
 import com.hazelcast.core.HazelcastException;
 import com.hazelcast.logging.ILogger;
-import com.hazelcast.nio.IOUtil;
+import com.hazelcast.util.IOUtil;
 
 import java.io.IOException;
 import java.net.InetAddress;

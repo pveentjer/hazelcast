@@ -17,7 +17,7 @@
 package com.hazelcast.internal.serialization.impl;
 
 import com.hazelcast.internal.serialization.InternalSerializationService;
-import com.hazelcast.nio.Bits;
+import com.hazelcast.util.Bits;
 import com.hazelcast.nio.BufferObjectDataInput;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.util.collection.ArrayUtils;
@@ -26,11 +26,11 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteOrder;
 
-import static com.hazelcast.nio.Bits.CHAR_SIZE_IN_BYTES;
-import static com.hazelcast.nio.Bits.INT_SIZE_IN_BYTES;
-import static com.hazelcast.nio.Bits.LONG_SIZE_IN_BYTES;
-import static com.hazelcast.nio.Bits.NULL_ARRAY_LENGTH;
-import static com.hazelcast.nio.Bits.SHORT_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.CHAR_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.INT_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.LONG_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.NULL_ARRAY_LENGTH;
+import static com.hazelcast.util.Bits.SHORT_SIZE_IN_BYTES;
 import static com.hazelcast.version.Version.UNKNOWN;
 
 class ByteArrayObjectDataInput extends VersionedObjectDataInput implements BufferObjectDataInput {

@@ -20,9 +20,9 @@ import com.hazelcast.spi.annotation.PrivateApi;
 
 import java.nio.ByteBuffer;
 
-import static com.hazelcast.nio.Bits.BYTE_SIZE_IN_BYTES;
-import static com.hazelcast.nio.Bits.INT_SIZE_IN_BYTES;
-import static com.hazelcast.nio.Bits.SHORT_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.BYTE_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.INT_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.SHORT_SIZE_IN_BYTES;
 import static com.hazelcast.nio.Packet.VERSION;
 
 /**

@@ -16,8 +16,6 @@
 
 package com.hazelcast.util;
 
-import com.hazelcast.nio.ClassLoaderUtil;
-
 import static com.hazelcast.util.ExceptionUtil.rethrow;
 
 /**

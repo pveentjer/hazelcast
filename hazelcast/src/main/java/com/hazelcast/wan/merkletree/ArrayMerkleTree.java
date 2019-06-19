@@ -21,8 +21,8 @@ import com.hazelcast.util.collection.OAHashSet;
 import java.util.Arrays;
 import java.util.function.Consumer;
 
-import static com.hazelcast.nio.Bits.INT_SIZE_IN_BYTES;
-import static com.hazelcast.nio.Bits.LONG_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.INT_SIZE_IN_BYTES;
+import static com.hazelcast.util.Bits.LONG_SIZE_IN_BYTES;
 import static com.hazelcast.util.JVMUtil.REFERENCE_COST_IN_BYTES;
 
 /**

@@ -24,7 +24,7 @@ import com.hazelcast.monitor.LocalMultiMapStats;
 import com.hazelcast.multimap.MultiMap;
 import com.hazelcast.multimap.impl.operations.EntrySetResponse;
 import com.hazelcast.multimap.impl.operations.MultiMapResponse;
-import com.hazelcast.nio.ClassLoaderUtil;
+import com.hazelcast.util.ClassLoaderUtil;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.quorum.QuorumType;
 import com.hazelcast.spi.InitializingObject;

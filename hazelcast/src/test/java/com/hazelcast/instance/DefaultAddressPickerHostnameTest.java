@@ -22,7 +22,7 @@ import com.hazelcast.config.NetworkConfig;
 import com.hazelcast.instance.DefaultAddressPicker.HostnameResolver;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.Logger;
-import com.hazelcast.nio.IOUtil;
+import com.hazelcast.util.IOUtil;
 import com.hazelcast.test.OverridePropertyRule;
 import com.hazelcast.test.annotation.ParallelJVMTest;
 import com.hazelcast.test.annotation.QuickTest;

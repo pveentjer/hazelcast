@@ -27,7 +27,7 @@ import com.hazelcast.internal.networking.nio.NioNetworking;
 import com.hazelcast.internal.util.InstantiationUtils;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingServiceImpl;
-import com.hazelcast.nio.ClassLoaderUtil;
+import com.hazelcast.util.ClassLoaderUtil;
 import com.hazelcast.nio.NetworkingService;
 import com.hazelcast.nio.NodeIOService;
 import com.hazelcast.nio.tcp.TcpIpConnectionChannelErrorHandler;
