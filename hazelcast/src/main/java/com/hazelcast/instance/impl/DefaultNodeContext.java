@@ -20,7 +20,6 @@ import com.hazelcast.cluster.Joiner;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.InvalidConfigurationException;
 import com.hazelcast.config.MemberAddressProviderConfig;
-import com.hazelcast.instance.AddressPicker;
 import com.hazelcast.internal.networking.ChannelErrorHandler;
 import com.hazelcast.internal.networking.Networking;
 import com.hazelcast.internal.networking.ServerSocketRegistry;

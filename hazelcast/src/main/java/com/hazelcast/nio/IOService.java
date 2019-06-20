@@ -21,6 +21,7 @@ import com.hazelcast.config.MemcacheProtocolConfig;
 import com.hazelcast.config.RestApiConfig;
 import com.hazelcast.config.SSLConfig;
 import com.hazelcast.config.SymmetricEncryptionConfig;
+import com.hazelcast.instance.impl.AddressPicker;
 import com.hazelcast.internal.ascii.TextCommandService;
 import com.hazelcast.instance.EndpointQualifier;
 import com.hazelcast.internal.networking.InboundHandler;
@@ -55,7 +56,7 @@ public interface IOService {
 
     /**
       * @return all server socket addresses of this Hazelcast member, as picked by the
-      *         configured {@link com.hazelcast.instance.AddressPicker}
+      *         configured {@link AddressPicker}
       */
     Map<EndpointQualifier, Address> getThisAddresses();
 

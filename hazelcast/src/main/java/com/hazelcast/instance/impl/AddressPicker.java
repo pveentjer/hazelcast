@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-package com.hazelcast.instance;
+package com.hazelcast.instance.impl;
 
+import com.hazelcast.instance.EndpointQualifier;
 import com.hazelcast.nio.Address;
 
 import java.nio.channels.ServerSocketChannel;

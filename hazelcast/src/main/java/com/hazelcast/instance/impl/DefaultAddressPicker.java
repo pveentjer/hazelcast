@@ -21,7 +21,6 @@ import com.hazelcast.config.Config;
 import com.hazelcast.config.EndpointConfig;
 import com.hazelcast.config.InterfacesConfig;
 import com.hazelcast.config.TcpIpConfig;
-import com.hazelcast.instance.AddressPicker;
 import com.hazelcast.instance.EndpointQualifier;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Address;

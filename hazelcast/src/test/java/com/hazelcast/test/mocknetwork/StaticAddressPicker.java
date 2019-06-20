@@ -16,7 +16,7 @@
 
 package com.hazelcast.test.mocknetwork;
 
-import com.hazelcast.instance.AddressPicker;
+import com.hazelcast.instance.impl.AddressPicker;
 import com.hazelcast.instance.EndpointQualifier;
 import com.hazelcast.nio.Address;
 

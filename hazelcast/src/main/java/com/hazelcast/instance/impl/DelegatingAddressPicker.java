@@ -21,7 +21,6 @@ import com.hazelcast.config.EndpointConfig;
 import com.hazelcast.config.InvalidConfigurationException;
 import com.hazelcast.config.NetworkConfig;
 import com.hazelcast.config.ServerSocketEndpointConfig;
-import com.hazelcast.instance.AddressPicker;
 import com.hazelcast.instance.EndpointQualifier;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Address;

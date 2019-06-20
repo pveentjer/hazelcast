@@ -17,7 +17,6 @@
 package com.hazelcast.instance.impl;
 
 import com.hazelcast.config.Config;
-import com.hazelcast.instance.AddressPicker;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.Logger;
 import com.hazelcast.spi.properties.GroupProperty;

@@ -19,7 +19,6 @@ package com.hazelcast.instance.impl;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.InterfacesConfig;
 import com.hazelcast.config.NetworkConfig;
-import com.hazelcast.instance.AddressPicker;
 import com.hazelcast.instance.impl.DefaultAddressPicker.HostnameResolver;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.Logger;
