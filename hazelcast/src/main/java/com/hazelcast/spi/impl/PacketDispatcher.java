@@ -26,7 +26,6 @@ import java.util.function.Consumer;
 
 import static com.hazelcast.instance.impl.OutOfMemoryErrorDispatcher.inspectOutOfMemoryError;
 import static com.hazelcast.nio.Packet.FLAG_OP_CONTROL;
-import static com.hazelcast.nio.Packet.FLAG_OP_RESPONSE;
 
 /**
  * A {@link Consumer} that dispatches the {@link Packet} to the right service. For example, operations are sent to the
@@ -38,17 +37,14 @@ public final class PacketDispatcher implements Consumer<Packet> {
     private final Consumer<Packet> eventService;
     private final Consumer<Packet> operationExecutor;
     private final Consumer<Packet> jetPacketConsumer;
-    private final Consumer<Packet> responseHandler;
     private final Consumer<Packet> invocationMonitor;
 
     public PacketDispatcher(ILogger logger,
                             Consumer<Packet> operationExecutor,
-                            Consumer<Packet> responseHandler,
                             Consumer<Packet> invocationMonitor,
                             Consumer<Packet> eventService,
                             Consumer<Packet> jetPacketConsumer) {
         this.logger = logger;
-        this.responseHandler = responseHandler;
         this.eventService = eventService;
         this.invocationMonitor = invocationMonitor;
         this.operationExecutor = operationExecutor;
@@ -60,9 +56,7 @@ public final class PacketDispatcher implements Consumer<Packet> {
         try {
             switch (packet.getPacketType()) {
                 case OPERATION:
-                    if (packet.isFlagRaised(FLAG_OP_RESPONSE)) {
-                        responseHandler.accept(packet);
-                    } else if (packet.isFlagRaised(FLAG_OP_CONTROL)) {
+                    if (packet.isFlagRaised(FLAG_OP_CONTROL)) {
                         invocationMonitor.accept(packet);
                     } else {
                         operationExecutor.accept(packet);

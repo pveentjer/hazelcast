@@ -25,34 +25,44 @@ import com.hazelcast.internal.util.concurrent.MPSCQueue;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
 import com.hazelcast.nio.Address;
+import com.hazelcast.nio.Bits;
 import com.hazelcast.nio.Packet;
-import com.hazelcast.spi.impl.operationservice.LiveOperations;
-import com.hazelcast.spi.impl.operationservice.Operation;
-import com.hazelcast.spi.impl.operationservice.UrgentSystemOperation;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationExecutor;
 import com.hazelcast.spi.impl.operationexecutor.OperationHostileThread;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunnerFactory;
+import com.hazelcast.spi.impl.operationservice.LiveOperations;
+import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.PartitionTaskFactory;
+import com.hazelcast.spi.impl.operationservice.UrgentSystemOperation;
 import com.hazelcast.spi.impl.operationservice.impl.operations.Backup;
 import com.hazelcast.spi.properties.HazelcastProperties;
 import com.hazelcast.spi.properties.HazelcastProperty;
+import com.hazelcast.util.HashUtil;
+import com.hazelcast.util.concurrent.BackoffIdleStrategy;
+import com.hazelcast.util.concurrent.BusySpinIdleStrategy;
 import com.hazelcast.util.concurrent.IdleStrategy;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.util.BitSet;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.MANDATORY;
-import static com.hazelcast.spi.impl.operationservice.impl.InboundResponseHandlerSupplier.getIdleStrategy;
+import static com.hazelcast.nio.Packet.FLAG_OP_RESPONSE;
+import static com.hazelcast.spi.impl.operationservice.impl.responses.Response.OFFSET_CALL_ID;
 import static com.hazelcast.spi.properties.GroupProperty.GENERIC_OPERATION_THREAD_COUNT;
 import static com.hazelcast.spi.properties.GroupProperty.PARTITION_COUNT;
 import static com.hazelcast.spi.properties.GroupProperty.PARTITION_OPERATION_THREAD_COUNT;
 import static com.hazelcast.spi.properties.GroupProperty.PRIORITY_GENERIC_OPERATION_THREAD_COUNT;
 import static com.hazelcast.util.Preconditions.checkNotNull;
 import static com.hazelcast.util.ThreadUtil.createThreadPoolName;
+import static com.hazelcast.util.concurrent.BackoffIdleStrategy.createBackoffIdleStrategy;
+import static java.util.concurrent.TimeUnit.MICROSECONDS;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
@@ -80,6 +90,10 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 public final class OperationExecutorImpl implements OperationExecutor, MetricsProvider {
     public static final HazelcastProperty IDLE_STRATEGY
             = new HazelcastProperty("hazelcast.operation.partitionthread.idlestrategy", "block");
+    private static final long IDLE_MAX_SPINS = 20;
+    private static final long IDLE_MAX_YIELDS = 50;
+    private static final long IDLE_MIN_PARK_NS = NANOSECONDS.toNanos(1);
+    private static final long IDLE_MAX_PARK_NS = MICROSECONDS.toNanos(100);
 
     private static final int TERMINATION_TIMEOUT_SECONDS = 3;
 
@@ -99,17 +113,19 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
     private final Address thisAddress;
     private final OperationRunner adHocOperationRunner;
     private final int priorityThreadCount;
+    private final Supplier<Consumer<Packet>> responseHandlerSupplier;
 
     public OperationExecutorImpl(HazelcastProperties properties,
                                  LoggingService loggerService,
                                  Address thisAddress,
                                  OperationRunnerFactory runnerFactory,
+                                 Supplier<Consumer<Packet>> responseHandlerSupplier,
                                  NodeExtension nodeExtension,
                                  String hzName,
                                  ClassLoader configClassLoader) {
         this.thisAddress = thisAddress;
         this.logger = loggerService.getLogger(OperationExecutorImpl.class);
-
+        this.responseHandlerSupplier = responseHandlerSupplier;
         this.adHocOperationRunner = runnerFactory.createAdHocRunner();
 
         this.partitionOperationRunners = initPartitionOperationRunners(properties, runnerFactory);
@@ -118,6 +134,21 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         this.priorityThreadCount = properties.getInteger(PRIORITY_GENERIC_OPERATION_THREAD_COUNT);
         this.genericOperationRunners = initGenericOperationRunners(properties, runnerFactory);
         this.genericThreads = initGenericThreads(hzName, nodeExtension, configClassLoader);
+    }
+
+    public static IdleStrategy getIdleStrategy(HazelcastProperties properties, HazelcastProperty property) {
+        String idleStrategyString = properties.getString(property);
+        if ("block".equals(idleStrategyString)) {
+            return null;
+        } else if ("busyspin".equals(idleStrategyString)) {
+            return new BusySpinIdleStrategy();
+        } else if ("backoff".equals(idleStrategyString)) {
+            return new BackoffIdleStrategy(IDLE_MAX_SPINS, IDLE_MAX_YIELDS, IDLE_MIN_PARK_NS, IDLE_MAX_PARK_NS);
+        } else if (idleStrategyString.startsWith("backoff,")) {
+            return createBackoffIdleStrategy(idleStrategyString);
+        } else {
+            throw new IllegalStateException("Unrecognized " + property.getName() + " value=" + idleStrategyString);
+        }
     }
 
     private OperationRunner[] initPartitionOperationRunners(HazelcastProperties properties,
@@ -147,7 +178,6 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
 
     private PartitionOperationThread[] initPartitionThreads(HazelcastProperties properties, String hzName,
                                                             NodeExtension nodeExtension, ClassLoader configClassLoader) {
-
         int threadCount = properties.getInteger(PARTITION_OPERATION_THREAD_COUNT);
         if (threadCount <= 0) {
             // default partition operation thread count
@@ -165,7 +195,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
             OperationQueue operationQueue = new OperationQueueImpl(normalQueue, new ConcurrentLinkedQueue<Object>());
 
             PartitionOperationThread partitionThread = new PartitionOperationThread(threadName, threadId, operationQueue, logger,
-                    nodeExtension, partitionOperationRunners, configClassLoader);
+                    nodeExtension, partitionOperationRunners, responseHandlerSupplier.get(), configClassLoader);
 
             threads[threadId] = partitionThread;
             normalQueue.setConsumerThread(partitionThread);
@@ -373,7 +403,15 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
 
     @Override
     public void accept(Packet packet) {
-        execute(packet, packet.getPartitionId(), packet.isUrgent());
+        if (packet.isFlagRaised(FLAG_OP_RESPONSE)) {
+            // it doesn't matter which partition thread we pick. As long as we get a nice spread
+            // over the partition threads. We could have used a random number generator here
+            long callId = Bits.readLong(packet.toByteArray(), OFFSET_CALL_ID, true);
+            OperationThread partitionThread = partitionThreads[HashUtil.hashToIndex((int)callId, partitionThreads.length)];
+            partitionThread.queue.add(packet, packet.isFlagRaised(Packet.FLAG_URGENT));
+        } else {
+            execute(packet, packet.getPartitionId(), packet.isUrgent());
+        }
     }
 
     private void execute(Object task, int partitionId, boolean priority) {

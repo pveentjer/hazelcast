@@ -199,7 +199,7 @@ public class InterceptorRegistryTest extends HazelcastTestSupport {
         OperationRunner[] operationRunners = new OperationRunner[]{operationRunner};
 
         return new PartitionOperationThread("threadName", 0, queue, LOGGER, nodeExtension,
-                operationRunners, getClass().getClassLoader());
+                operationRunners, null, getClass().getClassLoader());
     }
 
     private static class TestMapInterceptor implements MapInterceptor {

@@ -19,8 +19,11 @@ package com.hazelcast.spi.impl.operationexecutor.impl;
 import com.hazelcast.instance.impl.NodeExtension;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.nio.Packet;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
+import java.util.function.Consumer;
 
 /**
  * An {@link OperationThread} that executes Operations for a particular partition,
@@ -37,8 +40,9 @@ public final class PartitionOperationThread extends OperationThread {
                                     ILogger logger,
                                     NodeExtension nodeExtension,
                                     OperationRunner[] partitionOperationRunners,
+                                    Consumer<Packet> responseRunner,
                                     ClassLoader configClassLoader) {
-        super(name, threadId, queue, logger, nodeExtension, false, configClassLoader);
+        super(name, threadId, queue, logger, nodeExtension, false, configClassLoader, responseRunner);
         this.partitionOperationRunners = partitionOperationRunners;
     }
 

@@ -35,7 +35,7 @@ public final class GenericOperationThread extends OperationThread {
                                   OperationRunner operationRunner,
                                   boolean priority,
                                   ClassLoader configClassLoader) {
-        super(name, threadId, queue, logger, nodeExtension, priority, configClassLoader);
+        super(name, threadId, queue, logger, nodeExtension, priority, configClassLoader, null);
         this.operationRunner = operationRunner;
     }
 

@@ -45,8 +45,6 @@ public class PacketDispatcherTest extends HazelcastTestSupport {
 
     private Consumer<Packet> operationExecutor;
     private Consumer<Packet> eventService;
-//    private Consumer<Packet> connectionManager;
-    private Consumer<Packet> responseHandler;
     private Consumer<Packet> invocationMonitor;
     private PacketDispatcher dispatcher;
     private Consumer<Packet> jetService;
@@ -55,7 +53,6 @@ public class PacketDispatcherTest extends HazelcastTestSupport {
     public void setup() {
         ILogger logger = Logger.getLogger(getClass());
         operationExecutor = mock(Consumer.class);
-        responseHandler = mock(Consumer.class);
         eventService = mock(Consumer.class);
         invocationMonitor = mock(Consumer.class);
         jetService = mock(Consumer.class);
@@ -63,7 +60,6 @@ public class PacketDispatcherTest extends HazelcastTestSupport {
         dispatcher = new PacketDispatcher(
                 logger,
                 operationExecutor,
-                responseHandler,
                 invocationMonitor,
                 eventService,
                 jetService);
@@ -77,7 +73,7 @@ public class PacketDispatcherTest extends HazelcastTestSupport {
 
         verify(operationExecutor).accept(packet);
 
-        verifyZeroInteractions(responseHandler, eventService, invocationMonitor, jetService);
+        verifyZeroInteractions(eventService, invocationMonitor, jetService);
     }
 
     @Test
@@ -88,7 +84,7 @@ public class PacketDispatcherTest extends HazelcastTestSupport {
 
         verify(operationExecutor).accept(packet);
 
-        verifyZeroInteractions(responseHandler, eventService, invocationMonitor, jetService);
+        verifyZeroInteractions(eventService, invocationMonitor, jetService);
     }
 
 
@@ -98,8 +94,8 @@ public class PacketDispatcherTest extends HazelcastTestSupport {
 
         dispatcher.accept(packet);
 
-        verify(responseHandler).accept(packet);
-        verifyZeroInteractions(operationExecutor, eventService, invocationMonitor, jetService);
+        verify(operationExecutor).accept(packet);
+        verifyZeroInteractions(eventService, invocationMonitor, jetService);
     }
 
     @Test
@@ -108,8 +104,8 @@ public class PacketDispatcherTest extends HazelcastTestSupport {
 
         dispatcher.accept(packet);
 
-        verify(responseHandler).accept(packet);
-        verifyZeroInteractions(operationExecutor, eventService, invocationMonitor, jetService);
+        verify(operationExecutor).accept(packet);
+        verifyZeroInteractions(eventService, invocationMonitor, jetService);
     }
 
 
@@ -121,7 +117,7 @@ public class PacketDispatcherTest extends HazelcastTestSupport {
 
         verify(invocationMonitor).accept(packet);
 
-        verifyZeroInteractions(responseHandler, operationExecutor, eventService, jetService);
+        verifyZeroInteractions( operationExecutor, eventService, jetService);
     }
 
 
@@ -132,7 +128,7 @@ public class PacketDispatcherTest extends HazelcastTestSupport {
         dispatcher.accept(packet);
 
         verify(eventService).accept(packet);
-        verifyZeroInteractions(responseHandler, operationExecutor, invocationMonitor, jetService);
+        verifyZeroInteractions(operationExecutor, invocationMonitor, jetService);
     }
 
     @Test
@@ -141,7 +137,7 @@ public class PacketDispatcherTest extends HazelcastTestSupport {
         dispatcher.accept(packet);
 
         verify(jetService).accept(packet);
-        verifyZeroInteractions(responseHandler, operationExecutor, eventService, invocationMonitor);
+        verifyZeroInteractions(operationExecutor, eventService, invocationMonitor);
     }
 
     // unrecognized packets are logged. No handlers is contacted.
@@ -151,8 +147,7 @@ public class PacketDispatcherTest extends HazelcastTestSupport {
 
         dispatcher.accept(packet);
 
-        verifyZeroInteractions(responseHandler, operationExecutor, eventService, invocationMonitor,
-                jetService);
+        verifyZeroInteractions(operationExecutor, eventService, invocationMonitor, jetService);
     }
 
     // when one of the handlers throws an exception, the exception is logged but not rethrown

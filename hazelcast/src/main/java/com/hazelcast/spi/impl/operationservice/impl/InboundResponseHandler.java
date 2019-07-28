@@ -60,6 +60,7 @@ public final class InboundResponseHandler implements Consumer<Packet> {
     final MwCounter responsesBackup = newMwCounter();
     final SwCounter responsesError = newSwCounter();
     final MwCounter responsesMissing = newMwCounter();
+
     private final ILogger logger;
     private final InternalSerializationService serializationService;
     private final InvocationRegistry invocationRegistry;

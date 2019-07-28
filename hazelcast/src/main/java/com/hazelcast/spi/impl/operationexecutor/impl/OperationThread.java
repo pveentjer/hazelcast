@@ -23,15 +23,17 @@ import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.util.counters.SwCounter;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Packet;
-import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
+import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.util.executor.HazelcastManagedThread;
 
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import static com.hazelcast.instance.impl.OutOfMemoryErrorDispatcher.inspectOutOfMemoryError;
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
+import static com.hazelcast.nio.Packet.FLAG_OP_RESPONSE;
 
 /**
  * The OperationThread is responsible for processing operations, packets
@@ -47,6 +49,7 @@ public abstract class OperationThread extends HazelcastManagedThread implements 
 
     final int threadId;
     final OperationQueue queue;
+    private final Consumer<Packet> inboundResponseHandler;
     // This field wil only be accessed by the thread itself when doing 'self'
     // calls. So no need for any form of synchronization.
     OperationRunner currentRunner;
@@ -79,7 +82,8 @@ public abstract class OperationThread extends HazelcastManagedThread implements 
                            ILogger logger,
                            NodeExtension nodeExtension,
                            boolean priority,
-                           ClassLoader configClassLoader) {
+                           ClassLoader configClassLoader,
+                           Consumer<Packet> inboundResponseHandler) {
         super(name);
         setContextClassLoader(configClassLoader);
         this.queue = queue;
@@ -87,6 +91,7 @@ public abstract class OperationThread extends HazelcastManagedThread implements 
         this.logger = logger;
         this.nodeExtension = nodeExtension;
         this.priority = priority;
+        this.inboundResponseHandler = inboundResponseHandler;
     }
 
     public int getThreadId() {
@@ -149,8 +154,12 @@ public abstract class OperationThread extends HazelcastManagedThread implements 
     }
 
     private void process(Packet packet) throws Exception {
-        currentRunner = operationRunner(packet.getPartitionId());
-        currentRunner.run(packet);
+        if (packet.isFlagRaised(FLAG_OP_RESPONSE)) {
+            inboundResponseHandler.accept(packet);
+        } else {
+            currentRunner = operationRunner(packet.getPartitionId());
+            currentRunner.run(packet);
+        }
         completedPacketCount.inc();
     }
 

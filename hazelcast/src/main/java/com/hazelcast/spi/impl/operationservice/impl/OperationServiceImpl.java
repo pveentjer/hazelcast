@@ -165,11 +165,11 @@ public final class OperationServiceImpl implements MetricsProvider, LiveOperatio
 
         String hzName = nodeEngine.getHazelcastInstance().getName();
         ClassLoader configClassLoader = node.getConfigClassLoader();
-        this.inboundResponseHandlerSupplier = new InboundResponseHandlerSupplier(
-                configClassLoader, invocationRegistry, hzName, nodeEngine);
+        this.inboundResponseHandlerSupplier = new InboundResponseHandlerSupplier(invocationRegistry, nodeEngine);
 
         this.operationExecutor = new OperationExecutorImpl(
                 node.getProperties(), node.loggingService, thisAddress, new OperationRunnerFactoryImpl(this),
+                inboundResponseHandlerSupplier,
                 node.getNodeExtension(), hzName, configClassLoader);
 
         this.slowOperationDetector = new SlowOperationDetector(node.loggingService,
@@ -179,10 +179,6 @@ public final class OperationServiceImpl implements MetricsProvider, LiveOperatio
 
     public OutboundResponseHandler getOutboundResponseHandler() {
         return outboundResponseHandler;
-    }
-
-    public InboundResponseHandlerSupplier getInboundResponseHandlerSupplier() {
-        return inboundResponseHandlerSupplier;
     }
 
     public InvocationMonitor getInvocationMonitor() {
@@ -243,7 +239,7 @@ public final class OperationServiceImpl implements MetricsProvider, LiveOperatio
 
     @Override
     public int getResponseQueueSize() {
-        return inboundResponseHandlerSupplier.responseQueueSize();
+        return 0;
     }
 
     @Override
@@ -461,7 +457,6 @@ public final class OperationServiceImpl implements MetricsProvider, LiveOperatio
         initInvocationContext();
         invocationMonitor.start();
         operationExecutor.start();
-        inboundResponseHandlerSupplier.start();
         slowOperationDetector.start();
     }
 
@@ -502,7 +497,6 @@ public final class OperationServiceImpl implements MetricsProvider, LiveOperatio
 
         invocationRegistry.shutdown();
         invocationMonitor.shutdown();
-        inboundResponseHandlerSupplier.shutdown();
 
         try {
             invocationMonitor.awaitTermination(TERMINATION_TIMEOUT_MILLIS);
