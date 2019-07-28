@@ -407,7 +407,11 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
             // it doesn't matter which partition thread we pick. As long as we get a nice spread
             // over the partition threads. We could have used a random number generator here
             long callId = Bits.readLong(packet.toByteArray(), OFFSET_CALL_ID, true);
-            OperationThread partitionThread = partitionThreads[HashUtil.hashToIndex((int)callId, partitionThreads.length)];
+            // instead of passing partitionThreads.length, we pass 2 so only 2 threads will be used
+            // for response processing. This improves performance at the expense of having
+            // an imbalanced load. This part is an experiment.
+            // using all threads leads to a reduced throughput.
+            OperationThread partitionThread = partitionThreads[HashUtil.hashToIndex((int)callId, 2)];
             partitionThread.queue.add(packet, packet.isFlagRaised(Packet.FLAG_URGENT));
         } else {
             execute(packet, packet.getPartitionId(), packet.isUrgent());
