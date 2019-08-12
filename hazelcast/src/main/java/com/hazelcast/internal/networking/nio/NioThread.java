@@ -325,7 +325,7 @@ public class NioThread extends Thread implements OperationHostileThread {
                 node = head.next;
             } while (node != null);
 
-            // in reverse order we process them item so that we get the original order of placement.
+            // in reverse order we process them item so that we get FIFO
             for (int k = index; k >= 0; k--) {
                 tasks[k].run();
                 tasks[k] = null;
