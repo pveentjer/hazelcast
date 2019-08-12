@@ -349,17 +349,24 @@ public class NioThread extends Thread implements OperationHostileThread {
         // we'll try to cas the taskStack to null.
 
         for (; ; ) {
-            // todo: tasks are processed in reverse order.
             TaskNode node = head;
+            int index = -1;
             do {
                 if (node.task == null) {
                     // this node and everything following it already has been processed.
                     break;
                 }
-                node.task.run();
+                index++;
+                tasks[index] = node.task;
                 node.task = null;
                 node = head.next;
             } while (node != null);
+
+            // in reverse order we process them item so that we get the original order of placement.
+            for (int k = index; k >= 0; k--) {
+                tasks[k].run();
+                tasks[k] = null;
+            }
 
             TaskNode newHead = taskStack.get();
             if (newHead == head) {
