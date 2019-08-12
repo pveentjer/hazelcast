@@ -31,12 +31,10 @@ import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.Iterator;
-import java.util.Queue;
 import java.util.Random;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.INFO;
-import static com.hazelcast.internal.networking.nio.SelectorMode.SELECT_NOW;
 import static com.hazelcast.internal.networking.nio.SelectorOptimizer.newSelector;
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
 import static com.hazelcast.util.EmptyStatement.ignore;
@@ -73,8 +71,9 @@ public class NioThread extends Thread implements OperationHostileThread {
     @Probe(level = INFO)
     volatile long processCount;
 
-    @Probe(name = "taskQueueSize")
-    private final Queue<Runnable> taskQueue = new ConcurrentLinkedQueue<Runnable>();
+    //@Probe(name = "taskQueueSize")
+    private final AtomicReference<TaskNode> taskStack = new AtomicReference<>();
+
     @Probe
     private final SwCounter eventCount = newSwCounter();
     @Probe
@@ -102,6 +101,8 @@ public class NioThread extends Thread implements OperationHostileThread {
 
     // set to true while testing
     private boolean selectorWorkaroundTest;
+
+    private Runnable[] tasks = new Runnable[1000];
 
     public NioThread(String threadName,
                      ILogger logger,
@@ -196,27 +197,6 @@ public class NioThread extends Thread implements OperationHostileThread {
      */
     public void addTask(Runnable task) {
         add0(task);
-        return;
-    }
-
-    private boolean add0(Runnable task) {
-        if(task instanceof NioOutboundPipeline){
-            NioOutboundPipeline out = (NioOutboundPipeline)task;
-            if(out.writeQueue.get()==null){
-                throw new RuntimeException();
-            }
-        }
-
-        SelectionTaskNode update = new SelectionTaskNode();
-        update.task = task;
-        for (; ; ) {
-            SelectionTaskNode old = taskQueue.get();
-            update.next = old;
-            update.length = old == null ? 1 : old.length + 1;
-            if (taskQueue.compareAndSet(old, update)) {
-                return old == null;
-            }
-        }
     }
 
     /**
@@ -227,10 +207,28 @@ public class NioThread extends Thread implements OperationHostileThread {
      * @throws NullPointerException if task is null
      */
     public void addTaskAndWakeup(Runnable task) {
-        if(add0(task)){
+        if (add0(task)) {
             selector.wakeup();
         }
     }
+
+    private boolean add0(Runnable task) {
+        TaskNode update = new TaskNode();
+        update.task = task;
+        for (; ; ) {
+            TaskNode old = taskStack.get();
+            update.next = old;
+            if (taskStack.compareAndSet(old, update)) {
+                return old == null;
+            }
+        }
+    }
+
+    static class TaskNode {
+        TaskNode next;
+        Runnable task;
+    }
+
 
     @Override
     public void run() {
@@ -302,29 +300,104 @@ public class NioThread extends Thread implements OperationHostileThread {
         }
     }
 
-    private void selectLoopWithFix() throws IOException {
-        int idleCount = 0;
-        while (!stop) {
-            processTaskQueue();
+//    private void processTaskQueue() {
+//        TaskNode head;
+//        for (; ; ) {
+//            head = taskStack.get();
+//            if (head == null) {
+//                return;
+//            }
+//
+//            // todo: this part sucks, because you want to prevent cassing them item.
+//            if (taskStack.compareAndSet(head, null)) {
+//                break;
+//            }
+//        }
+//
+//        TaskNode node = head;
+//        int index = 0;
+//        do {
+//            tasks[index] = node.task;
+//            node.task = null;
+//            index++;
+//            node = node.next;
+//        } while (node != null);
+////
+////        for (int k = index - 1; k >= 0; k--) {
+////            tasks[k].run();
+////            tasks[k] = null;
+////        }
+//
+//        for (int k = 0 ; k<index; k++) {
+//            tasks[k].run();
+//            tasks[k] = null;
+//        }
+//
+//        // now you want to cas;
+//    }
 
-            long before = currentTimeMillis();
-            int selectedKeys = selector.select(SELECT_WAIT_TIME_MILLIS);
-            if (selectedKeys > 0) {
-                idleCount = 0;
-                processSelectionKeys();
-            } else if (!taskQueue.isEmpty()) {
-                idleCount = 0;
-            } else {
-                // no keys were selected, not interrupted by wakeup therefore we hit an issue with JDK/network stack
-                long selectTimeTaken = currentTimeMillis() - before;
-                idleCount = selectTimeTaken < SELECT_WAIT_TIME_MILLIS ? idleCount + 1 : 0;
 
-                if (selectorBugDetected(idleCount)) {
-                    rebuildSelector();
-                    idleCount = 0;
+    private void processTaskQueue() {
+        TaskNode head = taskStack.get();
+        if (head == null) {
+            return;
+        }
+
+        // we do not want to cas taskStack to null and then process the tasks because is means that the selector.wakeup
+        // will be called even though we are going to check if any tasks is pending (null is a marker for wakeup)
+        // So we won't change the item on the stack while processing the task. Only once we have processed the tasks,
+        // we'll try to cas the taskStack to null.
+
+        for (; ; ) {
+            // todo: tasks are processed in reverse order.
+            TaskNode node = head;
+            do {
+                if (node.task == null) {
+                    // this node and everything following it already has been processed.
+                    break;
+                }
+                node.task.run();
+                node.task = null;
+                node = head.next;
+            } while (node != null);
+
+            TaskNode newHead = taskStack.get();
+            if (newHead == head) {
+                // no new tasks have been placed
+                if (taskStack.compareAndSet(head, null)) {
+                    // taskQueue has been fully processed.
+                    // because we set the taskStack to null, other threads will being calling selector.wakeup.
+                    return;
                 }
             }
+            // new item was placed, process again.
+            head = newHead;
         }
+    }
+
+    private void selectLoopWithFix() throws IOException {
+//        int idleCount = 0;
+//        while (!stop) {
+//            processTaskQueue();
+//
+//            long before = currentTimeMillis();
+//            int selectedKeys = selector.select(SELECT_WAIT_TIME_MILLIS);
+//            if (selectedKeys > 0) {
+//                idleCount = 0;
+//                processSelectionKeys();
+//            } else if (!taskQueue.isEmpty()) {
+//                idleCount = 0;
+//            } else {
+//                // no keys were selected, not interrupted by wakeup therefore we hit an issue with JDK/network stack
+//                long selectTimeTaken = currentTimeMillis() - before;
+//                idleCount = selectTimeTaken < SELECT_WAIT_TIME_MILLIS ? idleCount + 1 : 0;
+//
+//                if (selectorBugDetected(idleCount)) {
+//                    rebuildSelector();
+//                    idleCount = 0;
+//                }
+//            }
+//        }
     }
 
     private boolean selectorBugDetected(int idleCount) {
@@ -333,37 +406,24 @@ public class NioThread extends Thread implements OperationHostileThread {
     }
 
     private void selectNowLoop() throws IOException {
-        long idleRound = 0;
-        while (!stop) {
-            boolean tasksProcessed = processTaskQueue();
-
-            int selectedKeys = selector.selectNow();
-
-            if (selectedKeys > 0) {
-                processSelectionKeys();
-                idleRound = 0;
-            } else if (tasksProcessed) {
-                idleRound = 0;
-            } else if (idleStrategy != null) {
-                idleRound++;
-                idleStrategy.idle(idleRound);
-            }
-        }
+//        long idleRound = 0;
+//        while (!stop) {
+//            boolean tasksProcessed = processTaskQueue();
+//
+//            int selectedKeys = selector.selectNow();
+//
+//            if (selectedKeys > 0) {
+//                processSelectionKeys();
+//                idleRound = 0;
+//            } else if (tasksProcessed) {
+//                idleRound = 0;
+//            } else if (idleStrategy != null) {
+//                idleRound++;
+//                idleStrategy.idle(idleRound);
+//            }
+//        }
     }
 
-    private boolean processTaskQueue() {
-        boolean tasksProcessed = false;
-        while (!stop) {
-            Runnable task = taskQueue.poll();
-            if (task == null) {
-                break;
-            }
-            task.run();
-            completedTaskCount.inc();
-            tasksProcessed = true;
-        }
-        return tasksProcessed;
-    }
 
     private void processSelectionKeys() {
         lastSelectTimeMs = currentTimeMillis();
@@ -388,7 +448,7 @@ public class NioThread extends Thread implements OperationHostileThread {
             eventCount.inc();
             pipeline.process();
         } catch (Throwable t) {
-             pipeline.onError(t);
+            pipeline.onError(t);
         }
     }
 
@@ -406,7 +466,7 @@ public class NioThread extends Thread implements OperationHostileThread {
 
     public void shutdown() {
         stop = true;
-        taskQueue.clear();
+        //taskQueue.clear();
         interrupt();
     }
 
