@@ -300,43 +300,6 @@ public class NioThread extends Thread implements OperationHostileThread {
         }
     }
 
-//    private void processTaskQueue() {
-//        TaskNode head;
-//        for (; ; ) {
-//            head = taskStack.get();
-//            if (head == null) {
-//                return;
-//            }
-//
-//            // todo: this part sucks, because you want to prevent cassing them item.
-//            if (taskStack.compareAndSet(head, null)) {
-//                break;
-//            }
-//        }
-//
-//        TaskNode node = head;
-//        int index = 0;
-//        do {
-//            tasks[index] = node.task;
-//            node.task = null;
-//            index++;
-//            node = node.next;
-//        } while (node != null);
-////
-////        for (int k = index - 1; k >= 0; k--) {
-////            tasks[k].run();
-////            tasks[k] = null;
-////        }
-//
-//        for (int k = 0 ; k<index; k++) {
-//            tasks[k].run();
-//            tasks[k] = null;
-//        }
-//
-//        // now you want to cas;
-//    }
-
-
     private void processTaskQueue() {
         TaskNode head = taskStack.get();
         if (head == null) {
