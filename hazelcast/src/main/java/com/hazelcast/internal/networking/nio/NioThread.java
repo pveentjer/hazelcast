@@ -272,6 +272,8 @@ public class NioThread extends Thread implements OperationHostileThread {
         }
 
         logger.finest(getName() + " finished");
+
+        System.out.println(latencyDistribution.toString());
     }
 
     /**
@@ -289,14 +291,23 @@ public class NioThread extends Thread implements OperationHostileThread {
         }
     }
 
+    private LatencyDistribution latencyDistribution = new LatencyDistribution();
+
     private void selectLoop() throws IOException {
+        long spinEnd = System.nanoTime();
         while (!stop) {
             processTaskQueue();
 
             int selectedKeys = selector.select(SELECT_WAIT_TIME_MILLIS);
+
             if (selectedKeys > 0) {
                 processSelectionKeys();
             }
+
+            long now = System.nanoTime();
+            long delta = now - spinEnd;
+            latencyDistribution.record(delta);
+            spinEnd = now;
         }
     }
 
@@ -326,6 +337,8 @@ public class NioThread extends Thread implements OperationHostileThread {
             } while (node != null);
 
             // in reverse order we process them item so that we get FIFO
+            // todo: currently the tasks array of a fixed length; but we could detect if the array isn't large
+            // enough and replace the array by a bigger one.
             for (int k = index; k >= 0; k--) {
                 tasks[k].run();
                 tasks[k] = null;
