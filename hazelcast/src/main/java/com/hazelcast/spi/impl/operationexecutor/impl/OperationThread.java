@@ -20,21 +20,17 @@ import com.hazelcast.instance.impl.NodeExtension;
 import com.hazelcast.internal.metrics.MetricsProvider;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
-import com.hazelcast.internal.nio.Packet;
 import com.hazelcast.internal.util.counters.SwCounter;
-import com.hazelcast.internal.util.executor.HazelcastManagedThread;
 import com.hazelcast.logging.ILogger;
+import com.hazelcast.internal.nio.Packet;
+import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
-import com.hazelcast.spi.impl.operationservice.Operation;
-import net.openhft.affinity.AffinityLock;
-import net.openhft.affinity.AffinitySupport;
+import com.hazelcast.internal.util.executor.HazelcastManagedThread;
 
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.hazelcast.instance.impl.OutOfMemoryErrorDispatcher.inspectOutOfMemoryError;
-import static com.hazelcast.internal.networking.nio.NioThread.THREAD_AFFINITY;
 import static com.hazelcast.internal.util.counters.SwCounter.newSwCounter;
 
 /**
@@ -99,28 +95,8 @@ public abstract class OperationThread extends HazelcastManagedThread implements 
 
     public abstract OperationRunner operationRunner(int partitionId);
 
-    public final static AtomicInteger CPU_ID = new AtomicInteger(Integer.getInteger("partitionThreadCpuId",0));
-
     @Override
-    public final void run() {
-        if (this instanceof PartitionOperationThread) {
-            if (THREAD_AFFINITY) {
-                AffinityLock lock = AffinityLock.acquireLock(CPU_ID.getAndIncrement());
-                try {
-                    System.out.println(getName() + " ThreadId:" + AffinitySupport.getThreadId());
-                    doRun();
-                } finally {
-                    lock.release();
-                }
-            } else {
-                doRun();
-            }
-        } else {
-            doRun();
-        }
-    }
-
-    private void doRun() {
+    public final void executeRun() {
         nodeExtension.onThreadStart(this);
         try {
             while (!shutdown) {

@@ -30,6 +30,7 @@ import com.hazelcast.internal.networking.Networking;
 import com.hazelcast.internal.networking.OutboundHandler;
 import com.hazelcast.internal.networking.nio.iobalancer.IOBalancer;
 import com.hazelcast.internal.util.ConcurrencyDetection;
+import com.hazelcast.internal.util.CpuPool;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
 import com.hazelcast.internal.util.concurrent.BackoffIdleStrategy;
@@ -120,6 +121,8 @@ public final class NioNetworking implements Networking {
     @Probe
     private volatile long packetsReceived;
 
+    private final CpuPool cpuPool = new CpuPool(System.getProperty("ioCpus"));
+
     public NioNetworking(Context ctx) {
         this.threadNamePrefix = ctx.threadNamePrefix;
         this.metricsRegistry = ctx.metricsRegistry;
@@ -190,6 +193,7 @@ public final class NioNetworking implements Networking {
                     idleStrategy);
             thread.id = i;
             thread.setSelectorWorkaroundTest(selectorWorkaroundTest);
+            thread.setCpuPool(cpuPool);
             inThreads[i] = thread;
             metricsRegistry.scanAndRegister(thread, "tcp.inputThread[" + thread.getName() + "]");
             thread.start();
@@ -206,6 +210,7 @@ public final class NioNetworking implements Networking {
                     idleStrategy);
             thread.id = i;
             thread.setSelectorWorkaroundTest(selectorWorkaroundTest);
+            thread.setCpuPool(cpuPool);
             outThreads[i] = thread;
             metricsRegistry.scanAndRegister(thread, "tcp.outputThread[" + thread.getName() + "]");
             thread.start();
