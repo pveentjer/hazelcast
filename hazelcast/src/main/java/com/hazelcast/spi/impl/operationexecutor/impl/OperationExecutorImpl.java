@@ -20,13 +20,14 @@ import com.hazelcast.instance.impl.NodeExtension;
 import com.hazelcast.internal.metrics.MetricsProvider;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
+import com.hazelcast.internal.nio.Packet;
 import com.hazelcast.internal.util.CpuPool;
 import com.hazelcast.internal.util.ThreadAffinity;
+import com.hazelcast.internal.util.concurrent.IdleStrategy;
 import com.hazelcast.internal.util.concurrent.MPSCQueue;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
 import com.hazelcast.nio.Address;
-import com.hazelcast.internal.nio.Packet;
 import com.hazelcast.spi.impl.PartitionSpecificRunnable;
 import com.hazelcast.spi.impl.operationexecutor.OperationExecutor;
 import com.hazelcast.spi.impl.operationexecutor.OperationHostileThread;
@@ -39,21 +40,19 @@ import com.hazelcast.spi.impl.operationservice.UrgentSystemOperation;
 import com.hazelcast.spi.impl.operationservice.impl.operations.Backup;
 import com.hazelcast.spi.properties.HazelcastProperties;
 import com.hazelcast.spi.properties.HazelcastProperty;
-import com.hazelcast.internal.util.concurrent.IdleStrategy;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.util.BitSet;
+import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import static com.hazelcast.internal.metrics.ProbeLevel.MANDATORY;
-import static com.hazelcast.spi.impl.operationservice.impl.InboundResponseHandlerSupplier.getIdleStrategy;
-import static com.hazelcast.spi.properties.GroupProperty.GENERIC_OPERATION_THREAD_COUNT;
-import static com.hazelcast.spi.properties.GroupProperty.PARTITION_COUNT;
-import static com.hazelcast.spi.properties.GroupProperty.PARTITION_OPERATION_THREAD_COUNT;
-import static com.hazelcast.spi.properties.GroupProperty.PRIORITY_GENERIC_OPERATION_THREAD_COUNT;
 import static com.hazelcast.internal.util.Preconditions.checkNotNull;
 import static com.hazelcast.internal.util.ThreadUtil.createThreadPoolName;
+import static com.hazelcast.spi.impl.operationservice.impl.InboundResponseHandlerSupplier.getIdleStrategy;
+import static com.hazelcast.spi.properties.GroupProperty.*;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
@@ -95,13 +94,16 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
     // all operations that are not specific for a partition will be executed here, e.g. heartbeat or map.size()
     private final GenericOperationThread[] genericThreads;
     private final OperationRunner[] genericOperationRunners;
+    private final CpuPool cpuPool = new CpuPool(System.getProperty("partitionCpus"));
 
     private final Address thisAddress;
     private final OperationRunner adHocOperationRunner;
     private final int priorityThreadCount;
-    private final CpuPool cpuPool = new CpuPool(System.getProperty("partitionCpus"));
-    private final boolean rescalingEnabled;
+    private final boolean rescalingEnabled = Boolean.parseBoolean(System.getProperty("partitionCpuRescaling", "true"));
+    private final float lowWaterMarkLoad = Float.parseFloat(System.getProperty("partitionCpusLowLoad", "0.1"));
+    private final float highWaterMarkLoad = Float.parseFloat(System.getProperty("partitionCpusHighLoad", "0.4"));
     private RescaleThread rescaleThread;
+    private volatile int activePartitionThreads;
 
     public OperationExecutorImpl(HazelcastProperties properties,
                                  LoggingService loggerService,
@@ -117,8 +119,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
 
         this.partitionOperationRunners = initPartitionOperationRunners(properties, runnerFactory);
         this.partitionThreads = initPartitionThreads(properties, hzName, nodeExtension, configClassLoader);
-
-        this.rescalingEnabled = Boolean.parseBoolean(System.getProperty("partitionCpuRescaling", "true"));
+        this.activePartitionThreads = partitionThreads.length;
         this.priorityThreadCount = properties.getInteger(PRIORITY_GENERIC_OPERATION_THREAD_COUNT);
         this.genericOperationRunners = initGenericOperationRunners(properties, runnerFactory);
         this.genericThreads = initGenericThreads(hzName, nodeExtension, configClassLoader);
@@ -159,6 +160,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
 
             PartitionOperationThread partitionThread = new PartitionOperationThread(threadName, threadId, operationQueue, logger,
                     nodeExtension, partitionOperationRunners, configClassLoader);
+
             threads[threadId] = partitionThread;
             normalQueue.setConsumerThread(partitionThread);
         }
@@ -335,7 +337,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
 
     @Override
     public int getPartitionThreadId(int partitionId) {
-        return getPartitionThreadId(partitionId, partitionThreads.length);
+        return getPartitionThreadId(partitionId, activePartitionThreads);
     }
 
     @Override
@@ -497,9 +499,8 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
 
     // public for testing purposes
     public int toPartitionThreadIndex(int partitionId) {
-        return partitionId % partitionThreads.length;
+        return partitionId % activePartitionThreads;
     }
-
 
     @Override
     public void start() {
@@ -560,15 +561,66 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
 
         @Override
         public void run() {
-            while (!shutdown) {
-                try {
+            try {
+                while (!shutdown) {
                     Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    return;
+                    float load = partitionCpusLoad();
+                    if (load < lowWaterMarkLoad) {
+                        scaleDown();
+                    } else if (load > highWaterMarkLoad) {
+                        scaleUp();
+                    }
                 }
-
-
+            } catch (InterruptedException e) {
             }
+        }
+
+        private void scaleUp() throws InterruptedException {
+            if (activePartitionThreads < partitionThreads.length) {
+                updateActivePartitionThreads(activePartitionThreads + 1);
+            } else {
+                System.out.println("Can't scale up, maximum number of partition threads is already active");
+            }
+        }
+
+        private void scaleDown() throws InterruptedException {
+            if (activePartitionThreads > 2) {
+                updateActivePartitionThreads(activePartitionThreads - 1);
+            } else {
+                System.out.println("Can't scale down, minimum number of partition threads is already active");
+            }
+        }
+
+        private void updateActivePartitionThreads(int newActivePartitionThreads) throws InterruptedException {
+            CountDownLatch startLatch = new CountDownLatch(partitionThreads.length);
+            CountDownLatch completeLatch = new CountDownLatch(1);
+            for (PartitionOperationThread t : partitionThreads) {
+                t.queue.add(new Runnable() {
+                    @Override
+                    public void run() {
+                        startLatch.countDown();
+                        try {
+                            completeLatch.await();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new RuntimeException(e);
+                        }
+                    }
+                }, true);
+            }
+            startLatch.await();
+
+            activePartitionThreads = newActivePartitionThreads;
+            completeLatch.countDown();
+        }
+
+        private float partitionCpusLoad() {
+            float total = 0;
+            List<Integer> usedCpus = cpuPool.usedCpus();
+            for (Integer cpu : usedCpus) {
+                total += ThreadAffinity.cpuLoad(cpu);
+            }
+            return total / usedCpus.size();
         }
 
         public void shutdown() {
