@@ -125,6 +125,8 @@ public class HttpPostCommandProcessor extends HttpCommandProcessor<HttpPostComma
                 sendResponse = false;
             } else if (uri.startsWith(URI_LICENSE_INFO)) {
                 handleSetLicense(command);
+            } else if (uri.startsWith(URI_SET_CPU_AFFINITY)) {
+                handleSetCpuAffinity(command);
             } else {
                 command.send404();
             }
@@ -913,6 +915,22 @@ public class HttpPostCommandProcessor extends HttpCommandProcessor<HttpPostComma
 
     protected String responseOnSetLicenseSuccess() {
         return response(ResponseType.SUCCESS);
+    }
+
+    private void handleSetCpuAffinity(HttpPostCommand command) {
+        byte[] data = command.getData();
+        if (data == null) {
+            return;
+        }
+        final String[] strList = bytesToString(data).split("&", -1);
+        if (strList.length != 1) {
+            return;
+        }
+        logger.info("Got thread affinity configuration change request:" + strList);
+
+        // TODO
+
+        command.setResponse(HttpCommand.CONTENT_TYPE_JSON, stringToBytes(response(ResponseType.SUCCESS)));
     }
 
 }

@@ -76,6 +76,9 @@ public abstract class HttpCommandProcessor<T> extends AbstractTextCommandProcess
     public static final String URI_CP_MEMBERS_URL = URI_CP_SUBSYSTEM_BASE_URL + "/members";
     public static final String URI_LOCAL_CP_MEMBER_URL = URI_CP_MEMBERS_URL + "/local";
 
+
+    public static final String URI_SET_CPU_AFFINITY = "/hazelcast/rest/setCpuAffinity";
+
     protected HttpCommandProcessor(TextCommandService textCommandService) {
         super(textCommandService);
     }
