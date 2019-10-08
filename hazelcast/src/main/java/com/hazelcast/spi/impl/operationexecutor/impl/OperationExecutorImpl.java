@@ -161,6 +161,8 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
             PartitionOperationThread partitionThread = new PartitionOperationThread(threadName, threadId, operationQueue, logger,
                     nodeExtension, partitionOperationRunners, configClassLoader);
 
+            partitionThread.activePartitionThreads=threadCount;
+            partitionThread.partitionOperationThreads=threads;
             threads[threadId] = partitionThread;
             normalQueue.setConsumerThread(partitionThread);
         }
@@ -611,6 +613,9 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
             startLatch.await();
 
             activePartitionThreads = newActivePartitionThreads;
+            for(PartitionOperationThread t: partitionThreads){
+                t.activePartitionThreads=activePartitionThreads;
+            }
             completeLatch.countDown();
         }
 

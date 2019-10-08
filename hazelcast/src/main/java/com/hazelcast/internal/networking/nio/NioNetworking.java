@@ -194,7 +194,6 @@ public final class NioNetworking implements Networking {
                     idleStrategy);
             thread.id = i;
             thread.setSelectorWorkaroundTest(selectorWorkaroundTest);
-            thread.setCpuPool(cpuPool);
             outThreads[i] = thread;
             metricsRegistry.scanAndRegister(thread, "tcp.outputThread[" + thread.getName() + "]");
             thread.start();
@@ -219,7 +218,6 @@ public final class NioNetworking implements Networking {
                     idleStrategy);
             thread.id = i;
             thread.setSelectorWorkaroundTest(selectorWorkaroundTest);
-            thread.setCpuPool(cpuPool);
             inThreads[i] = thread;
             metricsRegistry.scanAndRegister(thread, "tcp.inputThread[" + thread.getName() + "]");
             ThreadAffinity.setThreadAffinity(thread, cpuPool.take());
