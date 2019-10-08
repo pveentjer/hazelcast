@@ -21,6 +21,7 @@ import com.hazelcast.internal.metrics.MetricsProvider;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.util.CpuPool;
+import com.hazelcast.internal.util.ThreadAffinity;
 import com.hazelcast.internal.util.concurrent.MPSCQueue;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
@@ -98,6 +99,7 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
     private final Address thisAddress;
     private final OperationRunner adHocOperationRunner;
     private final int priorityThreadCount;
+    private final CpuPool cpuPool = new CpuPool(System.getProperty("partitionCpus"));
 
     public OperationExecutorImpl(HazelcastProperties properties,
                                  LoggingService loggerService,
@@ -143,7 +145,6 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
 
         int threadCount = properties.getInteger(PARTITION_OPERATION_THREAD_COUNT);
 
-        CpuPool cpuPool = new CpuPool(System.getProperty("partitionCpus"));
         IdleStrategy idleStrategy = getIdleStrategy(properties, IDLE_STRATEGY);
         PartitionOperationThread[] threads = new PartitionOperationThread[threadCount];
         for (int threadId = 0; threadId < threads.length; threadId++) {
@@ -155,7 +156,6 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
 
             PartitionOperationThread partitionThread = new PartitionOperationThread(threadName, threadId, operationQueue, logger,
                     nodeExtension, partitionOperationRunners, configClassLoader);
-            partitionThread.setCpuPool(cpuPool);
             threads[threadId] = partitionThread;
             normalQueue.setConsumerThread(partitionThread);
         }
@@ -502,6 +502,9 @@ public final class OperationExecutorImpl implements OperationExecutor, MetricsPr
         logger.info("Starting " + partitionThreads.length + " partition threads and "
                 + genericThreads.length + " generic threads (" + priorityThreadCount + " dedicated for priority tasks)");
         startAll(partitionThreads);
+        for (PartitionOperationThread thread : partitionThreads) {
+            ThreadAffinity.setThreadAffinity(thread, cpuPool.take());
+        }
         startAll(genericThreads);
     }
 

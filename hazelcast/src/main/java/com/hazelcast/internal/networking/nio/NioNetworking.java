@@ -31,6 +31,7 @@ import com.hazelcast.internal.networking.OutboundHandler;
 import com.hazelcast.internal.networking.nio.iobalancer.IOBalancer;
 import com.hazelcast.internal.util.ConcurrencyDetection;
 import com.hazelcast.internal.util.CpuPool;
+import com.hazelcast.internal.util.ThreadAffinity;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
 import com.hazelcast.internal.util.concurrent.BackoffIdleStrategy;
@@ -183,7 +184,6 @@ public final class NioNetworking implements Networking {
             return t;
         });
 
-
         NioThread[] outThreads = new NioThread[outputThreadCount];
         for (int i = 0; i < outThreads.length; i++) {
             NioThread thread = new NioThread(
@@ -198,6 +198,7 @@ public final class NioNetworking implements Networking {
             outThreads[i] = thread;
             metricsRegistry.scanAndRegister(thread, "tcp.outputThread[" + thread.getName() + "]");
             thread.start();
+            ThreadAffinity.setThreadAffinity(thread, cpuPool.take());
         }
         this.outputThreads = outThreads;
 
@@ -221,6 +222,7 @@ public final class NioNetworking implements Networking {
             thread.setCpuPool(cpuPool);
             inThreads[i] = thread;
             metricsRegistry.scanAndRegister(thread, "tcp.inputThread[" + thread.getName() + "]");
+            ThreadAffinity.setThreadAffinity(thread, cpuPool.take());
             thread.start();
         }
         this.inputThreads = inThreads;
@@ -277,6 +279,7 @@ public final class NioNetworking implements Networking {
             thread.shutdown();
             metricsRegistry.deregister(thread);
         }
+        cpuPool.reset();
     }
 
     @Override
