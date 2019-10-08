@@ -29,11 +29,15 @@ import com.hazelcast.internal.json.Json;
 import com.hazelcast.internal.management.ManagementCenterService;
 import com.hazelcast.internal.management.dto.WanReplicationConfigDTO;
 import com.hazelcast.internal.management.operation.SetLicenseOperation;
+import com.hazelcast.internal.networking.nio.NioThread;
+import com.hazelcast.internal.util.CpuPool;
+import com.hazelcast.internal.util.JsonUtil;
+import com.hazelcast.internal.util.StringUtil;
+import com.hazelcast.internal.util.ThreadAffinity;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.security.SecurityContext;
 import com.hazelcast.security.UsernamePasswordCredentials;
-import com.hazelcast.internal.util.JsonUtil;
-import com.hazelcast.internal.util.StringUtil;
+import com.hazelcast.spi.impl.operationexecutor.impl.OperationThread;
 import com.hazelcast.version.Version;
 import com.hazelcast.wan.impl.AddWanConfigResult;
 import com.hazelcast.wan.impl.WanReplicationService;
@@ -42,11 +46,12 @@ import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
+import java.util.Set;
 import java.util.UUID;
 
 import static com.hazelcast.cp.CPGroup.METADATA_CP_GROUP_NAME;
-import static com.hazelcast.internal.util.InvocationUtil.invokeOnStableClusterSerial;
 import static com.hazelcast.internal.util.ExceptionUtil.peel;
+import static com.hazelcast.internal.util.InvocationUtil.invokeOnStableClusterSerial;
 import static com.hazelcast.internal.util.StringUtil.bytesToString;
 import static com.hazelcast.internal.util.StringUtil.lowerCaseInternal;
 import static com.hazelcast.internal.util.StringUtil.stringToBytes;
@@ -920,17 +925,53 @@ public class HttpPostCommandProcessor extends HttpCommandProcessor<HttpPostComma
     private void handleSetCpuAffinity(HttpPostCommand command) {
         byte[] data = command.getData();
         if (data == null) {
+            command.send400();
             return;
         }
         final String[] strList = bytesToString(data).split("&", -1);
-        if (strList.length != 1) {
+        if (strList.length != 2) {
+            command.send400();
             return;
         }
-        logger.info("Got thread affinity configuration change request: " + strList[0]);
 
-        // TODO
+        String res;
+        try {
+            String mode = strList[0];
+            CpuPool cpuPool = new CpuPool(strList[1]);
+            Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
+            switch (mode) {
+                case "partitionCpus":
+                    for (Thread thread: threadSet) {
+                        if (thread instanceof OperationThread) {
+                            ThreadAffinity.setThreadAffinity(thread, takeFromCpuPoolCyclically(cpuPool));
+                        }
+                    }
+                    break;
+                case "ioCpus":
+                    for (Thread thread: threadSet) {
+                        if (thread instanceof NioThread) {
+                            ThreadAffinity.setThreadAffinity(thread, takeFromCpuPoolCyclically(cpuPool));
+                        }
+                    }
+                    break;
+                default:
+                    throw new IllegalStateException("Got invalid thread affinity mode: " + mode);
+            }
+            res = response(ResponseType.SUCCESS);
+        } catch (Exception e) {
+            res = exceptionResponse(e);
+        }
 
-        command.setResponse(HttpCommand.CONTENT_TYPE_JSON, stringToBytes(response(ResponseType.SUCCESS)));
+        command.setResponse(HttpCommand.CONTENT_TYPE_JSON, stringToBytes(res));
+    }
+
+    private static int takeFromCpuPoolCyclically(CpuPool cpuPool) {
+        int cpu = cpuPool.take();
+        if (cpu == -1) {
+            cpuPool.reset();
+            cpu = cpuPool.take();
+        }
+        return cpu;
     }
 
 }
