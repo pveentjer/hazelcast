@@ -926,7 +926,7 @@ public class HttpPostCommandProcessor extends HttpCommandProcessor<HttpPostComma
         if (strList.length != 1) {
             return;
         }
-        logger.info("Got thread affinity configuration change request:" + strList);
+        logger.info("Got thread affinity configuration change request: " + strList[0]);
 
         // TODO
 
