@@ -78,6 +78,7 @@ public abstract class HttpCommandProcessor<T> extends AbstractTextCommandProcess
 
 
     public static final String URI_SET_CPU_AFFINITY = "/hazelcast/rest/setCpuAffinity";
+    public static final String URI_SET_ADAPTIVE_THREAD_SIZING = "/hazelcast/rest/setAdaptivePartitionThreadSizing";
 
     protected HttpCommandProcessor(TextCommandService textCommandService) {
         super(textCommandService);

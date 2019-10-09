@@ -37,6 +37,7 @@ import com.hazelcast.internal.util.ThreadAffinity;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.security.SecurityContext;
 import com.hazelcast.security.UsernamePasswordCredentials;
+import com.hazelcast.spi.impl.operationexecutor.impl.OperationExecutorImpl;
 import com.hazelcast.spi.impl.operationexecutor.impl.OperationThread;
 import com.hazelcast.version.Version;
 import com.hazelcast.wan.impl.AddWanConfigResult;
@@ -132,6 +133,8 @@ public class HttpPostCommandProcessor extends HttpCommandProcessor<HttpPostComma
                 handleSetLicense(command);
             } else if (uri.startsWith(URI_SET_CPU_AFFINITY)) {
                 handleSetCpuAffinity(command);
+            } else if (uri.startsWith(URI_SET_ADAPTIVE_THREAD_SIZING)) {
+                handleSetAdaptivePartitionThreadSizing(command);
             } else {
                 command.send404();
             }
@@ -972,6 +975,30 @@ public class HttpPostCommandProcessor extends HttpCommandProcessor<HttpPostComma
             cpu = cpuPool.take();
         }
         return cpu;
+    }
+
+    private void handleSetAdaptivePartitionThreadSizing(HttpPostCommand command) {
+        byte[] data = command.getData();
+        if (data == null) {
+            command.send400();
+            return;
+        }
+        final String[] strList = bytesToString(data).split("&", -1);
+        if (strList.length != 1) {
+            command.send400();
+            return;
+        }
+
+        String res;
+        try {
+            boolean newValue = Boolean.parseBoolean(strList[0]);
+            OperationExecutorImpl.ADAPTIVE_PARTITION_THREAD_SIZING = newValue;
+            res = response(ResponseType.SUCCESS);
+        } catch (Exception e) {
+            res = exceptionResponse(e);
+        }
+
+        command.setResponse(HttpCommand.CONTENT_TYPE_JSON, stringToBytes(res));
     }
 
 }
