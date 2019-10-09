@@ -70,12 +70,11 @@ public final class PartitionOperationThread extends OperationThread {
 
     @Override
     protected void process(Operation operation) {
-
         int partitionId = operation.getPartitionId();
-        if(partitionId>=0) {
-            int indexOf = partitionId % activePartitionThreads;
-            if (indexOf != threadId) {
-                partitionOperationThreads[indexOf].queue.add(operation, operation.isUrgent());
+        if (partitionId >= 0) {
+            int expectedThreadId = partitionId % activePartitionThreads;
+            if (expectedThreadId != threadId) {
+                partitionOperationThreads[expectedThreadId].queue.add(operation, operation.isUrgent());
                 return;
             }
         }
@@ -88,10 +87,10 @@ public final class PartitionOperationThread extends OperationThread {
     @Override
     protected void process(Packet packet) throws Exception {
         int partitionId = packet.getPartitionId();
-        if(partitionId>=0) {
-            int indexOf = partitionId % activePartitionThreads;
-            if (indexOf != threadId) {
-                partitionOperationThreads[indexOf].queue.add(packet,packet.isUrgent());
+        if (partitionId >= 0) {
+            int expectedThreadId = partitionId % activePartitionThreads;
+            if (expectedThreadId != threadId) {
+                partitionOperationThreads[expectedThreadId].queue.add(packet, packet.isUrgent());
                 return;
             }
         }
@@ -104,10 +103,10 @@ public final class PartitionOperationThread extends OperationThread {
     @Override
     protected void process(PartitionSpecificRunnable runnable) {
         int partitionId = runnable.getPartitionId();
-        if(partitionId>=0) {
-            int indexOf = partitionId % activePartitionThreads;
-            if (indexOf != threadId) {
-                partitionOperationThreads[indexOf].queue.add(runnable, runnable instanceof UrgentSystemOperation);
+        if (partitionId >= 0) {
+            int expectedThreadId = partitionId % activePartitionThreads;
+            if (expectedThreadId != threadId) {
+                partitionOperationThreads[expectedThreadId].queue.add(runnable, runnable instanceof UrgentSystemOperation);
                 return;
             }
         }
