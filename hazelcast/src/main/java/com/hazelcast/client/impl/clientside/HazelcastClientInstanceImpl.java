@@ -44,23 +44,8 @@ import com.hazelcast.client.impl.protocol.codec.MetricsReadMetricsCodec;
 import com.hazelcast.client.impl.proxy.ClientClusterProxy;
 import com.hazelcast.client.impl.proxy.PartitionServiceProxy;
 import com.hazelcast.client.impl.querycache.ClientQueryCacheContext;
-import com.hazelcast.client.impl.spi.ClientClusterService;
-import com.hazelcast.client.impl.spi.ClientContext;
-import com.hazelcast.client.impl.spi.ClientExecutionService;
-import com.hazelcast.client.impl.spi.ClientInvocationService;
-import com.hazelcast.client.impl.spi.ClientListenerService;
-import com.hazelcast.client.impl.spi.ClientPartitionService;
-import com.hazelcast.client.impl.spi.ClientTransactionManagerService;
-import com.hazelcast.client.impl.spi.ProxyManager;
-import com.hazelcast.client.impl.spi.impl.AbstractClientInvocationService;
-import com.hazelcast.client.impl.spi.impl.ClientClusterServiceImpl;
-import com.hazelcast.client.impl.spi.impl.ClientExecutionServiceImpl;
-import com.hazelcast.client.impl.spi.impl.ClientInvocation;
-import com.hazelcast.client.impl.spi.impl.ClientPartitionServiceImpl;
-import com.hazelcast.client.impl.spi.impl.ClientTransactionManagerServiceImpl;
-import com.hazelcast.client.impl.spi.impl.ClientUserCodeDeploymentService;
-import com.hazelcast.client.impl.spi.impl.NonSmartClientInvocationService;
-import com.hazelcast.client.impl.spi.impl.SmartClientInvocationService;
+import com.hazelcast.client.impl.spi.*;
+import com.hazelcast.client.impl.spi.impl.*;
 import com.hazelcast.client.impl.spi.impl.listener.AbstractClientListenerService;
 import com.hazelcast.client.impl.spi.impl.listener.NonSmartClientListenerService;
 import com.hazelcast.client.impl.spi.impl.listener.SmartClientListenerService;
@@ -75,12 +60,7 @@ import com.hazelcast.collection.impl.list.ListService;
 import com.hazelcast.collection.impl.queue.QueueService;
 import com.hazelcast.collection.impl.set.SetService;
 import com.hazelcast.config.Config;
-import com.hazelcast.core.DistributedObject;
-import com.hazelcast.core.DistributedObjectListener;
-import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.core.ICompletableFuture;
-import com.hazelcast.core.IExecutorService;
-import com.hazelcast.core.LifecycleService;
+import com.hazelcast.core.*;
 import com.hazelcast.cp.CPSubsystem;
 import com.hazelcast.cp.internal.datastructures.unsafe.lock.LockServiceImpl;
 import com.hazelcast.cp.lock.ILock;
@@ -92,23 +72,11 @@ import com.hazelcast.flakeidgen.FlakeIdGenerator;
 import com.hazelcast.flakeidgen.impl.FlakeIdGeneratorService;
 import com.hazelcast.instance.BuildInfoProvider;
 import com.hazelcast.internal.crdt.pncounter.PNCounterService;
-import com.hazelcast.internal.diagnostics.BuildInfoPlugin;
-import com.hazelcast.internal.diagnostics.ConfigPropertiesPlugin;
-import com.hazelcast.internal.diagnostics.Diagnostics;
-import com.hazelcast.internal.diagnostics.EventQueuePlugin;
-import com.hazelcast.internal.diagnostics.MetricsPlugin;
-import com.hazelcast.internal.diagnostics.NetworkingImbalancePlugin;
-import com.hazelcast.internal.diagnostics.SystemLogPlugin;
-import com.hazelcast.internal.diagnostics.SystemPropertiesPlugin;
+import com.hazelcast.internal.diagnostics.*;
 import com.hazelcast.internal.metrics.ProbeLevel;
 import com.hazelcast.internal.metrics.impl.MetricsRegistryImpl;
 import com.hazelcast.internal.metrics.managementcenter.MetricsResultSet;
-import com.hazelcast.internal.metrics.metricsets.ClassLoadingMetricSet;
-import com.hazelcast.internal.metrics.metricsets.FileMetricSet;
-import com.hazelcast.internal.metrics.metricsets.GarbageCollectionMetricSet;
-import com.hazelcast.internal.metrics.metricsets.OperatingSystemMetricSet;
-import com.hazelcast.internal.metrics.metricsets.RuntimeMetricSet;
-import com.hazelcast.internal.metrics.metricsets.ThreadMetricSet;
+import com.hazelcast.internal.metrics.metricsets.*;
 import com.hazelcast.internal.nearcache.NearCacheManager;
 import com.hazelcast.internal.nio.ClassLoaderUtil;
 import com.hazelcast.internal.nio.Connection;
@@ -135,31 +103,17 @@ import com.hazelcast.splitbrainprotection.SplitBrainProtectionService;
 import com.hazelcast.topic.ITopic;
 import com.hazelcast.topic.impl.TopicService;
 import com.hazelcast.topic.impl.reliable.ReliableTopicService;
-import com.hazelcast.transaction.HazelcastXAResource;
-import com.hazelcast.transaction.TransactionContext;
-import com.hazelcast.transaction.TransactionException;
-import com.hazelcast.transaction.TransactionOptions;
-import com.hazelcast.transaction.TransactionalTask;
+import com.hazelcast.transaction.*;
 import com.hazelcast.transaction.impl.xa.XAService;
-import net.openhft.affinity.AffinityLock;
 
 import javax.annotation.Nonnull;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.hazelcast.client.properties.ClientProperty.CONCURRENT_WINDOW_MS;
-import static com.hazelcast.client.properties.ClientProperty.IO_WRITE_THROUGH_ENABLED;
-import static com.hazelcast.client.properties.ClientProperty.MAX_CONCURRENT_INVOCATIONS;
-import static com.hazelcast.client.properties.ClientProperty.RESPONSE_THREAD_DYNAMIC;
+import static com.hazelcast.client.properties.ClientProperty.*;
 import static com.hazelcast.internal.util.EmptyStatement.ignore;
 import static com.hazelcast.internal.util.ExceptionUtil.rethrow;
 import static com.hazelcast.internal.util.Preconditions.checkNotNull;
@@ -440,18 +394,6 @@ public class HazelcastClientInstanceImpl implements HazelcastInstance, Serializa
             statistics.start();
             clientExtension.afterStart(this);
             cpSubsystem.init(clientContext);
-
-            Thread thread = new Thread(){
-                public void run(){
-                    try {
-                        Thread.sleep(10000);
-                    } catch (InterruptedException e) {
-                    }
-
-                    System.out.println("\nThe assignment of CPUs is\n" + AffinityLock.dumpLocks());
-                }
-            };
-            thread.start();
         } catch (Throwable e) {
             try {
                 lifecycleService.terminate();

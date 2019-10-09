@@ -31,13 +31,7 @@ import com.hazelcast.internal.management.ManagementCenterService;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.ProbeLevel;
 import com.hazelcast.internal.metrics.impl.MetricsRegistryImpl;
-import com.hazelcast.internal.metrics.metricsets.ClassLoadingMetricSet;
-import com.hazelcast.internal.metrics.metricsets.FileMetricSet;
-import com.hazelcast.internal.metrics.metricsets.GarbageCollectionMetricSet;
-import com.hazelcast.internal.metrics.metricsets.OperatingSystemMetricSet;
-import com.hazelcast.internal.metrics.metricsets.RuntimeMetricSet;
-import com.hazelcast.internal.metrics.metricsets.StatisticsAwareMetricsSet;
-import com.hazelcast.internal.metrics.metricsets.ThreadMetricSet;
+import com.hazelcast.internal.metrics.metricsets.*;
 import com.hazelcast.internal.nio.Packet;
 import com.hazelcast.internal.partition.InternalPartitionService;
 import com.hazelcast.internal.partition.MigrationInfo;
@@ -76,7 +70,6 @@ import com.hazelcast.transaction.TransactionManagerService;
 import com.hazelcast.transaction.impl.TransactionManagerServiceImpl;
 import com.hazelcast.version.MemberVersion;
 import com.hazelcast.wan.impl.WanReplicationService;
-import net.openhft.affinity.AffinityLock;
 
 import javax.annotation.Nonnull;
 import java.util.Collection;
@@ -230,17 +223,6 @@ public class NodeEngineImpl implements NodeEngine {
         diagnostics.start();
 
         node.getNodeExtension().registerPlugins(diagnostics);
-        Thread thread = new Thread(){
-            public void run(){
-                try {
-                    Thread.sleep(10000);
-                } catch (InterruptedException e) {
-                }
-
-                System.out.println("\nThe assignment of CPUs is\n" + AffinityLock.dumpLocks());
-            }
-        };
-        thread.start();
     }
 
     public ConcurrencyDetection getConcurrencyDetection() {
