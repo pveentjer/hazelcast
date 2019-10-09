@@ -20,21 +20,13 @@ import com.hazelcast.instance.EndpointQualifier;
 import com.hazelcast.internal.metrics.MetricsRegistry;
 import com.hazelcast.internal.metrics.Probe;
 import com.hazelcast.internal.metrics.ProbeLevel;
-import com.hazelcast.internal.networking.Channel;
-import com.hazelcast.internal.networking.ChannelCloseListener;
-import com.hazelcast.internal.networking.ChannelErrorHandler;
-import com.hazelcast.internal.networking.ChannelInitializer;
-import com.hazelcast.internal.networking.ChannelInitializerProvider;
-import com.hazelcast.internal.networking.InboundHandler;
-import com.hazelcast.internal.networking.Networking;
-import com.hazelcast.internal.networking.OutboundHandler;
+import com.hazelcast.internal.networking.*;
 import com.hazelcast.internal.networking.nio.iobalancer.IOBalancer;
 import com.hazelcast.internal.util.ConcurrencyDetection;
 import com.hazelcast.internal.util.CpuPool;
-import com.hazelcast.internal.util.ThreadAffinity;
+import com.hazelcast.internal.util.concurrent.BackoffIdleStrategy;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.LoggingService;
-import com.hazelcast.internal.util.concurrent.BackoffIdleStrategy;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.io.IOException;
@@ -196,8 +188,8 @@ public final class NioNetworking implements Networking {
             thread.setSelectorWorkaroundTest(selectorWorkaroundTest);
             outThreads[i] = thread;
             metricsRegistry.scanAndRegister(thread, "tcp.outputThread[" + thread.getName() + "]");
+            thread.setCpuPool(cpuPool);
             thread.start();
-            ThreadAffinity.setThreadAffinity(thread, cpuPool.take());
         }
         this.outputThreads = outThreads;
 
@@ -213,8 +205,8 @@ public final class NioNetworking implements Networking {
             thread.setSelectorWorkaroundTest(selectorWorkaroundTest);
             inThreads[i] = thread;
             metricsRegistry.scanAndRegister(thread, "tcp.inputThread[" + thread.getName() + "]");
+            thread.setCpuPool(cpuPool);
             thread.start();
-            ThreadAffinity.setThreadAffinity(thread, cpuPool.take());
         }
         this.inputThreads = inThreads;
 

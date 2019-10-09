@@ -105,6 +105,7 @@ import com.hazelcast.topic.impl.TopicService;
 import com.hazelcast.topic.impl.reliable.ReliableTopicService;
 import com.hazelcast.transaction.*;
 import com.hazelcast.transaction.impl.xa.XAService;
+import net.openhft.affinity.AffinityLock;
 
 import javax.annotation.Nonnull;
 import java.util.*;
@@ -394,6 +395,19 @@ public class HazelcastClientInstanceImpl implements HazelcastInstance, Serializa
             statistics.start();
             clientExtension.afterStart(this);
             cpSubsystem.init(clientContext);
+
+
+            Thread thread = new Thread(){
+                public void run(){
+                    try {
+                        Thread.sleep(10000);
+                    } catch (InterruptedException e) {
+                    }
+
+                    System.out.println("\nThe assignment of CPUs is\n" + AffinityLock.dumpLocks());
+                }
+            };
+            thread.start();
         } catch (Throwable e) {
             try {
                 lifecycleService.terminate();
