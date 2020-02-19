@@ -33,6 +33,7 @@ import com.hazelcast.spi.properties.HazelcastProperties;
 import com.hazelcast.spi.properties.HazelcastProperty;
 
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ForkJoinPool;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -83,6 +84,7 @@ public class InboundResponseHandlerSupplier implements StaticMetricsProvider, Su
     public static final HazelcastProperty IDLE_STRATEGY
             = new HazelcastProperty("hazelcast.operation.responsequeue.idlestrategy", "block");
 
+
     private static final ThreadLocal<MutableInteger> INT_HOLDER = ThreadLocal.withInitial(MutableInteger::new);
 
     private static final long IDLE_MAX_SPINS = 20;
@@ -108,8 +110,13 @@ public class InboundResponseHandlerSupplier implements StaticMetricsProvider, Su
         this.logger = nodeEngine.getLogger(InboundResponseHandlerSupplier.class);
         this.properties = nodeEngine.getProperties();
         int responseThreadCount = properties.getInteger(RESPONSE_THREAD_COUNT);
-        if (responseThreadCount < 0) {
-            throw new IllegalArgumentException(RESPONSE_THREAD_COUNT.getName() + " can't be smaller than 0");
+        if (responseThreadCount ==-1) {
+            logger.warning("Enabling FJ Response Handler");
+            inboundResponseHandlers = new InboundResponseHandler[1];
+            inboundResponseHandlers[0] = new InboundResponseHandler(invocationRegistry, nodeEngine);
+            responseHandler = new FJResponseHandler(inboundResponseHandlers[0]);
+            this.responseThreads = new ResponseThread[0];
+            return;
         }
 
         if (logger.isFineEnabled()) {
@@ -152,45 +159,45 @@ public class InboundResponseHandlerSupplier implements StaticMetricsProvider, Su
     @Probe(name = OPERATION_METRIC_INBOUND_RESPONSE_HANDLER_RESPONSES_NORMAL_COUNT, level = MANDATORY)
     long responsesNormal() {
         long result = 0;
-        for (InboundResponseHandler handler : inboundResponseHandlers) {
-            result += handler.responsesNormal.get();
-        }
+//        for (InboundResponseHandler handler : inboundResponseHandlers) {
+//            result += handler.responsesNormal.get();
+//        }
         return result;
     }
 
     @Probe(name = OPERATION_METRIC_INBOUND_RESPONSE_HANDLER_RESPONSES_TIMEOUT_COUNT, level = MANDATORY)
     long responsesTimeout() {
         long result = 0;
-        for (InboundResponseHandler handler : inboundResponseHandlers) {
-            result += handler.responsesTimeout.get();
-        }
+//        for (InboundResponseHandler handler : inboundResponseHandlers) {
+//            result += handler.responsesTimeout.get();
+//        }
         return result;
     }
 
     @Probe(name = OPERATION_METRIC_INBOUND_RESPONSE_HANDLER_RESPONSES_BACKUP_COUNT, level = MANDATORY)
     long responsesBackup() {
         long result = 0;
-        for (InboundResponseHandler handler : inboundResponseHandlers) {
-            result += handler.responsesBackup.get();
-        }
+//        for (InboundResponseHandler handler : inboundResponseHandlers) {
+//            result += handler.responsesBackup.get();
+//        }
         return result;
     }
 
     @Probe(name = OPERATION_METRIC_INBOUND_RESPONSE_HANDLER_RESPONSES_ERROR_COUNT, level = MANDATORY)
     long responsesError() {
         long result = 0;
-        for (InboundResponseHandler handler : inboundResponseHandlers) {
-            result += handler.responsesError.get();
-        }
+//        for (InboundResponseHandler handler : inboundResponseHandlers) {
+//            result += handler.responsesError.get();
+//        }
         return result;
     }
 
     @Probe(name = OPERATION_METRIC_INBOUND_RESPONSE_HANDLER_RESPONSES_MISSING_COUNT, level = MANDATORY)
     long responsesMissing() {
         long result = 0;
-        for (InboundResponseHandler handler : inboundResponseHandlers) {
-            result += handler.responsesMissing.get();
-        }
+//        for (InboundResponseHandler handler : inboundResponseHandlers) {
+//            result += handler.responsesMissing.get();
+//        }
         return result;
     }
 
@@ -228,6 +235,19 @@ public class InboundResponseHandlerSupplier implements StaticMetricsProvider, Su
             return createBackoffIdleStrategy(idleStrategyString);
         } else {
             throw new IllegalStateException("Unrecognized " + property.getName() + " value=" + idleStrategyString);
+        }
+    }
+
+    final class FJResponseHandler implements Consumer<Packet>{
+        private final InboundResponseHandler inboundResponseHandler;
+
+        public FJResponseHandler(InboundResponseHandler inboundResponseHandler) {
+            this.inboundResponseHandler = inboundResponseHandler;
+        }
+
+        @Override
+        public void accept(Packet response) {
+            ForkJoinPool.commonPool().execute(() -> inboundResponseHandler.accept(response));
         }
     }
 

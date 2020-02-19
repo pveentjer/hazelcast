@@ -160,10 +160,10 @@ public class IOBalancer {
                 long min = loadImbalance.minimumLoad;
                 long max = loadImbalance.maximumLoad;
                 if (max == Long.MIN_VALUE) {
-                    logger.finest("There is at most 1 pipeline associated with each thread. "
+                    logger.warning("There is at most 1 pipeline associated with each thread. "
                             + "There is nothing to balance");
                 } else {
-                    logger.finest("No imbalance has been detected. Max. load: " + max + " Min load: " + min + ".");
+                    logger.warning("No imbalance has been detected. Max. load: " + max + " Min load: " + min + ".");
                 }
             }
         }
@@ -203,14 +203,14 @@ public class IOBalancer {
     private void tryMigrate(LoadImbalance loadImbalance) {
         MigratablePipeline pipeline = strategy.findPipelineToMigrate(loadImbalance);
         if (pipeline == null) {
-            logger.finest("I/O imbalance is detected, but no suitable migration candidate is found.");
+            logger.warning("I/O imbalance is detected, but no suitable migration candidate is found.");
             return;
         }
 
         NioThread dstOwner = loadImbalance.dstOwner;
         if (logger.isFinestEnabled()) {
             NioThread srcOwner = loadImbalance.srcOwner;
-            logger.finest("Scheduling migration of pipeline " + pipeline
+            logger.warning("Scheduling migration of pipeline " + pipeline
                     + " from " + srcOwner + " to " + dstOwner);
         }
         pipeline.requestMigration(dstOwner);

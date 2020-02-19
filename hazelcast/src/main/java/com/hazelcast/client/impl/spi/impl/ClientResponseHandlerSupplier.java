@@ -20,14 +20,15 @@ import com.hazelcast.client.impl.clientside.HazelcastClientInstanceImpl;
 import com.hazelcast.client.impl.protocol.ClientMessage;
 import com.hazelcast.client.impl.spi.impl.listener.ClientListenerServiceImpl;
 import com.hazelcast.internal.util.ConcurrencyDetection;
+import com.hazelcast.internal.util.MutableInteger;
 import com.hazelcast.internal.util.concurrent.MPSCQueue;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.spi.properties.HazelcastProperties;
 import com.hazelcast.spi.properties.HazelcastProperty;
-import com.hazelcast.internal.util.MutableInteger;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -36,8 +37,8 @@ import static com.hazelcast.client.impl.protocol.codec.builtin.ErrorsCodec.EXCEP
 import static com.hazelcast.client.properties.ClientProperty.RESPONSE_THREAD_COUNT;
 import static com.hazelcast.client.properties.ClientProperty.RESPONSE_THREAD_DYNAMIC;
 import static com.hazelcast.instance.impl.OutOfMemoryErrorDispatcher.onOutOfMemory;
-import static com.hazelcast.spi.impl.operationservice.impl.InboundResponseHandlerSupplier.getIdleStrategy;
 import static com.hazelcast.internal.util.HashUtil.hashToIndex;
+import static com.hazelcast.spi.impl.operationservice.impl.InboundResponseHandlerSupplier.getIdleStrategy;
 
 /**
  * A {@link Supplier} for {@link Supplier} instance that processes responses for client
@@ -84,11 +85,15 @@ public class ClientResponseHandlerSupplier implements Supplier<Consumer<ClientMe
         this.logger = invocationService.invocationLogger;
 
         HazelcastProperties properties = client.getProperties();
-        int responseThreadCount = properties.getInteger(RESPONSE_THREAD_COUNT);
-        if (responseThreadCount < 0) {
-            throw new IllegalArgumentException(RESPONSE_THREAD_COUNT.getName() + " can't be smaller than 0");
-        }
         this.responseThreadsDynamic = properties.getBoolean(RESPONSE_THREAD_DYNAMIC);
+        int responseThreadCount = properties.getInteger(RESPONSE_THREAD_COUNT);
+        if (responseThreadCount ==-1) {
+            logger.warning("Enabling FJ Response Handler");
+            responseHandler = new FJResponseHandler();
+            this.responseThreads = new ResponseThread[0];
+            return;
+        }
+
         logger.info("Running with " + responseThreadCount + " response threads, dynamic=" + responseThreadsDynamic);
         this.responseThreads = new ResponseThread[responseThreadCount];
         for (int k = 0; k < responseThreads.length; k++) {
@@ -211,6 +216,14 @@ public class ClientResponseHandlerSupplier implements Supplier<Consumer<ClientMe
             if (!started.get() && started.compareAndSet(false, true)) {
                 start();
             }
+        }
+    }
+
+    final class FJResponseHandler implements Consumer<ClientMessage>{
+
+        @Override
+        public void accept(ClientMessage response) {
+            ForkJoinPool.commonPool().execute(() -> process(response));
         }
     }
 
