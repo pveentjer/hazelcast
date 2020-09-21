@@ -25,6 +25,7 @@ import com.hazelcast.instance.ProtocolType;
 import com.hazelcast.instance.impl.Node;
 import com.hazelcast.internal.cluster.impl.MemberHandshake;
 import com.hazelcast.internal.networking.Channel;
+import com.hazelcast.internal.nio.Connection;
 import com.hazelcast.internal.nio.ConnectionLifecycleListener;
 import com.hazelcast.internal.nio.ConnectionType;
 import com.hazelcast.internal.nio.Packet;
@@ -188,15 +189,13 @@ public class MemberHandshakeHandlerTest {
     }
 
     private void assertExpectedAddressesRegistered() {
-        TcpServerConnectionManager.Plane[] planes = connectionManager.planes;
-        try {
+         try {
             for (Address address : expectedAddresses) {
                 boolean found = false;
-                for (TcpServerConnectionManager.Plane plane : planes) {
-                    if (plane.connectionMap.containsKey(address)) {
-                        found = true;
-                        break;
-                    }
+                Group group = connectionManager.groups.get(address);
+                if(group!=null){
+                    found = true;
+                    break;
                 }
 
                 assertTrue("Address " + address + " not found", found);

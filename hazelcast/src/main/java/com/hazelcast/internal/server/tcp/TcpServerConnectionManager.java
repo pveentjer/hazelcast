@@ -45,9 +45,9 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.nio.channels.SocketChannel;
 import java.util.Collection;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -56,7 +56,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static com.hazelcast.internal.metrics.MetricDescriptorConstants.TCP_DISCRIMINATOR_BINDADDRESS;
 import static com.hazelcast.internal.metrics.MetricDescriptorConstants.TCP_DISCRIMINATOR_ENDPOINT;
 import static com.hazelcast.internal.metrics.MetricDescriptorConstants.TCP_METRIC_CLIENT_COUNT;
 import static com.hazelcast.internal.metrics.MetricDescriptorConstants.TCP_METRIC_ENDPOINT_MANAGER_ACCEPTED_SOCKET_COUNT;
@@ -68,11 +67,8 @@ import static com.hazelcast.internal.metrics.MetricDescriptorConstants.TCP_METRI
 import static com.hazelcast.internal.metrics.MetricDescriptorConstants.TCP_METRIC_ENDPOINT_MANAGER_OPENED_COUNT;
 import static com.hazelcast.internal.metrics.MetricDescriptorConstants.TCP_METRIC_TEXT_COUNT;
 import static com.hazelcast.internal.metrics.MetricDescriptorConstants.TCP_PREFIX_CONNECTION;
-import static com.hazelcast.internal.metrics.MetricDescriptorConstants.TCP_TAG_ENDPOINT;
 import static com.hazelcast.internal.metrics.ProbeLevel.MANDATORY;
 import static com.hazelcast.internal.metrics.ProbeUnit.COUNT;
-import static com.hazelcast.internal.nio.ConnectionType.MEMCACHE_CLIENT;
-import static com.hazelcast.internal.nio.ConnectionType.REST_CLIENT;
 import static com.hazelcast.internal.nio.IOUtil.close;
 import static com.hazelcast.internal.nio.IOUtil.setChannelOptions;
 import static com.hazelcast.internal.util.ConcurrencyUtil.getOrPutIfAbsent;
@@ -80,7 +76,6 @@ import static com.hazelcast.internal.util.Preconditions.checkNotNull;
 import static com.hazelcast.internal.util.counters.MwCounter.newMwCounter;
 import static com.hazelcast.spi.properties.ClusterProperty.CHANNEL_COUNT;
 import static java.lang.Math.abs;
-import static java.util.Arrays.stream;
 import static java.util.Collections.newSetFromMap;
 import static java.util.Collections.unmodifiableSet;
 
@@ -91,8 +86,11 @@ public class TcpServerConnectionManager
     private static final int RETRY_NUMBER = 5;
     private static final long DELAY_FACTOR = 100L;
 
-    final Plane[] planes;
-    final int planeCount;
+    final int parallelConnectionsCount;
+    final ConcurrentMap<Address, Group> groups = new ConcurrentHashMap<>();
+    ConcurrentHashMap<AddressIndexPair, TcpServerConnectionErrorHandler> errorHandlers = new ConcurrentHashMap<>();
+
+    final Set<AddressIndexPair> connectionsInProgress =  newSetFromMap(new ConcurrentHashMap<>());
 
     @Probe(name = TCP_METRIC_ENDPOINT_MANAGER_ACTIVE_COUNT, level = MANDATORY)
     final Set<TcpServerConnection> connections = newSetFromMap(new ConcurrentHashMap<>());
@@ -114,8 +112,8 @@ public class TcpServerConnectionManager
     private final TcpServerConnector connector;
     private final TcpServerControl serverControl;
     private final NetworkStatsImpl networkStats;
-    private final ConstructorFunction<Address, TcpServerConnectionErrorHandler> errorHandlerConstructor =
-            endpoint -> new TcpServerConnectionErrorHandler(TcpServerConnectionManager.this, endpoint);
+    private final ConstructorFunction<AddressIndexPair, TcpServerConnectionErrorHandler> errorHandlerConstructor =
+            endpoint -> new TcpServerConnectionErrorHandler(TcpServerConnectionManager.this, endpoint.getAddress());
 
     private final AtomicInteger connectionIdGen = new AtomicInteger();
 
@@ -135,16 +133,12 @@ public class TcpServerConnectionManager
         this.endpointConfig = endpointConfig;
         this.endpointQualifier = endpointConfig != null ? endpointConfig.getQualifier() : null;
         this.channelInitializerFn = channelInitializerFn;
-        this.planeCount = serverContext.properties().getInteger(CHANNEL_COUNT);
+        this.parallelConnectionsCount = serverContext.properties().getInteger(CHANNEL_COUNT);
         this.serverContext = serverContext;
         this.logger = serverContext.getLoggingService().getLogger(TcpServerConnectionManager.class);
         this.connector = new TcpServerConnector(this);
         this.serverControl = new TcpServerControl(this, serverContext, logger, supportedProtocolTypes);
         this.networkStats = endpointQualifier == null ? null : new NetworkStatsImpl();
-        this.planes = new Plane[planeCount];
-        for (int planeIndex = 0; planeIndex < planes.length; planeIndex++) {
-            planes[planeIndex] = new Plane(planeIndex);
-        }
     }
 
     @Override
@@ -172,7 +166,8 @@ public class TcpServerConnectionManager
     }
 
     public ServerConnection get(Address address, int streamId) {
-        return getPlane(streamId).connectionMap.get(address);
+        Group group = groups.get(address);
+        return group == null ? null : group.get(streamId);
     }
 
     @Override
@@ -182,14 +177,18 @@ public class TcpServerConnectionManager
 
     @Override
     public ServerConnection getOrConnect(final Address address, final boolean silent, int streamId) {
-        Plane plane = getPlane(streamId);
-        TcpServerConnection connection = plane.connectionMap.get(address);
-        if (connection == null && server.isLive()) {
-            if (plane.connectionsInProgress.add(address)) {
+        Group group = groups.get(address);
+        TcpServerConnection connection = group.get(streamId);
+        if(connection != null){
+            return connection;
+        }
+
+        if (server.isLive()) {
+            if (connectionsInProgress.add(new AddressIndexPair(address, group.connectionIndex(streamId)))) {
                 if (logger.isFineEnabled()) {
                     logger.fine("Connection to: " + address + " streamId:" + streamId + " is not yet progress");
                 }
-                connector.asyncConnect(address, silent, plane.index);
+                connector.asyncConnect(address, silent, group.connectionIndex(streamId));
             } else {
                 if (logger.isFineEnabled()) {
                     logger.fine("Connection to: " + address + " streamId:" + streamId + " is already in progress");
@@ -200,8 +199,8 @@ public class TcpServerConnectionManager
     }
 
     @Override
-    public synchronized boolean register(final Address remoteAddress, final ServerConnection c, int planeIndex) {
-        Plane plane = planes[planeIndex];
+    public synchronized boolean register(final Address remoteAddress, final ServerConnection c, int connectionIndex) {
+        Group group = groups.get(remoteAddress);
         TcpServerConnection connection = (TcpServerConnection) c;
         try {
             if (remoteAddress.equals(serverContext.getThisAddress())) {
@@ -222,9 +221,9 @@ public class TcpServerConnectionManager
             connection.setRemoteAddress(remoteAddress);
 
             if (!connection.isClient()) {
-                connection.setErrorHandler(getErrorHandler(remoteAddress, plane.index, true));
+                connection.setErrorHandler(getErrorHandler(remoteAddress,connectionIndex, true));
             }
-            plane.connectionMap.put(remoteAddress, connection);
+            group.connections.set(connectionIndex, connection);
 
             serverContext.getEventService().executeEventCallback(new StripedRunnable() {
                 @Override
@@ -239,20 +238,20 @@ public class TcpServerConnectionManager
             });
             return true;
         } finally {
-            plane.connectionsInProgress.remove(remoteAddress);
+            connectionsInProgress.remove(new AddressIndexPair(remoteAddress, connectionIndex));
         }
     }
 
-    public Plane getPlane(int streamId) {
-        int planeIndex;
-        if (streamId == -1 || streamId == Integer.MIN_VALUE) {
-            planeIndex = 0;
-        } else {
-            planeIndex = abs(streamId) % planeCount;
-        }
-
-        return planes[planeIndex];
-    }
+//    public Plane getPlane(int streamId) {
+//        int planeIndex;
+//        if (streamId == -1 || streamId == Integer.MIN_VALUE) {
+//            planeIndex = 0;
+//        } else {
+//            planeIndex = abs(streamId) % parallelConnectionsCount;
+//        }
+//
+//        return planes[planeIndex];
+//    }
 
     private void fireConnectionRemovedEvent(final Connection connection, final Address endPoint) {
         if (server.isLive()) {
@@ -272,15 +271,15 @@ public class TcpServerConnectionManager
 
     public synchronized void reset(boolean cleanListeners) {
         acceptedChannels.forEach(IOUtil::closeResource);
-        for (Plane plane : planes) {
-            plane.connectionMap.values().forEach(conn -> close(conn, "TcpServer is stopping"));
-            plane.connectionMap.clear();
-        }
+//        for (Plane plane : planes) {
+//            plane.connectionMap.values().forEach(conn -> close(conn, "TcpServer is stopping"));
+//            plane.connectionMap.clear();
+//        }
 
         connections.forEach(conn -> close(conn, "TcpServer is stopping"));
         acceptedChannels.clear();
-        stream(planes).forEach(plane -> plane.connectionsInProgress.clear());
-        stream(planes).forEach(plane -> plane.errorHandlers.clear());
+//        stream(planes).forEach(plane -> plane.connectionsInProgress.clear());
+//        stream(planes).forEach(plane -> plane.errorHandlers.clear());
 
         connections.clear();
 
@@ -307,9 +306,8 @@ public class TcpServerConnectionManager
         }
     }
 
-    private TcpServerConnectionErrorHandler getErrorHandler(Address endpoint, int planeIndex, boolean reset) {
-        ConcurrentHashMap<Address, TcpServerConnectionErrorHandler> errorHandlers = planes[planeIndex].errorHandlers;
-        TcpServerConnectionErrorHandler handler = getOrPutIfAbsent(errorHandlers, endpoint, errorHandlerConstructor);
+    private TcpServerConnectionErrorHandler getErrorHandler(Address endpoint, int connectionIndex, boolean reset) {
+        TcpServerConnectionErrorHandler handler = getOrPutIfAbsent(errorHandlers, new AddressIndexPair(endpoint, connectionIndex), errorHandlerConstructor);
         if (reset) {
             handler.reset();
         }
@@ -334,7 +332,7 @@ public class TcpServerConnectionManager
     }
 
     void failedConnection(Address address, int planeIndex, Throwable t, boolean silent) {
-        planes[planeIndex].connectionsInProgress.remove(address);
+        //planes[planeIndex].connectionsInProgress.remove(address);
         serverContext.onFailedConnection(address);
         if (!silent) {
             getErrorHandler(address, planeIndex, false).onError(t);
@@ -405,18 +403,18 @@ public class TcpServerConnectionManager
     @Probe(name = TCP_METRIC_ENDPOINT_MANAGER_IN_PROGRESS_COUNT)
     private int connectionsInProgress() {
         int c = 0;
-        for (Plane plane : planes) {
-            c += plane.connectionsInProgress.size();
-        }
+//        for (Plane plane : planes) {
+//            c += plane.connectionsInProgress.size();
+//        }
         return c;
     }
 
     @Probe(name = TCP_METRIC_ENDPOINT_MANAGER_COUNT, level = MANDATORY)
     public int connectionCount() {
         int c = 0;
-        for (Plane plane : planes) {
-            c += plane.connectionMap.size();
-        }
+//        for (Plane plane : planes) {
+//            c += plane.connectionMap.size();
+//        }
         return c;
     }
 
@@ -441,26 +439,26 @@ public class TcpServerConnectionManager
 
         int clientCount = 0;
         int textCount = 0;
-        for (Plane plane : planes) {
-            for (Map.Entry<Address, TcpServerConnection> entry : plane.connectionMap.entrySet()) {
-                Address bindAddress = entry.getKey();
-                TcpServerConnection connection = entry.getValue();
-                if (connection.isClient()) {
-                    clientCount++;
-                    String connectionType = connection.getConnectionType();
-                    if (REST_CLIENT.equals(connectionType) || MEMCACHE_CLIENT.equals(connectionType)) {
-                        textCount++;
-                    }
-                }
-
-                if (connection.getRemoteAddress() != null) {
-                    context.collect(rootDescriptor
-                            .copy()
-                            .withDiscriminator(TCP_DISCRIMINATOR_BINDADDRESS, bindAddress.toString())
-                            .withTag(TCP_TAG_ENDPOINT, connection.getRemoteAddress().toString()), connection);
-                }
-            }
-        }
+//        for (Plane plane : planes) {
+//            for (Map.Entry<Address, TcpServerConnection> entry : plane.connectionMap.entrySet()) {
+//                Address bindAddress = entry.getKey();
+//                TcpServerConnection connection = entry.getValue();
+//                if (connection.isClient()) {
+//                    clientCount++;
+//                    String connectionType = connection.getConnectionType();
+//                    if (REST_CLIENT.equals(connectionType) || MEMCACHE_CLIENT.equals(connectionType)) {
+//                        textCount++;
+//                    }
+//                }
+//
+//                if (connection.getRemoteAddress() != null) {
+//                    context.collect(rootDescriptor
+//                            .copy()
+//                            .withDiscriminator(TCP_DISCRIMINATOR_BINDADDRESS, bindAddress.toString())
+//                            .withTag(TCP_TAG_ENDPOINT, connection.getRemoteAddress().toString()), connection);
+//                }
+//            }
+//        }
 
         if (endpointConfig == null) {
             context.collect(rootDescriptor.copy(), TCP_METRIC_CLIENT_COUNT, MANDATORY, COUNT, clientCount);
@@ -468,16 +466,7 @@ public class TcpServerConnectionManager
         }
     }
 
-    static class Plane {
-        final ConcurrentHashMap<Address, TcpServerConnection> connectionMap = new ConcurrentHashMap<>(100);
-        final Set<Address> connectionsInProgress = newSetFromMap(new ConcurrentHashMap<>());
-        final ConcurrentHashMap<Address, TcpServerConnectionErrorHandler> errorHandlers = new ConcurrentHashMap<>(100);
-        final int index;
 
-        Plane(int index) {
-            this.index = index;
-        }
-    }
 
     private final class SendTask implements Runnable {
         private final Packet packet;
@@ -516,20 +505,20 @@ public class TcpServerConnectionManager
             }
 
             Address remoteAddress = connection.getRemoteAddress();
-            if (remoteAddress != null) {
-                int planeIndex = connection.getPlaneIndex();
-                if (planeIndex > -1) {
-                    Plane plane = planes[connection.getPlaneIndex()];
-                    plane.connectionsInProgress.remove(remoteAddress);
-                    plane.connectionMap.remove(remoteAddress);
-                    fireConnectionRemovedEvent(connection, remoteAddress);
-                } //todo: could it be that we have a memory leak by not removing something from the plane.
-            }
+//            if (remoteAddress != null) {
+//                int planeIndex = connection.getPlaneIndex();
+//                if (planeIndex > -1) {
+//                    Plane plane = planes[connection.getPlaneIndex()];
+//                    plane.connectionsInProgress.remove(remoteAddress);
+//                    plane.connectionMap.remove(remoteAddress);
+//                    fireConnectionRemovedEvent(connection, remoteAddress);
+//                } //todo: could it be that we have a memory leak by not removing something from the plane.
+//            }
 
             if (cause != null) {
                 serverContext.onFailedConnection(remoteAddress);
                 if (!silent) {
-                    getErrorHandler(remoteAddress, connection.getPlaneIndex(), false).onError(cause);
+                    getErrorHandler(remoteAddress, connection.setConnectionIndex(), false).onError(cause);
                 }
             }
         }

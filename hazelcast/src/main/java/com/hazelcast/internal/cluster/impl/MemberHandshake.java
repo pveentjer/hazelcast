@@ -58,8 +58,8 @@ public class MemberHandshake
     public static final byte SCHEMA_VERSION_1 = (byte) 1;
     public static final byte SCHEMA_VERSION_2 = (byte) 2;
 
-    public static final String OPTION_PLANE_COUNT = "planeCount";
-    public static final String OPTION_PLANE_INDEX = "planeIndex";
+    public static final String CONNECTION_COUNT = "connectionCount";
+    public static final String CONNECTION_INDEX = "connectionIndex";
 
     private byte schemaVersion;
     private Map<ProtocolType, Collection<Address>> localAddresses;
@@ -93,12 +93,12 @@ public class MemberHandshake
         return value == null ? defaultValue : Integer.parseInt(value);
     }
 
-    public int getPlaneCount() {
-        return getIntOption(OPTION_PLANE_COUNT, 1);
+    public int getConnectionCount() {
+        return getIntOption(CONNECTION_COUNT, 1);
     }
 
-    public int getPlaneIndex() {
-        return getIntOption(OPTION_PLANE_INDEX, 0);
+    public int getConnectionIndex() {
+        return getIntOption(CONNECTION_INDEX, 0);
     }
 
     byte getSchemaVersion() {

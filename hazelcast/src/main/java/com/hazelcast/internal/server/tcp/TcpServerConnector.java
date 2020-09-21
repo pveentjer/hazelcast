@@ -69,12 +69,12 @@ class TcpServerConnector {
         HazelcastProperties properties = serverContext.properties();
         this.socketClientBind = properties.getBoolean(SOCKET_CLIENT_BIND);
         this.socketClientBindAny = properties.getBoolean(SOCKET_CLIENT_BIND_ANY);
-        this.planeCount = connectionManager.planeCount;
+        this.planeCount = connectionManager.parallelConnectionsCount;
     }
 
-    void asyncConnect(Address address, boolean silent, int planeIndex) {
+    void asyncConnect(Address address, boolean silent, int connectionIndex) {
         serverContext.shouldConnectTo(address);
-        serverContext.executeAsync(new ConnectTask(address, silent, planeIndex));
+        serverContext.executeAsync(new ConnectTask(address, silent, connectionIndex));
     }
 
     private boolean useAnyOutboundPort() {
@@ -99,12 +99,12 @@ class TcpServerConnector {
     private final class ConnectTask implements Runnable {
         private final Address remoteAddress;
         private final boolean silent;
-        private final int planeIndex;
+        private final int connectionIndex;
 
-        ConnectTask(Address remoteAddress, boolean silent, int planeIndex) {
+        ConnectTask(Address remoteAddress, boolean silent, int connectionIndex) {
             this.remoteAddress = remoteAddress;
             this.silent = silent;
-            this.planeIndex = planeIndex;
+            this.connectionIndex = connectionIndex;
         }
 
         @Override
@@ -142,7 +142,7 @@ class TcpServerConnector {
                 }
             } catch (Throwable e) {
                 logger.finest(e);
-                connectionManager.failedConnection(remoteAddress, planeIndex, e, silent);
+                connectionManager.failedConnection(remoteAddress, connectionIndex, e, silent);
             }
         }
 
@@ -200,7 +200,7 @@ class TcpServerConnector {
 
                     connection = connectionManager.newConnection(channel, remoteAddress);
                     new SendMemberHandshakeTask(logger, serverContext, connection,
-                            remoteAddress, true, planeIndex, planeCount).run();
+                            remoteAddress, true, connectionIndex, planeCount).run();
                 } catch (Exception e) {
                     closeConnection(connection, e);
                     closeSocket(socketChannel);

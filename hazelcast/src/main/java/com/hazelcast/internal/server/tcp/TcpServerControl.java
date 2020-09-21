@@ -48,7 +48,7 @@ public final class TcpServerControl {
     private final boolean spoofingChecks;
     private final boolean unifiedEndpointManager;
     private final Set<ProtocolType> supportedProtocolTypes;
-    private final int expectedPlaneCount;
+    private final int maxConnectionCount;
 
     public TcpServerControl(TcpServerConnectionManager connectionManager,
                             ServerContext serverContext,
@@ -60,7 +60,7 @@ public final class TcpServerControl {
         this.spoofingChecks = serverContext.properties().getBoolean(BIND_SPOOFING_CHECKS);
         this.supportedProtocolTypes = supportedProtocolTypes;
         this.unifiedEndpointManager = connectionManager.getEndpointQualifier() == null;
-        this.expectedPlaneCount = serverContext.properties().getInteger(CHANNEL_COUNT);
+        this.maxConnectionCount = serverContext.properties().getInteger(CHANNEL_COUNT);
     }
 
     public void process(Packet packet) {
@@ -73,15 +73,16 @@ public final class TcpServerControl {
             return;
         }
 
-        if (handshake.getPlaneCount() != expectedPlaneCount) {
-            connection.close("The connection handshake has incorrect number of planes. "
-                    + "Expected " + expectedPlaneCount + " found " + handshake.getPlaneCount(), null);
+        //todo: we should go to the lowest number of connections.
+        if (handshake.getConnectionCount() != maxConnectionCount) {
+            connection.close("The connection handshake has incorrect number of connections. "
+                    + "Expected " + maxConnectionCount + " found " + handshake.getConnectionCount(), null);
             return;
         }
 
         // before we register the connection on the plane, we make sure the plane index is set on the connection
         // so that we can safely remove the connection from the plane.
-        connection.setPlaneIndex(handshake.getPlaneIndex());
+        connection.setConnectionIndex(handshake.getConnectionIndex());
         process(connection, handshake);
     }
 
@@ -131,7 +132,7 @@ public final class TcpServerControl {
      * Performs the processing of the handshake (sets the endpoint on the Connection, registers the connection)
      * without any spoofing or other validation checks.
      * When executed on the connection initiator side, the connection is registered on the remote address
-     * with which it was registered in {@link TcpServerConnectionManager#connectionsInProgressArray},
+     * with which it was registered in {@link TcpServerConnectionManager#connectionsInProgress},
      * ignoring the {@code remoteEndpoint} argument.
      *
      * @param connection           the connection that send the handshake
@@ -146,7 +147,7 @@ public final class TcpServerControl {
                                        Collection<Address> remoteAddressAliases,
                                        MemberHandshake handshake) {
         final Address remoteAddress = new Address(connection.getRemoteSocketAddress());
-        if (connectionManager.planes[handshake.getPlaneIndex()].connectionsInProgress.contains(remoteAddress)) {
+        if (connectionManager.connectionsInProgress.contains(new AddressIndexPair(remoteAddress, handshake.getConnectionIndex()))) {
             // this is the connection initiator side --> register the connection under the address that was requested
             remoteEndpoint = remoteAddress;
         }
@@ -162,37 +163,49 @@ public final class TcpServerControl {
         serverContext.onSuccessfulConnection(remoteEndpoint);
         if (handshake.isReply()) {
             new SendMemberHandshakeTask(logger, serverContext, connection, remoteEndpoint, false,
-                    handshake.getPlaneIndex(), handshake.getPlaneCount()).run();
+                    handshake.getConnectionIndex(), handshake.getConnectionCount()).run();
         }
 
-        if (checkAlreadyConnected(connection, remoteEndpoint, handshake.getPlaneIndex())) {
+        if (checkAlreadyConnected(connection, remoteEndpoint, handshake.getConnectionIndex())) {
             return;
         }
 
         if (logger.isLoggable(Level.FINEST)) {
             logger.finest("Registering connection " + connection + " to address " + remoteEndpoint
-                    + " planeIndex:" + handshake.getPlaneIndex());
+                    + " connectionIndex:" + handshake.getConnectionIndex());
         }
-        boolean registered = connectionManager.register(remoteEndpoint, connection, handshake.getPlaneIndex());
+
+        boolean registered = connectionManager.register(remoteEndpoint, connection, handshake.getConnectionIndex());
 
         if (remoteAddressAliases != null && registered) {
             for (Address remoteAddressAlias : remoteAddressAliases) {
                 if (logger.isLoggable(Level.FINEST)) {
                     logger.finest("Registering connection " + connection + " to address alias " + remoteAddressAlias
-                            + " planeIndex:" + handshake.getPlaneIndex());
+                            + " connectionIndex:" + handshake.getConnectionIndex());
                 }
-                connectionManager.planes[handshake.getPlaneIndex()].connectionMap.putIfAbsent(remoteAddressAlias, connection);
+                //connectionManager.planes[handshake.getConnectionIndex()].connectionMap.putIfAbsent(remoteAddressAlias, connection);
+                Group group = connectionManager.groups.get(remoteAddressAlias);
+                if (group == null) {
+                    group = new Group(Math.min(maxConnectionCount, handshake.getConnectionCount()));
+                    Group prev = connectionManager.groups.putIfAbsent(remoteAddressAlias, group);
+                    group = prev == null ? group : prev;
+                }
+                group.connections.set(handshake.getConnectionIndex(), connection);
             }
         }
     }
 
-    private boolean checkAlreadyConnected(TcpServerConnection connection, Address remoteEndPoint, int planeIndex) {
-        Connection existingConnection = connectionManager.planes[planeIndex].connectionMap.get(remoteEndPoint);
+    private boolean checkAlreadyConnected(TcpServerConnection connection, Address remoteEndPoint, int connectionIndex) {
+        Group group = connectionManager.groups.get(remoteEndPoint);
+        if (group == null) {
+            return false;
+        }
+        Connection existingConnection = group.connections.get(connectionIndex);
         if (existingConnection != null && existingConnection.isAlive()) {
             if (existingConnection != connection) {
                 if (logger.isFinestEnabled()) {
                     logger.finest(existingConnection + " is already bound to " + remoteEndPoint
-                            + ", new one is " + connection + " planeIndex:" + planeIndex);
+                            + ", new one is " + connection + " connectionIndex:" + connectionIndex);
                 }
                 // todo probably it's already in activeConnections (ConnectTask , AcceptorIOThread)
                 connectionManager.connections.add(connection);
