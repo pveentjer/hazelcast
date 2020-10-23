@@ -51,6 +51,8 @@ public abstract class OperationRunner {
 
     public abstract void run(Packet packet) throws Exception;
 
+    public abstract Operation toOperation(Packet packet) throws Exception;
+
     public abstract void run(Runnable task);
 
     public abstract void run(Operation task);

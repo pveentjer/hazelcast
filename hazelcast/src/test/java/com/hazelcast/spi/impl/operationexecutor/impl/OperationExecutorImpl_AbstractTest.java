@@ -223,6 +223,11 @@ public abstract class OperationExecutorImpl_AbstractTest extends HazelcastTestSu
         }
 
         @Override
+        public Operation toOperation(Packet packet) throws Exception {
+            return null;
+        }
+
+        @Override
         public void run(Runnable task) {
             tasks.add(task);
             task.run();

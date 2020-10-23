@@ -152,7 +152,7 @@ public class DefaultNodeContext implements NodeContext {
         NettyServer nettyServer = null;
         if(System.getProperty("netty","true").equals("true")) {
             System.out.println("Netty enabled!!");
-            nettyServer = new NettyServer(node.getThisAddress(), node.nodeEngine.getPacketDispatcher());
+            nettyServer = new NettyServer(node.getThisAddress(), node.nodeEngine.getOperationService());
         }else{
             System.out.println("Netty disabled!!!");
         }

@@ -3,6 +3,7 @@ package com.hazelcast.internal.netty;
 import com.hazelcast.cluster.Address;
 import com.hazelcast.internal.nio.Packet;
 import com.hazelcast.internal.server.ServerConnectionManager;
+import com.hazelcast.spi.impl.operationservice.OperationService;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -29,21 +30,21 @@ import java.util.function.Consumer;
 public class NettyServer {
 
     private final Address thisAddress;
-    private final Consumer<Packet> packetDispatcher;
+    private final OperationService operationService;
     private MultithreadEventLoopGroup bossGroup;
     private MultithreadEventLoopGroup workerGroup;
     private ServerBootstrap serverBootstrap;
     private Bootstrap clientBootstrap;
     //   private NioEventLoopGroup clientEventLoopGroup;
     private ServerConnectionManager serverConnectionManager;
-    private int threadCount = 8;
-    private Mode mode = Mode.IO_URING;
+    private int threadCount = 40;
+    private Mode mode = Mode.EPOLL;
 
     enum Mode{NIO,EPOLL,IO_URING}
 
-    public NettyServer(Address thisAddress, Consumer<Packet> packetDispatcher) {
+    public NettyServer(Address thisAddress, OperationService operationService) {
         this.thisAddress = thisAddress;
-        this.packetDispatcher = packetDispatcher;
+        this.operationService = operationService;
         System.out.println("Mode:"+mode);
     }
 
@@ -69,7 +70,7 @@ public class NettyServer {
                                 new LinkDecoder(thisAddress, serverConnectionManager),
                                 new PacketEncoder(),
                                 new PacketDecoder(thisAddress),
-                                new OperationHandler(packetDispatcher));
+                                new OperationHandler(operationService));
                     }
                 })
                 .childOption(ChannelOption.SO_RCVBUF, 128 * 1024)
@@ -78,8 +79,6 @@ public class NettyServer {
                 .childOption(ChannelOption.SO_KEEPALIVE, true);
         serverBootstrap.bind(inetPort);
 
-
-        // clientEventLoopGroup = new NioEventLoopGroup();
         clientBootstrap = new Bootstrap();
 
         clientBootstrap.group(workerGroup);
@@ -90,7 +89,7 @@ public class NettyServer {
                         new LinkEncoder(thisAddress),
                         new PacketEncoder(),
                         new PacketDecoder(thisAddress),
-                        new OperationHandler(packetDispatcher));
+                        new OperationHandler(operationService));
             }
         })      .option(ChannelOption.SO_RCVBUF, 128 * 1024)
                 .option(ChannelOption.SO_SNDBUF, 128 * 1024)

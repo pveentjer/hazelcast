@@ -16,15 +16,15 @@
 
 package com.hazelcast.spi.impl.operationservice.impl;
 
-import com.hazelcast.internal.serialization.InternalSerializationService;
-import com.hazelcast.logging.ILogger;
 import com.hazelcast.cluster.Address;
-import com.hazelcast.internal.server.ServerConnectionManager;
 import com.hazelcast.internal.nio.Packet;
 import com.hazelcast.internal.serialization.Data;
+import com.hazelcast.internal.serialization.InternalSerializationService;
+import com.hazelcast.internal.server.ServerConnectionManager;
+import com.hazelcast.logging.ILogger;
+import com.hazelcast.spi.impl.SpiDataSerializerHook;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.OperationResponseHandler;
-import com.hazelcast.spi.impl.SpiDataSerializerHook;
 import com.hazelcast.spi.impl.operationservice.impl.responses.CallTimeoutResponse;
 import com.hazelcast.spi.impl.operationservice.impl.responses.ErrorResponse;
 import com.hazelcast.spi.impl.operationservice.impl.responses.NormalResponse;
@@ -32,8 +32,6 @@ import com.hazelcast.spi.impl.operationservice.impl.responses.Response;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-import static com.hazelcast.internal.serialization.impl.SerializationConstants.CONSTANT_TYPE_DATA_SERIALIZABLE;
-import static com.hazelcast.internal.serialization.impl.SerializationConstants.CONSTANT_TYPE_NULL;
 import static com.hazelcast.internal.nio.Bits.INT_SIZE_IN_BYTES;
 import static com.hazelcast.internal.nio.Bits.writeInt;
 import static com.hazelcast.internal.nio.Bits.writeIntB;
@@ -41,6 +39,9 @@ import static com.hazelcast.internal.nio.Bits.writeLong;
 import static com.hazelcast.internal.nio.Packet.FLAG_OP_RESPONSE;
 import static com.hazelcast.internal.nio.Packet.FLAG_URGENT;
 import static com.hazelcast.internal.nio.Packet.Type.OPERATION;
+import static com.hazelcast.internal.serialization.impl.SerializationConstants.CONSTANT_TYPE_DATA_SERIALIZABLE;
+import static com.hazelcast.internal.serialization.impl.SerializationConstants.CONSTANT_TYPE_NULL;
+import static com.hazelcast.internal.util.Preconditions.checkNotNull;
 import static com.hazelcast.spi.impl.SpiDataSerializerHook.BACKUP_ACK_RESPONSE;
 import static com.hazelcast.spi.impl.SpiDataSerializerHook.NORMAL_RESPONSE;
 import static com.hazelcast.spi.impl.operationservice.impl.responses.BackupAckResponse.BACKUP_RESPONSE_SIZE_IN_BYTES;
@@ -55,7 +56,6 @@ import static com.hazelcast.spi.impl.operationservice.impl.responses.Response.OF
 import static com.hazelcast.spi.impl.operationservice.impl.responses.Response.OFFSET_TYPE_FACTORY_ID;
 import static com.hazelcast.spi.impl.operationservice.impl.responses.Response.OFFSET_TYPE_ID;
 import static com.hazelcast.spi.impl.operationservice.impl.responses.Response.OFFSET_URGENT;
-import static com.hazelcast.internal.util.Preconditions.checkNotNull;
 import static java.nio.ByteOrder.BIG_ENDIAN;
 
 /**
@@ -106,6 +106,25 @@ public final class OutboundResponseHandler implements OperationResponseHandler {
         }
     }
 
+    public Packet toResponse(Operation operation, Object obj) {
+        if (obj == null) {
+            return toNormalResponsePacket(operation.getCallId(), (byte) 0, operation.isUrgent(), null);
+        } else if (obj.getClass() == NormalResponse.class) {
+            NormalResponse response = (NormalResponse) obj;
+            return toNormalResponsePacket(operation.getCallId(), (byte) response.getBackupAcks(), operation.isUrgent(), response.getValue());
+        } else if (obj.getClass() == ErrorResponse.class || obj.getClass() == CallTimeoutResponse.class) {
+            Response response = (Response) obj;
+            byte[] bytes = serializationService.toBytes(obj);
+            return newResponsePacket(bytes, response.isUrgent());
+        } else if (obj instanceof Throwable) {
+            ErrorResponse response = new ErrorResponse((Throwable) obj, operation.getCallId(), operation.isUrgent());
+            byte[] bytes = serializationService.toBytes(response);
+            return newResponsePacket(bytes, response.isUrgent());
+        } else {
+            return toNormalResponsePacket(operation.getCallId(), 0, operation.isUrgent(), obj);
+        }
+    }
+
     public boolean send(ServerConnectionManager connectionManager, Address target, Response response) {
         checkNotNull(target, "Target is required!");
 
@@ -129,7 +148,7 @@ public final class OutboundResponseHandler implements OperationResponseHandler {
         return transmit(target, packet, connectionManager);
     }
 
-    Packet toNormalResponsePacket(long callId, int backupAcks, boolean urgent, Object value) {
+    public Packet toNormalResponsePacket(long callId, int backupAcks, boolean urgent, Object value) {
         byte[] bytes;
         boolean isData = value instanceof Data;
         if (isData) {
@@ -216,7 +235,7 @@ public final class OutboundResponseHandler implements OperationResponseHandler {
         // a bottleneck.
         // The order of operations is respected, but the order of responses is not respected, e.g.
         // for inbound responses we toss responses in an arbitrary response thread.
-        return connectionManager.transmit(packet, target,  ThreadLocalRandom.current().nextInt());
+        return connectionManager.transmit(packet, target, ThreadLocalRandom.current().nextInt());
     }
 
     private void checkTarget(Address target) {

@@ -422,6 +422,20 @@ class OperationRunnerImpl extends OperationRunner implements StaticMetricsProvid
         op.logError(e);
     }
 
+
+    @Override
+    public Operation toOperation(Packet packet) {
+        ServerConnection connection = packet.getConn();
+        Address caller = connection.getRemoteAddress();
+        Object object = nodeEngine.toObject(packet);
+        Operation op = (Operation) object;
+        op.setNodeEngine(nodeEngine);
+        setCallerAddress(op, caller);
+        setConnection(op, connection);
+        setCallerUuidIfNotSet(caller, op);
+        return op;
+    }
+
     @Override
     public void run(Packet packet) throws Exception {
         long startNanos = System.nanoTime();
