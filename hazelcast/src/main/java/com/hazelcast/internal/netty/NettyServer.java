@@ -37,8 +37,8 @@ public class NettyServer {
     private Bootstrap clientBootstrap;
     //   private NioEventLoopGroup clientEventLoopGroup;
     private ServerConnectionManager serverConnectionManager;
-    private int threadCount = 40;
-    private Mode mode = Mode.EPOLL;
+    private int threadCount = 36;
+    private Mode mode = Mode.IO_URING;
 
     enum Mode{NIO,EPOLL,IO_URING}
 
