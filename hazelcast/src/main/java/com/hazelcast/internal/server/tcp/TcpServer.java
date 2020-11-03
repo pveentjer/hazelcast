@@ -26,7 +26,7 @@ import com.hazelcast.internal.metrics.LongProbeFunction;
 import com.hazelcast.internal.metrics.MetricDescriptor;
 import com.hazelcast.internal.metrics.MetricsCollectionContext;
 import com.hazelcast.internal.metrics.MetricsRegistry;
-import com.hazelcast.internal.netty.NettyServer;
+import com.hazelcast.internal.netty.CoreThreadServer;
 import com.hazelcast.internal.networking.ChannelInitializer;
 import com.hazelcast.internal.networking.Networking;
 import com.hazelcast.internal.nio.ConnectionListener;
@@ -72,7 +72,7 @@ public final class TcpServer implements Server {
     private final ILogger logger;
     private final Networking networking;
     private final MetricsRegistry metricsRegistry;
-    private final NettyServer nettyServer;
+    private final CoreThreadServer nettyServer;
     // accessed only in synchronized methods
     private ScheduledFuture refreshStatsFuture;
     private final RefreshNetworkStatsTask refreshStatsTask;
@@ -92,7 +92,7 @@ public final class TcpServer implements Server {
                      ServerSocketRegistry registry,
                      MetricsRegistry metricsRegistry,
                      Networking networking,
-                     NettyServer nettyServer,
+                     CoreThreadServer nettyServer,
                      Function<EndpointQualifier, ChannelInitializer> channelInitializerFn) {
         this.context = context;
         this.networking = networking;

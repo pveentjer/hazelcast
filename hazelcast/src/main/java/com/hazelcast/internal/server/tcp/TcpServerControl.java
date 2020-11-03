@@ -21,7 +21,7 @@ import com.hazelcast.instance.EndpointQualifier;
 import com.hazelcast.instance.ProtocolType;
 import com.hazelcast.internal.cluster.impl.MemberHandshake;
 import com.hazelcast.internal.netty.Link;
-import com.hazelcast.internal.netty.NettyServer;
+import com.hazelcast.internal.netty.CoreThreadServer;
 import com.hazelcast.internal.nio.Connection;
 import com.hazelcast.internal.nio.ConnectionType;
 import com.hazelcast.internal.nio.Packet;
@@ -52,14 +52,14 @@ public final class TcpServerControl {
     private final boolean unifiedEndpointManager;
     private final Set<ProtocolType> supportedProtocolTypes;
     private final int expectedPlaneCount;
-    private final NettyServer nettyServer;
+    private final CoreThreadServer nettyServer;
     private final Address thisAddress;
 
     public TcpServerControl(TcpServerConnectionManager connectionManager,
                             ServerContext serverContext,
                             ILogger logger,
                             Set<ProtocolType> supportedProtocolTypes,
-                            NettyServer nettyServer,
+                            CoreThreadServer nettyServer,
                             Address thisAddress) {
         this.connectionManager = connectionManager;
         this.serverContext = serverContext;

@@ -1,8 +1,9 @@
 package com.hazelcast.internal.netty;
 
 import com.hazelcast.cluster.Address;
-import com.hazelcast.internal.nio.Packet;
 import com.hazelcast.internal.server.ServerConnectionManager;
+import com.hazelcast.internal.util.ThreadAffinity;
+import com.hazelcast.internal.util.executor.HazelcastManagedThread;
 import com.hazelcast.spi.impl.operationservice.OperationService;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
@@ -25,27 +26,54 @@ import io.netty.channel.uring.IOUringSocketChannel;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.ExecutionException;
-import java.util.function.Consumer;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
-public class NettyServer {
+import static com.hazelcast.internal.util.ThreadAffinity.newSystemThreadAffinity;
+
+public class CoreThreadServer {
+
+    private int BUFFER_SIZE = 128 * 1024;
 
     private final Address thisAddress;
     private final OperationService operationService;
     private MultithreadEventLoopGroup bossGroup;
     private MultithreadEventLoopGroup workerGroup;
-    private ServerBootstrap serverBootstrap;
     private Bootstrap clientBootstrap;
-    //   private NioEventLoopGroup clientEventLoopGroup;
     private ServerConnectionManager serverConnectionManager;
-    private int threadCount = 36;
-    private Mode mode = Mode.IO_URING;
+    private final int threadCount;
+    private final Mode mode;
+    private final ThreadAffinity threadAffinity;
 
-    enum Mode{NIO,EPOLL,IO_URING}
+    enum Mode {NIO, EPOLL, IO_URING}
 
-    public NettyServer(Address thisAddress, OperationService operationService) {
+    public CoreThreadServer(Address thisAddress, OperationService operationService) {
         this.thisAddress = thisAddress;
         this.operationService = operationService;
-        System.out.println("Mode:"+mode);
+
+        this.threadAffinity = newSystemThreadAffinity("affinity");
+        if (threadAffinity.isEnabled()) {
+            this.threadCount = threadAffinity.getThreadCount();
+        } else {
+            this.threadCount = Integer.parseInt(System.getProperty("threads", "" + Runtime.getRuntime().availableProcessors()));
+        }
+
+        String modeString = System.getProperty("mode", "nio");
+        switch (modeString) {
+            case "nio":
+                mode = Mode.NIO;
+                break;
+            case "epoll":
+                mode = Mode.EPOLL;
+                break;
+            case "io_uring":
+                mode = Mode.IO_URING;
+                break;
+            default:
+                throw new RuntimeException("Unrecognized mode:" + modeString);
+        }
+
+        System.out.println("Mode:" + mode + " threadCount:" + threadCount+" thread affinity:"+threadAffinity);
     }
 
     public void setServerConnectionManager(ServerConnectionManager serverConnectionManager) {
@@ -53,14 +81,13 @@ public class NettyServer {
     }
 
     public void start() {
-        System.out.println("Started ");
         int inetPort = thisAddress.getPort() + 10000;
-        System.out.println("Started netty server on " + (thisAddress.getHost() + " " + inetPort));
+        System.out.println("Started ThreadPerCoreServer on " + (thisAddress.getHost() + " " + inetPort));
 
         bossGroup = newBossGroup();
         workerGroup = newWorkerGroup();
 
-        serverBootstrap = new ServerBootstrap();
+        ServerBootstrap serverBootstrap = new ServerBootstrap();
         serverBootstrap.group(bossGroup, workerGroup)
                 .channel(getServerSocketChannelClass())
                 .childHandler(new ChannelInitializer<Channel>() {
@@ -73,8 +100,8 @@ public class NettyServer {
                                 new OperationHandler(operationService));
                     }
                 })
-                .childOption(ChannelOption.SO_RCVBUF, 128 * 1024)
-                .childOption(ChannelOption.SO_SNDBUF, 128 * 1024)
+                .childOption(ChannelOption.SO_RCVBUF, BUFFER_SIZE)
+                .childOption(ChannelOption.SO_SNDBUF, BUFFER_SIZE)
                 .childOption(ChannelOption.TCP_NODELAY, true)
                 .childOption(ChannelOption.SO_KEEPALIVE, true);
         serverBootstrap.bind(inetPort);
@@ -91,14 +118,13 @@ public class NettyServer {
                         new PacketDecoder(thisAddress),
                         new OperationHandler(operationService));
             }
-        })      .option(ChannelOption.SO_RCVBUF, 128 * 1024)
-                .option(ChannelOption.SO_SNDBUF, 128 * 1024)
+        }).option(ChannelOption.SO_RCVBUF, BUFFER_SIZE)
+                .option(ChannelOption.SO_SNDBUF, BUFFER_SIZE)
                 .option(ChannelOption.TCP_NODELAY, true);
     }
 
-    @NotNull
-    public Class<? extends ServerSocketChannel> getServerSocketChannelClass() {
-        switch (mode){
+    private Class<? extends ServerSocketChannel> getServerSocketChannelClass() {
+        switch (mode) {
             case NIO:
                 return NioServerSocketChannel.class;
             case EPOLL:
@@ -110,9 +136,8 @@ public class NettyServer {
         }
     }
 
-    @NotNull
-    public Class<? extends SocketChannel> getChannelClass() {
-        switch (mode){
+    private Class<? extends SocketChannel> getChannelClass() {
+        switch (mode) {
             case NIO:
                 return NioSocketChannel.class;
             case EPOLL:
@@ -122,32 +147,29 @@ public class NettyServer {
             default:
                 throw new RuntimeException();
         }
-
     }
 
-    @NotNull
-    public MultithreadEventLoopGroup newWorkerGroup() {
-        switch (mode){
+    private MultithreadEventLoopGroup newWorkerGroup() {
+        switch (mode) {
             case NIO:
-                return new NioEventLoopGroup(threadCount);
+                return new NioEventLoopGroup(threadCount, new CoreThreadFactory(threadAffinity));
             case EPOLL:
-                return  new EpollEventLoopGroup(threadCount);
+                return new EpollEventLoopGroup(threadCount, new CoreThreadFactory(threadAffinity));
             case IO_URING:
-                return  new IOUringEventLoopGroup(threadCount);
+                return new IOUringEventLoopGroup(threadCount, new CoreThreadFactory(threadAffinity));
             default:
                 throw new RuntimeException();
         }
     }
 
-    @NotNull
-    public MultithreadEventLoopGroup newBossGroup() {
-        switch (mode){
+    private MultithreadEventLoopGroup newBossGroup() {
+        switch (mode) {
             case NIO:
                 return new NioEventLoopGroup(threadCount);
             case EPOLL:
-                return  new EpollEventLoopGroup(threadCount);
+                return new EpollEventLoopGroup(threadCount);
             case IO_URING:
-                return  new IOUringEventLoopGroup(threadCount);
+                return new IOUringEventLoopGroup(threadCount);
             default:
                 throw new RuntimeException();
         }
@@ -155,14 +177,12 @@ public class NettyServer {
 
     public Channel connect(Address address) {
         if (address == null) {
-            throw new RuntimeException("Address can't be null");
+            throw new NullPointerException("Address can't be null");
         }
         ChannelFuture future = clientBootstrap.connect(address.getHost(), address.getPort() + 10000);
         try {
             future.get();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        } catch (ExecutionException e) {
+        } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }
         return future.channel();
@@ -178,4 +198,33 @@ public class NettyServer {
         }
     }
 
+    private static class CoreThreadFactory implements ThreadFactory {
+        private final AtomicInteger counter = new AtomicInteger();
+        private final ThreadAffinity threadAffinity;
+
+        public CoreThreadFactory(ThreadAffinity threadAffinity) {
+            this.threadAffinity = threadAffinity;
+        }
+
+        @Override
+        public Thread newThread(@NotNull Runnable r) {
+            CoreThread thread = new CoreThread("CoreThread/" + counter.getAndIncrement(), r);
+            thread.setThreadAffinity(threadAffinity);
+            return thread;
+        }
+    }
+
+    private static class CoreThread extends HazelcastManagedThread {
+        private final Runnable task;
+
+        public CoreThread(String name, Runnable task) {
+            super(name);
+            this.task = task;
+        }
+
+        @Override
+        protected void executeRun() {
+            task.run();
+        }
+    }
 }

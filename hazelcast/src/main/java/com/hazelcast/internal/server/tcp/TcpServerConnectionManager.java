@@ -23,7 +23,7 @@ import com.hazelcast.internal.metrics.DynamicMetricsProvider;
 import com.hazelcast.internal.metrics.MetricDescriptor;
 import com.hazelcast.internal.metrics.MetricsCollectionContext;
 import com.hazelcast.internal.metrics.Probe;
-import com.hazelcast.internal.netty.NettyServer;
+import com.hazelcast.internal.netty.CoreThreadServer;
 import com.hazelcast.internal.networking.Channel;
 import com.hazelcast.internal.networking.ChannelInitializer;
 import com.hazelcast.internal.networking.Networking;
@@ -133,7 +133,7 @@ public class TcpServerConnectionManager
                                Function<EndpointQualifier, ChannelInitializer> channelInitializerFn,
                                ServerContext serverContext,
                                Set<ProtocolType> supportedProtocolTypes,
-                               NettyServer nettyServer) {
+                               CoreThreadServer nettyServer) {
         this.server = server;
         this.endpointConfig = endpointConfig;
         this.endpointQualifier = endpointConfig != null ? endpointConfig.getQualifier() : null;

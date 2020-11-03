@@ -22,7 +22,7 @@ import com.hazelcast.config.MemberAddressProviderConfig;
 import com.hazelcast.instance.AddressPicker;
 import com.hazelcast.internal.cluster.Joiner;
 import com.hazelcast.internal.metrics.MetricsRegistry;
-import com.hazelcast.internal.netty.NettyServer;
+import com.hazelcast.internal.netty.CoreThreadServer;
 import com.hazelcast.internal.networking.ChannelErrorHandler;
 import com.hazelcast.internal.networking.Networking;
 import com.hazelcast.internal.server.tcp.ServerSocketRegistry;
@@ -149,10 +149,10 @@ public class DefaultNodeContext implements NodeContext {
         Networking networking = createNetworking(node);
         Config config = node.getConfig();
 
-        NettyServer nettyServer = null;
+        CoreThreadServer nettyServer = null;
         if(System.getProperty("netty","true").equals("true")) {
             System.out.println("Netty enabled!!");
-            nettyServer = new NettyServer(node.getThisAddress(), node.nodeEngine.getOperationService());
+            nettyServer = new CoreThreadServer(node.getThisAddress(), node.nodeEngine.getOperationService());
         }else{
             System.out.println("Netty disabled!!!");
         }
