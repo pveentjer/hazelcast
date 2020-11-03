@@ -1,4 +1,4 @@
-package com.hazelcast.internal.netty;
+package com.hazelcast.internal.corethread;
 
 import com.hazelcast.cluster.Address;
 import com.hazelcast.internal.nio.Packet;

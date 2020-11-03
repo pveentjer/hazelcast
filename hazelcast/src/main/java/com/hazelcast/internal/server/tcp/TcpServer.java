@@ -26,7 +26,7 @@ import com.hazelcast.internal.metrics.LongProbeFunction;
 import com.hazelcast.internal.metrics.MetricDescriptor;
 import com.hazelcast.internal.metrics.MetricsCollectionContext;
 import com.hazelcast.internal.metrics.MetricsRegistry;
-import com.hazelcast.internal.netty.CoreThreadServer;
+import com.hazelcast.internal.corethread.CoreThreadServer;
 import com.hazelcast.internal.networking.ChannelInitializer;
 import com.hazelcast.internal.networking.Networking;
 import com.hazelcast.internal.nio.ConnectionListener;

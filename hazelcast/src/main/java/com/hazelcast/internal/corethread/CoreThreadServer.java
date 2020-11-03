@@ -1,4 +1,4 @@
-package com.hazelcast.internal.netty;
+package com.hazelcast.internal.corethread;
 
 import com.hazelcast.cluster.Address;
 import com.hazelcast.internal.server.ServerConnectionManager;
@@ -23,11 +23,8 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.channel.uring.IOUringEventLoopGroup;
 import io.netty.channel.uring.IOUringServerSocketChannel;
 import io.netty.channel.uring.IOUringSocketChannel;
-import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.hazelcast.internal.util.ThreadAffinity.newSystemThreadAffinity;
 
@@ -201,33 +198,4 @@ public class CoreThreadServer {
         }
     }
 
-    private static class CoreThreadFactory implements ThreadFactory {
-        private final AtomicInteger counter = new AtomicInteger();
-        private final ThreadAffinity threadAffinity;
-
-        public CoreThreadFactory(ThreadAffinity threadAffinity) {
-            this.threadAffinity = threadAffinity;
-        }
-
-        @Override
-        public Thread newThread(@NotNull Runnable r) {
-            CoreThread thread = new CoreThread("CoreThread/" + counter.getAndIncrement(), r);
-            thread.setThreadAffinity(threadAffinity);
-            return thread;
-        }
-    }
-
-    private static class CoreThread extends HazelcastManagedThread {
-        private final Runnable task;
-
-        public CoreThread(String name, Runnable task) {
-            super(name);
-            this.task = task;
-        }
-
-        @Override
-        protected void executeRun() {
-            task.run();
-        }
-    }
 }

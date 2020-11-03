@@ -1,4 +1,4 @@
-package com.hazelcast.internal.netty;
+package com.hazelcast.internal.corethread;
 
 import com.hazelcast.cluster.Address;
 import io.netty.buffer.ByteBuf;
@@ -19,7 +19,7 @@ public class LinkEncoder extends MessageToByteEncoder {
     }
 
     @Override
-    protected void encode(ChannelHandlerContext ctx, Object a, ByteBuf out) throws Exception {
+    protected void encode(ChannelHandlerContext ctx, Object a, ByteBuf out) {
         if (!(a instanceof Link)) {
             System.out.println("Skipping Link encoder for: " + a);
             return;
@@ -27,8 +27,6 @@ public class LinkEncoder extends MessageToByteEncoder {
 
         Link link = (Link)a;
         Address address = link.address;
-        //System.out.println(debug(ctx) + "AddressEncoder: Send address:" + address);
-
         out.writeInt(address.getHost().length());
         out.writeCharSequence(address.getHost(), StandardCharsets.UTF_8);
         out.writeInt(address.getPort());

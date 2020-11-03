@@ -1,4 +1,4 @@
-package com.hazelcast.internal.netty;
+package com.hazelcast.internal.corethread;
 
 import com.hazelcast.internal.nio.Packet;
 import com.hazelcast.internal.util.HashUtil;
@@ -54,13 +54,12 @@ public class OperationHandler extends SimpleChannelInboundHandler<Packet> {
                 OperationRunner runner = getRunner(packet);
                 Operation operation = runner.toOperation(packet);
                 operation.setOperationResponseHandler((op, response) -> {
-                    Packet responsePacket = outboundResponseHandler.toResponse(operation, response);
+                    Packet responsePacket = outboundResponseHandler.toResponse(op, response);
                     if (batch) {
                         ctx.write(responsePacket);
                     } else {
                         ctx.writeAndFlush(responsePacket);
                     }
-
                 });
                 runner.run(operation);
             }

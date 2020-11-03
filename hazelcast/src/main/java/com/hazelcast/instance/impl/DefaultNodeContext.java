@@ -22,7 +22,7 @@ import com.hazelcast.config.MemberAddressProviderConfig;
 import com.hazelcast.instance.AddressPicker;
 import com.hazelcast.internal.cluster.Joiner;
 import com.hazelcast.internal.metrics.MetricsRegistry;
-import com.hazelcast.internal.netty.CoreThreadServer;
+import com.hazelcast.internal.corethread.CoreThreadServer;
 import com.hazelcast.internal.networking.ChannelErrorHandler;
 import com.hazelcast.internal.networking.Networking;
 import com.hazelcast.internal.server.tcp.ServerSocketRegistry;

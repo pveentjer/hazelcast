@@ -1,4 +1,4 @@
-package com.hazelcast.internal.netty;
+package com.hazelcast.internal.corethread;
 
 import com.hazelcast.cluster.Address;
 import com.hazelcast.internal.server.ServerConnectionManager;
@@ -39,7 +39,6 @@ public class LinkDecoder extends ByteToMessageDecoder {
             System.out.println("Connection not found for remote address:"+remoteAddress);
         }
         connection.nettyChannel = ctx.channel();
-        //System.out.println(debug(ctx)+"found connection:"+connection);
 
         ctx.attr(TcpServerConnection.CONNECTION).set(connection);
 

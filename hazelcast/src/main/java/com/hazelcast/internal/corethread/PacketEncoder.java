@@ -1,4 +1,4 @@
-package com.hazelcast.internal.netty;
+package com.hazelcast.internal.corethread;
 
 import com.hazelcast.internal.nio.Packet;
 import io.netty.buffer.ByteBuf;
