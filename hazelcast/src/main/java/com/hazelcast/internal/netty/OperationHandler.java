@@ -22,8 +22,10 @@ public class OperationHandler extends SimpleChannelInboundHandler<Packet> {
     private final OperationRunner[] partitionRunners;
     private final OperationRunner[] genericRunners;
     private final OutboundResponseHandler outboundResponseHandler;
+    private final boolean batch;
 
-    public OperationHandler(OperationService os) {
+    public OperationHandler(OperationService os, boolean batch) {
+        this.batch = batch;
         OperationServiceImpl operationService = (OperationServiceImpl) os;
         this.inboundResponseHandler = operationService.getInboundResponseHandlerSupplier().get();
         this.outboundResponseHandler = operationService.getOutboundResponseHandler();
@@ -32,7 +34,7 @@ public class OperationHandler extends SimpleChannelInboundHandler<Packet> {
         this.partitionRunners = operationService.getOperationExecutor().getPartitionOperationRunners();
     }
 
-    public OperationRunner getRunner(Packet packet) {
+    private OperationRunner getRunner(Packet packet) {
         int partitionId = packet.getPartitionId();
         if (partitionId < 0) {
             return genericRunners[0];
@@ -42,7 +44,7 @@ public class OperationHandler extends SimpleChannelInboundHandler<Packet> {
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, Packet packet) throws Exception {
+    protected void channelRead0(ChannelHandlerContext ctx, Packet packet) {
         try {
             if (packet.isFlagRaised(FLAG_OP_RESPONSE)) {
                 inboundResponseHandler.accept(packet);
@@ -53,7 +55,12 @@ public class OperationHandler extends SimpleChannelInboundHandler<Packet> {
                 Operation operation = runner.toOperation(packet);
                 operation.setOperationResponseHandler((op, response) -> {
                     Packet responsePacket = outboundResponseHandler.toResponse(operation, response);
-                    ctx.channel().write(responsePacket);
+                    if (batch) {
+                        ctx.write(responsePacket);
+                    } else {
+                        ctx.writeAndFlush(responsePacket);
+                    }
+
                 });
                 runner.run(operation);
             }
@@ -65,6 +72,8 @@ public class OperationHandler extends SimpleChannelInboundHandler<Packet> {
     @Override
     public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
         super.channelReadComplete(ctx);
-        ctx.channel().flush();
+        if (batch) {
+            ctx.flush();
+        }
     }
 }

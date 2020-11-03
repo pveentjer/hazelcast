@@ -44,12 +44,15 @@ public class CoreThreadServer {
     private final int threadCount;
     private final Mode mode;
     private final ThreadAffinity threadAffinity;
+    private final boolean batch;
 
     enum Mode {NIO, EPOLL, IO_URING}
 
     public CoreThreadServer(Address thisAddress, OperationService operationService) {
         this.thisAddress = thisAddress;
         this.operationService = operationService;
+
+        this.batch = Boolean.parseBoolean(System.getProperty("batch","true"));
 
         this.threadAffinity = newSystemThreadAffinity("affinity");
         if (threadAffinity.isEnabled()) {
@@ -73,7 +76,7 @@ public class CoreThreadServer {
                 throw new RuntimeException("Unrecognized mode:" + modeString);
         }
 
-        System.out.println("Mode:" + mode + " threadCount:" + threadCount+" thread affinity:"+threadAffinity);
+        System.out.println("Mode:" + mode + " threadCount:" + threadCount+" thread affinity:"+threadAffinity+" batch:"+batch);
     }
 
     public void setServerConnectionManager(ServerConnectionManager serverConnectionManager) {
@@ -97,7 +100,7 @@ public class CoreThreadServer {
                                 new LinkDecoder(thisAddress, serverConnectionManager),
                                 new PacketEncoder(),
                                 new PacketDecoder(thisAddress),
-                                new OperationHandler(operationService));
+                                new OperationHandler(operationService, batch));
                     }
                 })
                 .childOption(ChannelOption.SO_RCVBUF, BUFFER_SIZE)
@@ -116,7 +119,7 @@ public class CoreThreadServer {
                         new LinkEncoder(thisAddress),
                         new PacketEncoder(),
                         new PacketDecoder(thisAddress),
-                        new OperationHandler(operationService));
+                        new OperationHandler(operationService, batch));
             }
         }).option(ChannelOption.SO_RCVBUF, BUFFER_SIZE)
                 .option(ChannelOption.SO_SNDBUF, BUFFER_SIZE)
