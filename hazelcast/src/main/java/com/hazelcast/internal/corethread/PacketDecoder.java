@@ -17,10 +17,9 @@ import static com.hazelcast.internal.nio.Packet.VERSION;
 
 public class PacketDecoder extends ByteToMessageDecoder {
     static final int HEADER_SIZE = BYTE_SIZE_IN_BYTES + SHORT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES + INT_SIZE_IN_BYTES;
+
     private final Address thisAddress;
-
     private int packetsDecoded = 0;
-
     private int valueOffset;
     private int size;
     private boolean headerComplete;

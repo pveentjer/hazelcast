@@ -30,7 +30,8 @@ import static com.hazelcast.internal.util.ThreadAffinity.newSystemThreadAffinity
 
 public class CoreThreadServer {
 
-    private int BUFFER_SIZE = 128 * 1024;
+    private static final int SERVER_PORT_DELTA = 10000;
+    private static final int BUFFER_SIZE = 128 * 1024;
 
     private final Address thisAddress;
     private final OperationService operationService;
@@ -81,7 +82,7 @@ public class CoreThreadServer {
     }
 
     public void start() {
-        int inetPort = thisAddress.getPort() + 10000;
+        int inetPort = thisAddress.getPort() + SERVER_PORT_DELTA;
         System.out.println("Started ThreadPerCoreServer on " + (thisAddress.getHost() + " " + inetPort));
 
         bossGroup = newBossGroup();
@@ -107,7 +108,6 @@ public class CoreThreadServer {
         serverBootstrap.bind(inetPort);
 
         clientBootstrap = new Bootstrap();
-
         clientBootstrap.group(workerGroup);
         clientBootstrap.channel(getChannelClass());
         clientBootstrap.handler(new ChannelInitializer<Channel>() {
@@ -179,7 +179,7 @@ public class CoreThreadServer {
         if (address == null) {
             throw new NullPointerException("Address can't be null");
         }
-        ChannelFuture future = clientBootstrap.connect(address.getHost(), address.getPort() + 10000);
+        ChannelFuture future = clientBootstrap.connect(address.getHost(), address.getPort() + SERVER_PORT_DELTA);
         try {
             future.get();
         } catch (InterruptedException | ExecutionException e) {
@@ -197,5 +197,4 @@ public class CoreThreadServer {
             bossGroup.shutdownGracefully();
         }
     }
-
 }

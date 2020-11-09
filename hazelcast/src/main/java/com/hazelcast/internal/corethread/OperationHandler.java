@@ -1,7 +1,6 @@
 package com.hazelcast.internal.corethread;
 
 import com.hazelcast.internal.nio.Packet;
-import com.hazelcast.internal.util.HashUtil;
 import com.hazelcast.spi.impl.operationexecutor.OperationRunner;
 import com.hazelcast.spi.impl.operationservice.Operation;
 import com.hazelcast.spi.impl.operationservice.OperationService;
@@ -14,7 +13,14 @@ import java.util.function.Consumer;
 
 import static com.hazelcast.internal.nio.Packet.FLAG_OP_CONTROL;
 import static com.hazelcast.internal.nio.Packet.FLAG_OP_RESPONSE;
+import static com.hazelcast.internal.util.HashUtil.hashToIndex;
 
+/**
+ * Responsible for processing an operation.
+ *
+ * Currently there is no thread-safety within a partition. Every {@link CoreThread} can process any
+ * partition without any form of synchronization.
+ */
 public class OperationHandler extends SimpleChannelInboundHandler<Packet> {
 
     private final Consumer<Packet> inboundResponseHandler;
@@ -39,7 +45,7 @@ public class OperationHandler extends SimpleChannelInboundHandler<Packet> {
         if (partitionId < 0) {
             return genericRunners[0];
         } else {
-            return partitionRunners[HashUtil.hashToIndex(partitionId, partitionRunners.length)];
+            return partitionRunners[hashToIndex(partitionId, partitionRunners.length)];
         }
     }
 
@@ -51,21 +57,25 @@ public class OperationHandler extends SimpleChannelInboundHandler<Packet> {
             } else if (packet.isFlagRaised(FLAG_OP_CONTROL)) {
                 invocationMonitor.accept(packet);
             } else {
-                OperationRunner runner = getRunner(packet);
-                Operation operation = runner.toOperation(packet);
-                operation.setOperationResponseHandler((op, response) -> {
-                    Packet responsePacket = outboundResponseHandler.toResponse(op, response);
-                    if (batch) {
-                        ctx.write(responsePacket);
-                    } else {
-                        ctx.writeAndFlush(responsePacket);
-                    }
-                });
-                runner.run(operation);
+                acceptOperation(ctx, packet);
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private void acceptOperation(ChannelHandlerContext ctx, Packet packet) throws Exception {
+        OperationRunner runner = getRunner(packet);
+        Operation operation = runner.toOperation(packet);
+        operation.setOperationResponseHandler((op, response) -> {
+            Packet responsePacket = outboundResponseHandler.toResponse(op, response);
+            if (batch) {
+                ctx.write(responsePacket);
+            } else {
+                ctx.writeAndFlush(responsePacket);
+            }
+        });
+        runner.run(operation);
     }
 
     @Override

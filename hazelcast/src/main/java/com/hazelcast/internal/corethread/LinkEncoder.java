@@ -33,5 +33,4 @@ public class LinkEncoder extends MessageToByteEncoder {
         out.writeInt(link.plane);
         ctx.pipeline().remove(this);
     }
-
 }

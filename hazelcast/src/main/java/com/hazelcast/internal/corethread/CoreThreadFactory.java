@@ -6,11 +6,11 @@ import org.jetbrains.annotations.NotNull;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
-class CoreThreadFactory implements ThreadFactory {
+public class CoreThreadFactory implements ThreadFactory {
     private final AtomicInteger counter = new AtomicInteger();
     private final ThreadAffinity threadAffinity;
 
-    CoreThreadFactory(ThreadAffinity threadAffinity) {
+    public CoreThreadFactory(ThreadAffinity threadAffinity) {
         this.threadAffinity = threadAffinity;
     }
 
