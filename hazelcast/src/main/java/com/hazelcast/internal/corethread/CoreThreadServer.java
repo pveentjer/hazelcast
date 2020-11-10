@@ -3,8 +3,8 @@ package com.hazelcast.internal.corethread;
 import com.hazelcast.cluster.Address;
 import com.hazelcast.internal.server.ServerConnectionManager;
 import com.hazelcast.internal.util.ThreadAffinity;
-import com.hazelcast.internal.util.executor.HazelcastManagedThread;
 import com.hazelcast.spi.impl.operationservice.OperationService;
+import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -23,6 +23,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.channel.uring.IOUringEventLoopGroup;
 import io.netty.channel.uring.IOUringServerSocketChannel;
 import io.netty.channel.uring.IOUringSocketChannel;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.ExecutionException;
 
@@ -34,7 +35,9 @@ public class CoreThreadServer {
     private static final int BUFFER_SIZE = 128 * 1024;
 
     private final Address thisAddress;
-    private final OperationService operationService;
+    private final OperationServiceImpl operationService;
+    private final String executorString;
+    private final Object[] partitionLocks;
     private MultithreadEventLoopGroup bossGroup;
     private MultithreadEventLoopGroup workerGroup;
     private Bootstrap clientBootstrap;
@@ -46,11 +49,11 @@ public class CoreThreadServer {
 
     enum Mode {NIO, EPOLL, IO_URING}
 
-    public CoreThreadServer(Address thisAddress, OperationService operationService) {
+    public CoreThreadServer(Address thisAddress, OperationService os) {
         this.thisAddress = thisAddress;
-        this.operationService = operationService;
+        this.operationService = (OperationServiceImpl) os;
 
-        this.batch = Boolean.parseBoolean(System.getProperty("batch","true"));
+        this.batch = Boolean.parseBoolean(System.getProperty("batch", "true"));
 
         this.threadAffinity = newSystemThreadAffinity("affinity");
         if (threadAffinity.isEnabled()) {
@@ -74,7 +77,16 @@ public class CoreThreadServer {
                 throw new RuntimeException("Unrecognized mode:" + modeString);
         }
 
-        System.out.println("Mode:" + mode + " threadCount:" + threadCount+" thread affinity:"+threadAffinity+" batch:"+batch);
+        this.executorString = System.getProperty("executor", "unsynchronized");
+
+        System.out.println("Mode:" + mode + " executor:" + executorString + " threadCount:"
+                + threadCount + " thread affinity:" + threadAffinity + " batch:" + batch);
+
+        int partitionCount = operationService.getNode().partitionService.getPartitionCount();
+        this.partitionLocks = new Object[partitionCount];
+        for (int k = 0; k < partitionCount; k++) {
+            partitionLocks[k] = new Object();
+        }
     }
 
     public void setServerConnectionManager(ServerConnectionManager serverConnectionManager) {
@@ -98,7 +110,7 @@ public class CoreThreadServer {
                                 new LinkDecoder(thisAddress, serverConnectionManager),
                                 new PacketEncoder(),
                                 new PacketDecoder(thisAddress),
-                                new OperationHandler(operationService, batch));
+                                newOperationExecutor());
                     }
                 })
                 .childOption(ChannelOption.SO_RCVBUF, BUFFER_SIZE)
@@ -116,11 +128,25 @@ public class CoreThreadServer {
                         new LinkEncoder(thisAddress),
                         new PacketEncoder(),
                         new PacketDecoder(thisAddress),
-                        new OperationHandler(operationService, batch));
+                        newOperationExecutor());
             }
         }).option(ChannelOption.SO_RCVBUF, BUFFER_SIZE)
                 .option(ChannelOption.SO_SNDBUF, BUFFER_SIZE)
                 .option(ChannelOption.TCP_NODELAY, true);
+    }
+
+    @NotNull
+    public OperationExecutor newOperationExecutor() {
+        switch (executorString) {
+            case "unsynchronized":
+                return new UnsynchronizedOperationExecutor(operationService, batch);
+            case "partitionlock":
+                return new PartitionLockOperationExecutor(operationService, batch, partitionLocks);
+            case "offloading":
+                return new OffloadingOperatingExecutor(operationService, batch);
+            default:
+                throw new RuntimeException("unrecognized executor ["+executorString+"]");
+        }
     }
 
     private Class<? extends ServerSocketChannel> getServerSocketChannelClass() {

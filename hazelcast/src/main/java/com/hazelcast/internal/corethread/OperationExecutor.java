@@ -20,19 +20,52 @@ import static com.hazelcast.internal.util.HashUtil.hashToIndex;
  *
  * Currently there is no thread-safety within a partition. Every {@link CoreThread} can process any
  * partition without any form of synchronization.
+ *
+ * Execution options:
+ * 1) synchronize the partition
+ * 2) always send the operation to the right thread
+ * 3) offload the request to the thread responsible for a given partition.
+ *
+ *
+ * <h1>Synchronize the partition</h1>
+ * So you synchronize the partition.
+ *
+ * Advantage:
+ * you don't need many connections.
+ *
+ * <h1>Send request to the right CPU</h1>
+ *
+ * Disadvantage:
+ * You need as many connections as CPUs.
+ *
+ * The advantage is that there is no contention and no cache coherence traffic. It is truly a thread per core approach.
+ *
+ * If a request is send to a CPU where it doesn't belong, a redirect could be send.
+ *
+ * <h1>Offload</h1>
+ * Send a request that doesn't belong, to the CPU where it belongs.
+ *
+ * Advantage:
+ * you don't need many connections.
+ *
+ * <h1>Send to right NUMA node</h1>
+ *
+ * So this either requires synchronization or offloading, but you keep the request in the right NUMA node. So you need
+ * to have at least 1 connection per NUMA node and if you get a connect to the wrong NUMA node, it should be redirected.
  */
-public class OperationHandler extends SimpleChannelInboundHandler<Packet> {
+public abstract class OperationExecutor extends SimpleChannelInboundHandler<Packet> {
 
-    private final Consumer<Packet> inboundResponseHandler;
-    private final Consumer<Packet> invocationMonitor;
-    private final OperationRunner[] partitionRunners;
-    private final OperationRunner[] genericRunners;
-    private final OutboundResponseHandler outboundResponseHandler;
-    private final boolean batch;
+    protected final Consumer<Packet> inboundResponseHandler;
+    protected final Consumer<Packet> invocationMonitor;
+    protected final OperationRunner[] partitionRunners;
+    protected final OperationRunner[] genericRunners;
+    protected final OutboundResponseHandler outboundResponseHandler;
+    protected final boolean batch;
+    protected final OperationServiceImpl operationService;
 
-    public OperationHandler(OperationService os, boolean batch) {
+    public OperationExecutor(OperationService os, boolean batch) {
         this.batch = batch;
-        OperationServiceImpl operationService = (OperationServiceImpl) os;
+        this.operationService = (OperationServiceImpl) os;
         this.inboundResponseHandler = operationService.getInboundResponseHandlerSupplier().get();
         this.outboundResponseHandler = operationService.getOutboundResponseHandler();
         this.invocationMonitor = operationService.getInvocationMonitor();
@@ -40,7 +73,7 @@ public class OperationHandler extends SimpleChannelInboundHandler<Packet> {
         this.partitionRunners = operationService.getOperationExecutor().getPartitionOperationRunners();
     }
 
-    private OperationRunner getRunner(Packet packet) {
+    protected OperationRunner getRunner(Packet packet) {
         int partitionId = packet.getPartitionId();
         if (partitionId < 0) {
             return genericRunners[0];
@@ -64,25 +97,5 @@ public class OperationHandler extends SimpleChannelInboundHandler<Packet> {
         }
     }
 
-    private void acceptOperation(ChannelHandlerContext ctx, Packet packet) throws Exception {
-        OperationRunner runner = getRunner(packet);
-        Operation operation = runner.toOperation(packet);
-        operation.setOperationResponseHandler((op, response) -> {
-            Packet responsePacket = outboundResponseHandler.toResponse(op, response);
-            if (batch) {
-                ctx.write(responsePacket);
-            } else {
-                ctx.writeAndFlush(responsePacket);
-            }
-        });
-        runner.run(operation);
-    }
-
-    @Override
-    public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
-        super.channelReadComplete(ctx);
-        if (batch) {
-            ctx.flush();
-        }
-    }
+    protected abstract void acceptOperation(ChannelHandlerContext ctx, Packet packet) throws Exception;
 }

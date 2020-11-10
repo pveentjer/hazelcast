@@ -194,6 +194,10 @@ public final class OperationServiceImpl implements StaticMetricsProvider, LiveOp
                 properties, hzName);
     }
 
+    public Node getNode(){
+        return node;
+    }
+
     public ConcurrentMap<Class, LatencyDistribution> getOpLatencyDistributions() {
         return opLatencyDistributions;
     }

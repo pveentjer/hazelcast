@@ -16,7 +16,8 @@ public class CoreThreadFactory implements ThreadFactory {
 
     @Override
     public Thread newThread(@NotNull Runnable r) {
-        CoreThread thread = new CoreThread("CoreThread/" + counter.getAndIncrement(), r);
+        int id = counter.getAndIncrement();
+        CoreThread thread = new CoreThread("CoreThread/" + id, r, id);
         thread.setThreadAffinity(threadAffinity);
         return thread;
     }

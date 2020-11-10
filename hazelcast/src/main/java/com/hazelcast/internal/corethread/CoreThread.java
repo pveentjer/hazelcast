@@ -9,10 +9,16 @@ import com.hazelcast.internal.util.executor.HazelcastManagedThread;
  */
 public class CoreThread extends HazelcastManagedThread {
     private final Runnable task;
+    private final int id;
 
-    public CoreThread(String name, Runnable task) {
+    public CoreThread(String name, Runnable task, int id) {
         super(name);
         this.task = task;
+        this.id = id;
+    }
+
+    public int getThreadId(){
+        return id;
     }
 
     @Override
