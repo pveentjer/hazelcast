@@ -149,12 +149,12 @@ public class DefaultNodeContext implements NodeContext {
         Networking networking = createNetworking(node);
         Config config = node.getConfig();
 
-        CoreThreadServer nettyServer = null;
+        CoreThreadServer coreThreadServer = null;
         if(System.getProperty("netty","true").equals("true")) {
-            System.out.println("Netty enabled!!");
-            nettyServer = new CoreThreadServer(node.getThisAddress(), node.nodeEngine.getOperationService());
+            System.out.println("CoreThreadServer enabled!!");
+            coreThreadServer = new CoreThreadServer(node.getThisAddress(), node.nodeEngine.getOperationService(), node.getProperties());
         }else{
-            System.out.println("Netty disabled!!!");
+            System.out.println("CoreThreadServer disabled!!!");
         }
         MetricsRegistry metricsRegistry = node.nodeEngine.getMetricsRegistry();
         return new TcpServer(
@@ -164,7 +164,7 @@ public class DefaultNodeContext implements NodeContext {
                 registry,
                 metricsRegistry,
                 networking,
-                nettyServer,
+                coreThreadServer,
                 node.getNodeExtension().createChannelInitializerFn(context));
     }
 

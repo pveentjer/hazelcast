@@ -5,6 +5,8 @@ import com.hazelcast.internal.server.ServerConnectionManager;
 import com.hazelcast.internal.util.ThreadAffinity;
 import com.hazelcast.spi.impl.operationservice.OperationService;
 import com.hazelcast.spi.impl.operationservice.impl.OperationServiceImpl;
+import com.hazelcast.spi.properties.ClusterProperty;
+import com.hazelcast.spi.properties.HazelcastProperties;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -27,6 +29,13 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.ExecutionException;
 
+import static com.hazelcast.internal.corethread.CoreThreadServer.ExecutorMode.OFFLOADING;
+import static com.hazelcast.internal.corethread.CoreThreadServer.ExecutorMode.PARTITION_LOCK;
+import static com.hazelcast.internal.corethread.CoreThreadServer.ExecutorMode.PER_CORE;
+import static com.hazelcast.internal.corethread.CoreThreadServer.ExecutorMode.UNSYNCHRONIZED;
+import static com.hazelcast.internal.corethread.CoreThreadServer.MultiplexMode.EPOLL;
+import static com.hazelcast.internal.corethread.CoreThreadServer.MultiplexMode.IO_URING;
+import static com.hazelcast.internal.corethread.CoreThreadServer.MultiplexMode.NIO;
 import static com.hazelcast.internal.util.ThreadAffinity.newSystemThreadAffinity;
 
 public class CoreThreadServer {
@@ -36,23 +45,24 @@ public class CoreThreadServer {
 
     private final Address thisAddress;
     private final OperationServiceImpl operationService;
-    private final String executorString;
-    private final Object[] partitionLocks;
+    private final ExecutorMode executorMode;
+    private Object[] partitionLocks;
     private MultithreadEventLoopGroup bossGroup;
     private MultithreadEventLoopGroup workerGroup;
     private Bootstrap clientBootstrap;
     private ServerConnectionManager serverConnectionManager;
     private final int threadCount;
-    private final Mode mode;
+    private final MultiplexMode multiplexMode;
     private final ThreadAffinity threadAffinity;
     private final boolean batch;
 
-    enum Mode {NIO, EPOLL, IO_URING}
+    enum MultiplexMode {NIO, EPOLL, IO_URING}
 
-    public CoreThreadServer(Address thisAddress, OperationService os) {
+    enum ExecutorMode {UNSYNCHRONIZED, PARTITION_LOCK, OFFLOADING, PER_CORE}
+
+    public CoreThreadServer(Address thisAddress, OperationService os, HazelcastProperties properties) {
         this.thisAddress = thisAddress;
         this.operationService = (OperationServiceImpl) os;
-
         this.batch = Boolean.parseBoolean(System.getProperty("batch", "true"));
 
         this.threadAffinity = newSystemThreadAffinity("affinity");
@@ -62,30 +72,56 @@ public class CoreThreadServer {
             this.threadCount = Integer.parseInt(System.getProperty("threads", "" + Runtime.getRuntime().availableProcessors()));
         }
 
-        String modeString = System.getProperty("mode", "nio");
-        switch (modeString) {
-            case "nio":
-                mode = Mode.NIO;
-                break;
-            case "epoll":
-                mode = Mode.EPOLL;
-                break;
-            case "io_uring":
-                mode = Mode.IO_URING;
-                break;
-            default:
-                throw new RuntimeException("Unrecognized mode:" + modeString);
-        }
+        multiplexMode = getMultiplexMode();
+        executorMode = getExecutorMode();
 
-        this.executorString = System.getProperty("executor", "unsynchronized");
-
-        System.out.println("Mode:" + mode + " executor:" + executorString + " threadCount:"
+        System.out.println("Mode:" + multiplexMode + " executor:" + executorMode + " threadCount:"
                 + threadCount + " thread affinity:" + threadAffinity + " batch:" + batch);
 
-        int partitionCount = operationService.getNode().partitionService.getPartitionCount();
-        this.partitionLocks = new Object[partitionCount];
-        for (int k = 0; k < partitionCount; k++) {
-            partitionLocks[k] = new Object();
+        if (executorMode == PARTITION_LOCK) {
+            int partitionCount = properties.getInteger(ClusterProperty.PARTITION_COUNT);
+            this.partitionLocks = new Object[partitionCount];
+            for (int k = 0; k < partitionCount; k++) {
+                partitionLocks[k] = new Object();
+            }
+        } else if (executorMode == PER_CORE) {
+            int channelCount = properties.getInteger(ClusterProperty.CHANNEL_COUNT);
+            if (channelCount != threadCount) {
+                throw new RuntimeException("Channel must be same as thread count. "
+                        + "channelcount=" + channelCount + " threadCount=" + threadCount);
+            }
+        }
+    }
+
+    private ExecutorMode getExecutorMode() {
+        String executorModeString = System.getProperty("executor", "unsynchronized");
+
+        switch (executorModeString) {
+            case "unsynchronized":
+                return UNSYNCHRONIZED;
+            case "partition_lock":
+                return PARTITION_LOCK;
+            case "offloading":
+                return OFFLOADING;
+            case "per_core":
+                return PER_CORE;
+            default:
+                throw new RuntimeException("unrecognized executorMode [" + executorModeString + "]");
+        }
+    }
+
+    @NotNull
+    private MultiplexMode getMultiplexMode() {
+        String modeString = System.getProperty("multiplex", "nio");
+        switch (modeString) {
+            case "nio":
+                return NIO;
+            case "epoll":
+                return EPOLL;
+            case "io_uring":
+                return IO_URING;
+            default:
+                throw new RuntimeException("Unrecognized multiplexMode:" + modeString);
         }
     }
 
@@ -94,12 +130,31 @@ public class CoreThreadServer {
     }
 
     public void start() {
-        int inetPort = thisAddress.getPort() + SERVER_PORT_DELTA;
-        System.out.println("Started ThreadPerCoreServer on " + (thisAddress.getHost() + " " + inetPort));
-
         bossGroup = newBossGroup();
         workerGroup = newWorkerGroup();
 
+        newServerBootstrap();
+        newClientBootstrap();
+    }
+
+    private void newClientBootstrap() {
+        clientBootstrap = new Bootstrap();
+        clientBootstrap.group(workerGroup);
+        clientBootstrap.channel(getChannelClass());
+        clientBootstrap.handler(new ChannelInitializer<Channel>() {
+            protected void initChannel(Channel ch) {
+                ch.pipeline().addLast(
+                        new LinkEncoder(thisAddress),
+                        new PacketEncoder(),
+                        new PacketDecoder(thisAddress),
+                        newOperationExecutor());
+            }
+        }).option(ChannelOption.SO_RCVBUF, BUFFER_SIZE)
+                .option(ChannelOption.SO_SNDBUF, BUFFER_SIZE)
+                .option(ChannelOption.TCP_NODELAY, true);
+    }
+
+    private void newServerBootstrap() {
         ServerBootstrap serverBootstrap = new ServerBootstrap();
         serverBootstrap.group(bossGroup, workerGroup)
                 .channel(getServerSocketChannelClass())
@@ -117,40 +172,38 @@ public class CoreThreadServer {
                 .childOption(ChannelOption.SO_SNDBUF, BUFFER_SIZE)
                 .childOption(ChannelOption.TCP_NODELAY, true)
                 .childOption(ChannelOption.SO_KEEPALIVE, true);
-        serverBootstrap.bind(inetPort);
 
-        clientBootstrap = new Bootstrap();
-        clientBootstrap.group(workerGroup);
-        clientBootstrap.channel(getChannelClass());
-        clientBootstrap.handler(new ChannelInitializer<Channel>() {
-            protected void initChannel(Channel ch) {
-                ch.pipeline().addLast(
-                        new LinkEncoder(thisAddress),
-                        new PacketEncoder(),
-                        new PacketDecoder(thisAddress),
-                        newOperationExecutor());
+        if (executorMode == PER_CORE) {
+            for (int k = 0; k < threadCount; k++) {
+                int port = thisAddress.getPort() + SERVER_PORT_DELTA + k * 128;
+                System.out.println("Started ThreadPerCoreServer on " + (thisAddress.getHost() + " " + port));
+                serverBootstrap.bind(port);
             }
-        }).option(ChannelOption.SO_RCVBUF, BUFFER_SIZE)
-                .option(ChannelOption.SO_SNDBUF, BUFFER_SIZE)
-                .option(ChannelOption.TCP_NODELAY, true);
+        } else {
+            int port = thisAddress.getPort() + SERVER_PORT_DELTA;
+            System.out.println("Started ThreadPerCoreServer on " + (thisAddress.getHost() + " " + port));
+            serverBootstrap.bind(port);
+        }
     }
 
     @NotNull
     public OperationExecutor newOperationExecutor() {
-        switch (executorString) {
-            case "unsynchronized":
+        switch (executorMode) {
+            case PER_CORE:
                 return new UnsynchronizedOperationExecutor(operationService, batch);
-            case "partitionlock":
+            case UNSYNCHRONIZED:
+                return new UnsynchronizedOperationExecutor(operationService, batch);
+            case PARTITION_LOCK:
                 return new PartitionLockOperationExecutor(operationService, batch, partitionLocks);
-            case "offloading":
+            case OFFLOADING:
                 return new OffloadingOperatingExecutor(operationService, batch);
             default:
-                throw new RuntimeException("unrecognized executor ["+executorString+"]");
+                throw new RuntimeException("Unknown executorMode: " + executorMode);
         }
     }
 
     private Class<? extends ServerSocketChannel> getServerSocketChannelClass() {
-        switch (mode) {
+        switch (multiplexMode) {
             case NIO:
                 return NioServerSocketChannel.class;
             case EPOLL:
@@ -163,7 +216,7 @@ public class CoreThreadServer {
     }
 
     private Class<? extends SocketChannel> getChannelClass() {
-        switch (mode) {
+        switch (multiplexMode) {
             case NIO:
                 return NioSocketChannel.class;
             case EPOLL:
@@ -176,7 +229,7 @@ public class CoreThreadServer {
     }
 
     private MultithreadEventLoopGroup newWorkerGroup() {
-        switch (mode) {
+        switch (multiplexMode) {
             case NIO:
                 return new NioEventLoopGroup(threadCount, new CoreThreadFactory(threadAffinity));
             case EPOLL:
@@ -189,7 +242,7 @@ public class CoreThreadServer {
     }
 
     private MultithreadEventLoopGroup newBossGroup() {
-        switch (mode) {
+        switch (multiplexMode) {
             case NIO:
                 return new NioEventLoopGroup(threadCount);
             case EPOLL:
@@ -201,17 +254,26 @@ public class CoreThreadServer {
         }
     }
 
-    public Channel connect(Address address) {
+    public Channel connect(Address address, int cpu) {
         if (address == null) {
             throw new NullPointerException("Address can't be null");
         }
-        ChannelFuture future = clientBootstrap.connect(address.getHost(), address.getPort() + SERVER_PORT_DELTA);
+
+        ChannelFuture future = clientBootstrap.connect(address.getHost(), getPort(address, cpu));
         try {
             future.get();
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }
         return future.channel();
+    }
+
+    public int getPort(Address address, int cpu) {
+        if (executorMode == PER_CORE) {
+            return address.getPort() + SERVER_PORT_DELTA + cpu * 128;
+        } else {
+            return address.getPort() + SERVER_PORT_DELTA;
+        }
     }
 
     public void shutdown() {

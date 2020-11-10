@@ -20,8 +20,8 @@ import com.hazelcast.cluster.Address;
 import com.hazelcast.instance.EndpointQualifier;
 import com.hazelcast.instance.ProtocolType;
 import com.hazelcast.internal.cluster.impl.MemberHandshake;
-import com.hazelcast.internal.corethread.Link;
 import com.hazelcast.internal.corethread.CoreThreadServer;
+import com.hazelcast.internal.corethread.Link;
 import com.hazelcast.internal.nio.Connection;
 import com.hazelcast.internal.nio.ConnectionType;
 import com.hazelcast.internal.nio.Packet;
@@ -68,7 +68,7 @@ public final class TcpServerControl {
         this.supportedProtocolTypes = supportedProtocolTypes;
         this.unifiedEndpointManager = connectionManager.getEndpointQualifier() == null;
         this.expectedPlaneCount = serverContext.properties().getInteger(CHANNEL_COUNT);
-        this.nettyServer= nettyServer;
+        this.nettyServer = nettyServer;
         this.thisAddress = thisAddress;
     }
 
@@ -95,9 +95,9 @@ public final class TcpServerControl {
         process(connection, handshake);
 
         // we only want 1 side to establish an extra connection to the other side.
-        if(nettyServer!=null && connection.getChannel().isClientMode()) {
-           Address remoteAddress = handshake.getLocalAddresses().get(ProtocolType.MEMBER).iterator().next();
-            Channel nettyChannel = nettyServer.connect(remoteAddress);
+        if (nettyServer != null && connection.getChannel().isClientMode()) {
+            Address remoteAddress = handshake.getLocalAddresses().get(ProtocolType.MEMBER).iterator().next();
+            Channel nettyChannel = nettyServer.connect(remoteAddress, handshake.getPlaneIndex());
             //System.out.println("is open:"+nettyChannel.isOpen());
             //System.out.println("is active:"+nettyChannel.isActive());
             nettyChannel.attr(TcpServerConnection.CONNECTION).set(connection);
